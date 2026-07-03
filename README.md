@@ -1,10 +1,6 @@
-# example/
+# Agents
 
-Reference source tree used for local smoke tests and demos with:
-
-```bash
-ulis build --source example
-```
+All agent config files.
 
 ## Layout
 
