@@ -1,0 +1,255 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/sonnet",
+  "small_model": "opencode/kimi-k2.5-free",
+  "agent": {
+    "ai-engineer": {
+      "description": "End-to-end AI systems — model selection, training pipelines, inference optimization, MLOps, and ethical AI",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.2
+    },
+    "architect": {
+      "description": "System design specialist for architecture, module boundaries, API contracts, and data flow",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "bash": false,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.3
+    },
+    "competitive-analyst": {
+      "description": "Competitive intelligence — competitor mapping, benchmarking, strategic analysis, and market positioning",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": false,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.3
+    },
+    "database-optimizer": {
+      "description": "Database performance tuning — query optimization, index design, execution plans, and schema analysis across PostgreSQL, MySQL, MongoDB, Redis",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.1
+    },
+    "debugger": {
+      "description": "Systematic debugging of high-severity issues with evidence-first root cause investigation",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.3
+    },
+    "devops": {
+      "description": "CI/CD, infrastructure automation, deployment safety, observability, and platform engineering specialist",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.2
+    },
+    "documentation": {
+      "description": "Generate and maintain project documentation, guides, and API docs aligned with implementation",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.2
+    },
+    "market-researcher": {
+      "description": "Market analysis, consumer behavior research, market sizing, segmentation, and strategic opportunity identification",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": false,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.3
+    },
+    "migration": {
+      "description": "Database migration specialist for schema diffs, safe migrations, and dry-run validation",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": false,
+        "bash": true,
+        "search": false,
+        "browser": false
+      },
+      "temperature": 0
+    },
+    "penetration-tester": {
+      "description": "Authorized penetration testing — vulnerability discovery, exploit validation, web/network/API/cloud security assessment",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "bash": true,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.1
+    },
+    "performance": {
+      "description": "Performance optimization specialist for profiling, bottleneck analysis, and optimization",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": true,
+        "bash": true,
+        "search": false,
+        "browser": false
+      },
+      "temperature": 0.2
+    },
+    "project-idea-validator": {
+      "description": "Brutally honest idea validation — competitor teardown, demand verification, market fit, and go/no-go guidance",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": false,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0.3
+    },
+    "refactor": {
+      "description": "Code refactoring and cleanup specialist for improvements without changing functionality",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": true,
+        "bash": true,
+        "search": false,
+        "browser": false
+      },
+      "temperature": 0.1
+    },
+    "research-analyst": {
+      "description": "Use this agent when you need comprehensive research across multiple sources with synthesis of findings into actionable insights, trend identification, and detailed reporting.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": false,
+        "bash": false,
+        "search": true,
+        "browser": true
+      }
+    },
+    "security": {
+      "description": "Security review specialist for auth, payments, permissions, secrets, and crypto",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "bash": false,
+        "search": true,
+        "browser": false
+      },
+      "temperature": 0
+    }
+  },
+  "permission": {
+    "read": "allow",
+    "edit": "ask",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "external_directory": "ask",
+    "bash": {
+      "*": "ask",
+      "bq query*": "allow",
+      "bun run build:*": "allow",
+      "bun run lint:file:*": "allow",
+      "bun run test:*": "allow",
+      "bun run test:file:*": "allow",
+      "bun test:*": "allow",
+      "cc:*": "allow",
+      "comm:*": "allow",
+      "find*": "allow"
+    },
+    "skill": {
+      "*": "ask",
+      "read-*": "allow",
+      "search-*": "allow",
+      "internal-*": "deny"
+    },
+    "webfetch": "allow",
+    "websearch": "allow",
+    "codesearch": "allow",
+    "doom_loop": "ask"
+  },
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "enabled": true,
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
+      }
+    },
+    "gh_grep": {
+      "type": "remote",
+      "enabled": true,
+      "url": "https://mcp.grep.app"
+    },
+    "memory": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
