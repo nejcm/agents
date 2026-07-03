@@ -1,36 +1,36 @@
 ---
 name: route-model-work
-description: Route work across Codex, Claude Code, subagents, and cheaper analysis models with a token-efficient delegation policy. Use when asked to design an agent workflow, choose which model should handle coding or codebase-analysis tasks, set fallback behavior between models, orchestrate subagents, reduce token burn, or encode model-priority rules in CLAUDE.md, AGENTS.md, skills, or agent configs.
+description: Execute cross-model delegation — the decision tree, delegation packet, reporting shape, and three-phase plan→code→judge procedure for routing work between Fable, Codex/GPT-5.5, and cheaper analysis models. Use when asked to actually orchestrate a delegation, run a plan→code→judge round-trip, build a delegation prompt, classify a task for routing, or encode the delegation procedure in agent configs. For always-on routing defaults see the model-routing rule.
 ---
 
 # Route Model Work
 
-## Routing Policy
-
-Use a skill or lightweight routing section for recurring delegation policy. Use a full workflow only when there are durable handoffs, required artifacts, or deterministic validation gates.
-
-Default to the cheapest reliable path:
-
-1. Keep Fable on `high` effort by default.
-2. Avoid `xhigh`, `max`, and `extra` unless the user explicitly asks or the task has a clear quality reason that justifies the token cost.
-3. Use Codex as the fallback or implementation executor for coding tasks where precise steering, repo edits, tests, and local command execution matter.
-4. Use cheaper or specialized models for token-hungry discovery such as broad codebase analysis, web or computer-use research, log summarization, and first-pass inventory.
-5. Report distilled findings back to Fable or the primary orchestrator instead of forwarding raw transcripts.
+Procedural companion to the `model-routing` rule. The rule holds defaults; this skill holds how to execute.
 
 ## Decision Tree
 
 Classify the request before selecting a model:
 
-- **Implementation or repo edits**: delegate to Codex/GPT-5.5-style coding agent. Give exact goal, constraints, files, tests, and expected output. Ask for a concise result report.
-- **Architecture, strategy, or ambiguous planning**: keep with Fable on `high`, then delegate concrete implementation slices to Codex when ready.
+- **Implementation or repo edits**: delegate to Codex / GPT-5.5. Give exact goal, constraints, files, tests, and expected output. Ask for a concise result report.
+- **Architecture, strategy, or ambiguous planning**: keep with Fable on `high`; delegate concrete implementation slices to Codex when ready.
 - **Broad codebase survey**: use a cheaper model or subagent to map files, symbols, risks, and candidate touchpoints. Feed back only the compressed map and confidence gaps.
 - **Computer use or browser-heavy work**: use another capable tool/model first. Return screenshots, URLs, form state, extracted facts, and unresolved blockers.
-- **Review or verification**: use Codex for local tests and diffs; use a separate reviewer only when independent judgment is useful.
+- **Review or verification**: Codex for local tests and diffs; a separate Fable judge pass only when independent judgment is useful.
 - **High-stakes or uncertain current facts**: browse or use authoritative docs first, then route implementation separately.
+
+## Three-Phase Procedure (non-trivial work)
+
+Run when the task needs quality and a single pass won't suffice. Per the `model-routing` rule, this is the default for non-trivial work.
+
+1. **Plan (Fable `high`)** — produce the objective, constraints, touchpoints, success criteria, and a concrete implementation slice list. No code edits here.
+2. **Code (GPT 5.5 `high`)** — hand each slice to Codex with a delegation packet (below). Codex works locally: edits, runs tests, verifies. Returns changed files, test result, blockers only.
+3. **Judge (Fable `high`)** — review diffs and verification against the plan. Approve, request changes, or re-plan. Do not redo implementation; re-delegate if needed.
+
+Cost target: plan + judge in the ~few-dollar range. If a phase is burning tokens without progress, stop and re-plan rather than push through.
 
 ## Delegation Packet
 
-When delegating, send only the minimum context needed:
+Send only the minimum context needed:
 
 - Objective and success criteria.
 - Relevant files, commands, or links.
@@ -39,7 +39,7 @@ When delegating, send only the minimum context needed:
 - Required verification.
 - Expected response shape.
 
-Prefer this prompt shape:
+Prompt shape:
 
 ```text
 Task: <specific outcome>
