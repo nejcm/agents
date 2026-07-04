@@ -2,10 +2,10 @@
 name: implement-plan
 description: Execute an approved, existing implementation plan from a file, issue, PRD, pasted checklist or plan from current chat. Use this skill whenever the user asks to implement a plan, continue a plan, execute phases, work through checkboxes, or resume planned development, even if they only say "do the next phase" or "continue from the plan."
 ---
-
 # Implement Plan
 
 Implement approved technical plans with critical review, phased execution, and real verification.
+
 
 ## Plan Authority
 
@@ -62,30 +62,23 @@ Question: [specific decision needed]
 
 ## Execution Cadence
 
-Work in natural batches:
+Work in natural batches/phases:
 
 - Small plan (1-2 tasks): finish the whole plan if verification stays tight.
-- Medium plan (3-8 tasks): finish one phase or 2-3 related tasks, then verify.
-- Large plan (8+ tasks): finish one dependency layer at a time.
+- Medium plan (3-6 tasks): finish one phase or 2-3 related tasks, then verify and review.
+- Large plan (6+ tasks): finish one dependency layer at a time.
 
-Pause after each phase in large (8+ phases) plans unless the user explicitly asked for continuous execution.
+Pause after each phase in large (6+ tasks) plans unless the user explicitly asked for continuous execution.
+Prefer this dependency order when the plan does not specify one: Data/types -> core logic -> APIs/commands -> integrations -> UI/UX -> tests -> docs
 
-Prefer this dependency order when the plan does not specify one:
+Per-phase cadence (default, unless user says otherwise):
 
-```text
-Data/types -> core logic -> APIs/commands -> integrations -> UI/UX -> tests -> docs
-```
-
-For each active task:
-
-1. Mark it in progress in the todo list.
-2. Implement only the requested scope.
-3. Keep edits close to existing patterns.
-4. Run the plan's verification and code review for that task or phase.
-5. Fix failures before moving forward.
-6. Commit code
-7. Mark the task complete in the todo list.
-8. If the plan file uses checkboxes and editing it is appropriate, check off completed items there too.
+1. Implement the phase — mark tasks in todo list, edit only the requested scope, match existing patterns.
+2. Verify — run the plan's checks, then lint/typecheck/tests as appropriate.
+3. Review — dispatch code review against the phase's diff. Fix valid findings.
+4. Commit — `git add` + commit with a conventional commit message describing the phase. Do not ask.
+5. Update — mark tasks complete in todo list. Check off plan file checkboxes if appropriate.
+6. Report — brief progress report: what changed, verification result, commit SHA.
 
 Use subagents only when the user has allowed delegation and the work can be split into independent, bounded tasks. Keep blocking or tightly coupled work local.
 
@@ -138,7 +131,7 @@ After each phase or meaningful batch, report:
 - What changed.
 - Which plan items are complete.
 - Verification run and result.
-- Any remaining blockers or manual checks.
+- Commit SHA.
 
 If manual validation is required, pause with a concrete checklist and wait for the user before marking it complete.
 
@@ -158,6 +151,6 @@ Do not restart the plan unless the user asks or prior state is inconsistent.
 When all plan items are complete:
 
 1. Run final relevant verification.
-2. Confirm whether the plan file was updated.
-3. Report files changed, checks run, and unresolved manual validation.
-4. Do not commit unless the user asked for a commit.
+2. Commit final changes (per defaults — skip only if user said not to).
+3. Confirm whether the plan file was updated.
+4. Report files changed, checks run, and unresolved manual validation.
