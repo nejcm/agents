@@ -1,13 +1,16 @@
 # Model Routing
 
-Defaults apply every turn. Override only with an explicit reason.
+Defaults apply every turn. Override only with an explicit reason. Pick the best model capable of the task except if specified otherwise. 
+Three tiers:
 
-- **Effort levels:** Fable on `high` by default. `xhigh` only for the narrow planner/judge roles in three-phase work (below). Avoid `max`/`extra` — token-hungry with worse outputs.
-- **Model priority:**
-  - Fable — orchestrate, plan, judge, ambiguous architecture.
-  - Codex / GPT-5.5 — default coder for implementation, repo edits, tests, local commands. Steerable, cheap, and fast even at `high`.
-  - Cheaper / specialized models — token-hungry discovery: broad codebase survey, computer use, browser work, log summarization, first-pass inventory.
-- **Report distilled findings back to Fable, never raw transcripts.**
-- **Non-trivial work → three-phase:** Fable `high` plan → GPT 5.5 `high` code → Fable `high` judge. Economics: plan + judge cost ~few $ vs. $50+ for full round trips on Fable alone.
-- **Don't choreograph multi-agent dances for tasks one local coding agent can finish directly.**
-- See the `route-model-work` skill for the delegation packet, decision tree, and execution procedure.
+| Tier      | Use for                                                                                               | Model (effort)                                |
+| --------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **Think** | Planning, architecture, code review, debugging, adversarial review, security audit, complex reasoning | fable (high), opus-4-8 (high), gpt-5.5 (high) |
+| **Build** | Implementing, editing, refactoring, code generation, frontend design, general coding                  | opus-4-8 (medium), gpt-5.5 (medium)           |
+| **Ship**  | Commits, linting, status checks, docs, exploration, search, simple one-shot tasks                     | haiku (medium), gpt-5.5 (low)                 |
+
+**Per-skill overrides**: Skills with `model:` frontmatter automatically switch tier on load:
+
+- **Think**: `code-review`, `requesting-code-review`, `adversarial-review`, `grill-*`, `codebase-design`, `improve-codebase-architecture`, `domain-modeling`, `security`
+- **Build**: `implement-plan`, `review-fix-commit`, `frontend-design`
+- **Ship**: `git-workflow`, `ci-status`, `code-quality`, `doc-generator`, `explore-codebase`, `performance-profiler`
