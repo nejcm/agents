@@ -28,6 +28,16 @@ Run when the task needs quality and a single pass won't suffice. Per the `model-
 
 Cost target: plan + judge in the ~few-dollar range. If a phase is burning tokens without progress, stop and re-plan rather than push through.
 
+## Context Management
+
+The three-phase procedure has natural compact points between phases:
+
+- After **Plan** produces its slice list, compact before handing to **Code** while keeping the plan.
+- After **Code** returns, the judge needs only the plan plus the diff/report — compact if the plan phase accumulated exploration context.
+- Never compact mid-phase.
+
+Compact only when context pressure is real (~125k tokens or ~60% of the window).
+
 ## Delegation Packet
 
 Send only the minimum context needed:

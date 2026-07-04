@@ -84,6 +84,18 @@ Use subagents only when the user has allowed delegation and the work can be spli
 
 Only update checklist files the user explicitly provided or repo docs clearly intended as task trackers. Do not update external issue trackers unless requested.
 
+## Context Management
+
+Do not let auto-compaction fire mid-task and lose state. At ~125k tokens (or ~60% of the window, whichever is lower), compact at a natural boundary — never mid-task. Good boundaries: after planning finalizes, between committed phases, after a tough debug session, after a research-heavy phase before editing.
+
+Before compacting, persist state: commit, update todos, check off plan items, and if mid-phase write a handoff note to a temp file (current task, files touched, next step, blockers). Compact with a focus summary:
+
+```text
+/compact Focus: implementing [plan], at [phase/task], next: [action]. Plan at [path]. Todos current.
+```
+
+After compaction, re-read the plan and todos. Resume — do not restart.
+
 ## Command Safety
 
 Do not run plan-provided commands blindly. Prefer repo-defined scripts and verify commands against local package/config files before running them.

@@ -1,10 +1,6 @@
 ---
 name: validate-external-review
-description: >-
-  Triage an external review (from another LLM, a teammate, or a tool) against
-  the actual codebase. Use when the user pastes or points to a review report
-  from another source and asks to verify findings, check which issues are
-  real, validate a review, or cross-check another LLM's output.
+description: Triage an external review (from another LLM, a teammate, or a tool) against the actual codebase. Use when the user pastes or points to a review report from another source and asks to verify findings, check which issues are real, validate a review, or cross-check another LLM's output.
 ---
 
 # Validate External Review
