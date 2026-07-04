@@ -13,7 +13,7 @@ Take a review report from another LLM or source, verify each finding against the
 
 ## Core rule
 
-**Do not edit, fix, or modify code** except if explicitly requested by the user.
+**Do not edit, fix, or modify code** unless the user explicitly requests it.
 
 ## Workflow
 
@@ -93,8 +93,6 @@ To fix the X valid findings, say "fix the valid ones".
 To investigate the V uncertain ones further, say which.
 To dismiss the Y invalid ones, no action needed.
 ```
-
-Under no circumstances start fixing until the user explicitly requests it.
 
 ## Guardrails
 
