@@ -1,80 +1,83 @@
 ---
 name: route-model-work
-description: Execute cross-model delegation — the decision tree, delegation packet, reporting shape, and three-phase plan→code→judge procedure for routing work between Fable, Codex/GPT-5.5, and cheaper analysis models. Use when asked to actually orchestrate a delegation, run a plan→code→judge round-trip, build a delegation prompt, classify a task for routing, or encode the delegation procedure in agent configs. For always-on routing defaults see the model-routing rule.
+description: Route work across models and providers using capability roles, risk-based effort, live discovery, safe delegation patterns, and structured result handling. Use when dispatching a subagent, coordinating parallel work, running plan/build/judge, obtaining independent judgment, or encoding orchestration behavior.
 ---
 
 # Route Model Work
 
-Procedural companion to the `model-routing` rule. The rule holds defaults; this skill holds how to execute.
+This skill executes delegation. The always-on `@rules/model-routing.md` rule owns role, effort, and model preferences.
 
-## Decision Tree
+## Dispatch Order
 
-Classify the request before selecting a model:
+Use the first available mechanism:
 
-- **Implementation or repo edits**: delegate to Codex / GPT-5.5. Give exact goal, constraints, files, tests, and expected output. Ask for a concise result report.
-- **Architecture, strategy, or ambiguous planning**: keep with Fable on `high`; delegate concrete implementation slices to Codex when ready.
-- **Broad codebase survey**: use a cheaper model or subagent to map files, symbols, risks, and candidate touchpoints. Feed back only the compressed map and confidence gaps.
-- **Computer use or browser-heavy work**: use another capable tool/model first. Return screenshots, URLs, form state, extracted facts, and unresolved blockers.
-- **Review or verification**: Codex for local tests and diffs; a separate Fable judge pass only when independent judgment is useful.
-- **High-stakes or uncertain current facts**: browse or use authoritative docs first, then route implementation separately.
+- **Host-native subagent tool** — use when it supports the required role, model, effort, and isolation.
+- **Non-interactive CLI** — use an installed `codex exec` or `claude -p` only when the required settings can be represented safely.
+- **Local execution** — continue locally when capable; disclose that delegation or model independence was unavailable.
 
-## Three-Phase Procedure (non-trivial work)
+Never guess a provider, model ID, effort option, or mode.
 
-Run when the task needs quality and a single pass won't suffice. Per the `model-routing` rule, this is the default for non-trivial work.
+## Orchestration Patterns
 
-1. **Plan (Fable `high`)** — produce the objective, constraints, touchpoints, success criteria, and a concrete implementation slice list. No code edits here.
-2. **Code (GPT 5.5 `high`)** — hand each slice to Codex with a delegation packet (below). Codex works locally: edits, runs tests, verifies. Returns changed files, test result, blockers only.
-3. **Judge (Fable `high`)** — review diffs and verification against the plan. Approve, request changes, or re-plan. Do not redo implementation; re-delegate if needed.
+Choose the smallest pattern that provides the needed benefit:
 
-Cost target: plan + judge in the ~few-dollar range. If a phase is burning tokens without progress, stop and re-plan rather than push through.
+- **Specialist delegate** — one bounded task requiring different expertise or tools.
+- **Parallel fan-out** — independent read-only surveys or reviews, followed by synthesis.
+- **Plan → build → judge** — high-risk or ambiguous work needs independent evaluation after implementation.
+- **Second opinion** — a read-only, cross-family challenge to a material decision or conclusion.
 
-## Context Management
+For cross-family staged work, assign each family the role it is strongest at, keep phases sequential, and prevent self-review. If a requested family is unavailable, use the next capable model and disclose the reduced independence (Example: ask Fable to produce an implementation plan, ask GPT to implement the accepted plan, then ask Fable to review the diff against the plan and repo rules).
 
-The three-phase procedure has natural compact points between phases:
+Do not use plan → build → judge as a default for all non-trivial work.
 
-- After **Plan** produces its slice list, compact before handing to **Code** while keeping the plan.
-- After **Code** returns, the judge needs only the plan plus the diff/report — compact if the plan phase accumulated exploration context.
-- Never compact mid-phase.
+Use a second opinion when explicitly requested or when a decision is high-impact, disputed, difficult to reverse, security-sensitive, or supported with low confidence. Never claim a second opinion unless a separate model actually ran.
 
-Compact only when context pressure is real (~125k tokens or ~60% of the window).
+## Automatic Limits
+
+Unless the user specifies another budget:
+
+- Use at most three delegates.
+- Use at most one `xhigh` delegate.
+- Do not create duplicate roles without a distinct question or scope.
+- Retry a failed delegation once with a concrete correction, then stop and re-plan.
+- Run independent read-only delegates in parallel; run dependent phases sequentially.
 
 ## Delegation Packet
 
-Send only the minimum context needed:
-
-- Objective and success criteria.
-- Relevant files, commands, or links.
-- Constraints from AGENTS.md, CLAUDE.md, user preferences, and repo rules.
-- What not to spend tokens on.
-- Required verification.
-- Expected response shape.
-
-Prompt shape:
+Send only the context needed for the assigned task:
 
 ```text
-Task: <specific outcome>
-Context: <compressed facts only>
-Constraints: <style, safety, routing, token budget>
-Work locally with the available tools. Do not broaden scope.
-Verify with: <tests/checks>
-Return: changed files, verification result, blockers only.
+Objective: <specific outcome>
+Success criteria: <observable result>
+Role: <planner | builder | reviewer/judge | cheap worker>
+Effort: <supported effort>
+Context: <compressed facts, relevant files, commands, or links>
+Constraints: <repo rules, user requirements, safety, scope, budget>
+Workspace/mode: <read-only or isolated edit workspace>
+Do not: <explicit exclusions>
+Verify with: <tests, checks, or evidence>
+Return: outcome, evidence, changed files, checks, confidence, blockers
 ```
 
-## Reporting Back
+Do not send whole-codebase dumps or raw transcripts when a focused packet is sufficient.
 
-Return summaries, not transcripts:
+## Result Handling
 
-- Decision made and why.
-- Delegated target and effort level.
-- Findings, changed files, tests, and blockers.
-- Residual uncertainty.
+Require each delegate to return:
 
-Do not hide failures, uncertainty, or skipped validation. If the requested model/tool is unavailable, say so and use the nearest available fallback.
+- Outcome and key evidence.
+- Changed files, if any.
+- Verification performed and results.
+- Confidence and unresolved uncertainty.
+- Blockers or degraded fallbacks.
 
-## Anti-Patterns
+The orchestrator must check important claims against repository tools, tests, or primary sources. Summarize results instead of forwarding transcripts.
 
-- Do not use expensive effort levels for routine implementation.
-- Do not send whole-codebase dumps to premium models.
-- Do not ask Fable to perform exhaustive tool-heavy exploration when a cheaper worker can summarize it.
-- Do not preserve model outputs uncritically; verify important claims with tools, tests, or primary sources.
-- Do not create multi-agent choreography for tasks one local coding agent can finish directly.
+For staged patterns, compact context only between phases and only under real context pressure. Preserve the objective, constraints, accepted plan, diff or result report, and unresolved risks.
+
+## Failure Handling
+
+- If the preferred model is unavailable, discover and use the next capable mapping from `model-routing.md`.
+- If cross-family review is unavailable, use a same-family reviewer and disclose reduced independence.
+- If a delegate fails, correct the packet or choose a supported fallback for one retry.
+- If verification fails or the retry fails, stop integration and re-plan.
