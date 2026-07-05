@@ -5,19 +5,7 @@ description: Route work across models and providers using capability roles, risk
 
 # Route Model Work
 
-This skill executes delegation. The always-on `model-routing` rule owns role, effort, and model preferences.
-
-## Decide Whether to Delegate
-
-Keep work local unless delegation materially improves specialization, independent verification, parallel progress, or context reduction.
-
-When delegation helps:
-
-1. Select the minimum sufficient orchestration pattern.
-2. Assign each delegate one capability role and a risk-based effort.
-3. Discover supported providers, models, efforts, and modes.
-4. Dispatch with least privilege and a bounded packet.
-5. Verify and integrate results; do not accept model output uncritically.
+This skill executes delegation. The always-on `@rules/model-routing.md` rule owns role, effort, and model preferences.
 
 ## Dispatch Order
 
@@ -27,16 +15,7 @@ Use the first available mechanism:
 - **Non-interactive CLI** — use an installed `codex exec` or `claude -p` only when the required settings can be represented safely.
 - **Local execution** — continue locally when capable; disclose that delegation or model independence was unavailable.
 
-Never guess a provider, model ID, effort option, or mode. Use the nearest supported fallback and report any degraded capability, effort, or independence.
-
-## Permissions and Workspaces
-
-- Planner, reviewer, judge, survey, and second-opinion delegates are read-only.
-- Builders receive only the edit-capable mode required for their task.
-- Bypass, full-access, or equivalent modes require explicit user authorization.
-- Use one writer in the active workspace.
-- Parallel delegates are read-only by default.
-- Parallel builders require isolated worktrees and explicit integration.
+Never guess a provider, model ID, effort option, or mode.
 
 ## Orchestration Patterns
 
@@ -44,9 +23,10 @@ Choose the smallest pattern that provides the needed benefit:
 
 - **Specialist delegate** — one bounded task requiring different expertise or tools.
 - **Parallel fan-out** — independent read-only surveys or reviews, followed by synthesis.
-- **Plan → build** — ambiguous work needs a plan before one builder implements it.
-- **Plan → build → judge** — high-risk work needs independent evaluation after implementation.
+- **Plan → build → judge** — high-risk or ambiguous work needs independent evaluation after implementation.
 - **Second opinion** — a read-only, cross-family challenge to a material decision or conclusion.
+
+For cross-family staged work, assign each family the role it is strongest at, keep phases sequential, and prevent self-review. If a requested family is unavailable, use the next capable model and disclose the reduced independence (Example: ask Fable to produce an implementation plan, ask GPT to implement the accepted plan, then ask Fable to review the diff against the plan and repo rules).
 
 Do not use plan → build → judge as a default for all non-trivial work.
 
@@ -101,12 +81,3 @@ For staged patterns, compact context only between phases and only under real con
 - If cross-family review is unavailable, use a same-family reviewer and disclose reduced independence.
 - If a delegate fails, correct the packet or choose a supported fallback for one retry.
 - If verification fails or the retry fails, stop integration and re-plan.
-
-## Anti-Patterns
-
-- Expensive effort for routine, easily verified work.
-- Multiple agents when one local agent can finish reliably.
-- Multiple writers in one workspace.
-- Premium models performing broad mechanical discovery.
-- Reviewer and builder sharing a model family when independent judgment is material and an alternative is available.
-- Hidden failures, skipped checks, unsupported settings, or silent fallbacks.

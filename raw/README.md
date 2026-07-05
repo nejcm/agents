@@ -31,7 +31,7 @@ Files in `raw/common/` are copied to **every** platform's generated directory.
 
 ## Current Files
 
-### `common/AGENTS.md`
+### `AGENTS.md`
 
 Cross-platform agent instructions injected into every tool's config. Contains:
 

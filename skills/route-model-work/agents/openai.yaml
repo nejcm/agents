@@ -1,4 +1,0 @@
-interface:
-  display_name: "Route Model Work"
-  short_description: "Route coding work across models efficiently"
-  default_prompt: "Use $route-model-work to choose the right model/delegation path for this task."

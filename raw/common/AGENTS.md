@@ -27,4 +27,4 @@ If you are unsure how to do something, use `gh_grep` to search code examples fro
 
 # Model Policy
 
-@~/.codex/rules/common/model-routing.md
+@rules/model-routing.md
