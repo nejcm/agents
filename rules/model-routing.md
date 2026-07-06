@@ -6,7 +6,7 @@ Apply this policy every turn. It selects how work should be executed; it does no
 
 Work locally when the current agent can complete the task reliably without unnecessary coordination.
 
-Use `route-model-work` skill when delegation materially improves at least one of:
+Delegate when doing so materially improves at least one of:
 
 - Specialization or tool access.
 - Independent verification.
@@ -39,6 +39,4 @@ Choose effort from risk and ambiguity, independently of role. Skill names are ad
 | `high` | Architecture, planning, ambiguity, security, adversarial review, code review, difficult debugging |
 | `xhigh` | One narrow, high-stakes decision where extra reasoning has clear value |
 
-Use at most one automatic `xhigh` delegate. Never select `max` or `ultracode` without an explicit user request. Request delegation only for a specialist, independent judgment, parallel work, or context compression.
-
-Use `route-model-work` skill for dispatch mechanics, orchestration patterns, limits, fallbacks, and reporting.
+Use at most one automatic `xhigh` delegate. Never select `max` or `ultracode` without an explicit user request. Request delegation only for a specialist, independent judgment, parallel work, or context compression. Follow platform-specific instructions for dispatch mechanics, orchestration patterns, limits, fallbacks, and reporting.
