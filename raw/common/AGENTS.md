@@ -24,7 +24,3 @@ Only show changed code blocks. Never full files.
 Dry Output: bullets only if needed. No paragraphs.
 
 If you are unsure how to do something, use `gh_grep` to search code examples from GitHub.
-
-# Model Policy
-
-@rules/model-routing.md
