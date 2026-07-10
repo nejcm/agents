@@ -40,7 +40,7 @@ Rankings are relative preferences from 1–10; higher is better.
 
 | Model               | Cost | Intelligence | Taste | Default work                                                                                       |
 | ------------------- | ---: | -----------: | ----: | -------------------------------------------------------------------------------------------------- |
-| GPT-5.5 (via Codex) |    9 |            8 |     5 | Implementation, mechanical changes, migrations, data analysis, logs, large documents, computer use |
+| GPT-5.6 (via Codex) |    9 |            8 |     5 | Implementation, mechanical changes, migrations, data analysis, logs, large documents, computer use |
 | Sonnet 5            |    5 |            5 |     6 | Thin Codex wrapper agents and bounded coordination                                                 |
 | Opus 4.8            |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment                                          |
 | Fable 5             |    2 |            9 |     9 | Architecture, ambiguous planning, product judgment, final synthesis, difficult review              |
@@ -55,12 +55,12 @@ How to apply:
   escalating.
 - Cost is a tie-breaker only; when axes conflict for anything that ships, intelligence > taste > cost.
 - Bulk or mechanical work with a clear spec (implementation, migrations, data
-  analysis) goes to GPT-5.5 — it is very cost effective.
+  analysis) goes to GPT-5.6 — it is very cost effective.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7.
 - Review plans and implementations with Fable 5 or Opus 4.8, optionally adding
-  GPT-5.5 as an extra cross-family perspective. Never review with Haiku.
+  GPT-5.6 as an extra cross-family perspective. Never review with Haiku.
 - Prefer different model families for independent review. If unavailable, disclose reduced independence.
-- If computer use would help complete or verify work, shell out to GPT-5.5
+- If computer use would help complete or verify work, shell out to GPT-5.6
   through Codex.
 
 ### Effort
@@ -85,19 +85,21 @@ differ, and no duplicate work without a specific reason. Parallelize
 independent read-only work; sequence dependent phases. Describe a review as
 independent only when another model actually performed it.
 
-#### GPT-5.5 runs only through the Codex CLI
+#### GPT-5.6 runs only through the Codex CLI
 
 - Entry points are `codex exec` and `codex exec review`
-  with `-m gpt-5.5`. Use the CLI fallback.
+  with `-m gpt-5.6-sol`. In an interactive session, a direct shell call is the
+  default path; the wrapper pattern below applies only inside workflows and
+  subagents where shell is not first-class.
   For work they don't cover (investigation, data analysis), run
-  `codex exec -m gpt-5.5 -s read-only` with a self-contained prompt.
+  `codex exec -m gpt-5.6-sol -s read-only` with a self-contained prompt.
 - Workflow and subagent `model` parameters only accept Claude models, so wrap
   Codex: spawn a thin agent with `model: 'sonnet'`, `effort: 'low'` whose
   prompt writes a self-contained Codex prompt, runs `codex exec` via shell, and
   returns the report. Use the wrapper's `schema` option when structured output
   is useful.
-- Prefix every wrapper label with `gpt-5.5:`, e.g.
-  `{label: 'gpt-5.5:review-auth'}`. The workflow UI shows the wrapper's Claude
+- Prefix every wrapper label with `gpt-5.6:`, e.g.
+  `{label: 'gpt-5.6:review-auth'}`. The workflow UI shows the wrapper's Claude
   model, so the label is the only indication of the real worker.
 - Codex runs can exceed shell 10-minute timeout: set an explicit longer
   timeout, or run in the background and poll for the report artifact.
@@ -134,7 +136,7 @@ invoking Codex.
 Investigation (read-only):
 
 ```bash
-codex exec -m gpt-5.5 -C "$PWD" -s read-only \
+codex exec -m gpt-5.6-sol -C "$PWD" -s read-only \
   -o "$TEMP_DIR/result.md" "<focused investigation prompt>"
 ```
 
@@ -142,12 +144,21 @@ Implementation: use an isolated worktree and `-s workspace-write`. State the
 permitted files, required behavior, exclusions, and verification.
 
 Review — select exactly one target (`--uncommitted`, `--base <branch>`, or
-`--commit <sha>`):
+`--commit <sha>`). A focus prompt cannot be combined with a target flag; the
+CLI rejects it:
 
 ```bash
-codex exec review -m gpt-5.5 --uncommitted \
-  -o "$TEMP_DIR/review.md" "<review focus>"
+# Target-flag mode (no prompt argument):
+codex exec review -m gpt-5.6-sol --uncommitted -o "$TEMP_DIR/review.md"
+
+# Focus mode (prompt, no target flag) — describe the target in the prompt:
+codex exec review -m gpt-5.6-sol -o "$TEMP_DIR/review.md" \
+  "Review the uncommitted changes to src/foo.ts for <focus>."
 ```
+
+`--uncommitted` also reviews untracked files; expect noise findings on local
+scratch/settings files (e.g. `.claude/settings.local.json`) and discard them
+rather than acting on them.
 
 Computer use: state the flow, environment, expected evidence, screenshot or
 video requirements, and whether edits are allowed. Confirm the invoked Codex
@@ -156,8 +167,10 @@ prove computer-use availability.
 
 On timeout, inspect the process and artifact before retrying. Retry once with
 a concrete correction, then re-plan. If a review that inspected its target
-finds no issues, accept that; do not rerun to force findings. Reports must
-name the inspected target and state clearly when there are no findings.
+finds no issues, accept that; do not rerun to force findings. If a diff was
+already reviewed (and findings triaged) this session and has not changed,
+cite that review instead of dispatching another. Reports must name the
+inspected target and state clearly when there are no findings.
 
 ### Handle Results
 

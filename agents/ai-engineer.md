@@ -13,7 +13,7 @@ platforms:
   claude:
     model: opus
   codex:
-    model: gpt-5.5
+    model: gpt-5.6-sol
 ---
 
 # AI Engineer Agent

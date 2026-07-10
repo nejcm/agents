@@ -21,9 +21,9 @@ Concrete model IDs are preferences, not guarantees. Discover available providers
 
 | Role               | Use                                                           | Preferred order                                              |
 | ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5 → GPT-5.5 → Opus 4.8                                 |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.5 → Opus 4.8 → strongest discovered code-capable model |
-| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5 → Opus 4.8 → GPT-5.5                                 |
+| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5 → GPT-5.6 → Opus 4.8                                 |
+| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6 → Opus 4.8 → strongest discovered code-capable model |
+| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5 → Opus 4.8 → GPT-5.6                                 |
 | **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | Lowest-cost capable OpenCode model → GPT mini → Haiku        |
 
 Prefer a different model family for independent review. If unavailable, use the best same-family fallback and disclose the reduced independence.

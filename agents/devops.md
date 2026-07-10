@@ -13,7 +13,7 @@ platforms:
   claude:
     model: sonnet
   codex:
-    model: gpt-5.5-mini
+    model: gpt-5.6-terra
 ---
 
 # DevOps Agent
