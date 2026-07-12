@@ -10,27 +10,32 @@ Dispatch reviewer sub-agents with crafted work-product context, never session hi
 Review on two axes:
 
 1. **Spec**:
-  - Missing or partial requirements
-  - Scope creep or behavior not requested
-  - Requirements that appear implemented incorrectly
-  - Quote or cite the requirement for each finding when possible 
+
+- Missing or partial requirements
+- Scope creep or behavior not requested
+- Requirements that appear implemented incorrectly
+- Quote or cite the requirement for each finding when possible
+
 2. **Standards/Quality**: Does the implementation meet repo conventions and engineering quality?
-  - Violations of documented repo standards
-  - Architecture and separation of concerns
-  - Error handling, edge cases, security, performance
-  - Type safety where applicable
-  - Tests that verify real behavior
-  - Migration/backward compatibility if schemas or APIs changed
-  - Possible code smells: mysterious names, duplication, feature envy, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle man, refused bequest
+
+- Violations of documented repo standards
+- Architecture and separation of concerns
+- Error handling, edge cases, security, performance
+- Type safety where applicable
+- Tests that verify real behavior
+- Migration/backward compatibility if schemas or APIs changed
+- Possible code smells: mysterious names, duplication, feature envy, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle man, refused bequest
 
 Both axes run as parallel sub-agents so they don't pollute each other's context and triage findings by severity inside each axis.
 
 Severity:
+
 - Critical: bugs, security issues, data loss, broken required behavior
 - Important: missing requirements, weak architecture, poor error handling, meaningful test gaps
 - Minor: style, documentation, small maintainability issues
 
 For every issue include:
+
 - File:line
 - What is wrong
 - Why it matters
@@ -85,7 +90,6 @@ Find the spec or requirements in this order:
 3. Matching files under `docs/`, `specs/`, `.scratch/`, or plan/task directories.
 4. If none exists, review the Spec axis as "no spec available" and focus on visible intent from commits and diff.
 
-
 ## 3. Standards
 
 Find standards sources:
@@ -101,7 +105,7 @@ On top of whatever the repo documents, the Standards axis always carries the **s
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
 - **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation — and, like any standard here, skip anything tooling already enforces.
 
-Each smell reads *what it is* → *how to fix*; match it against the diff:
+Each smell reads _what it is_ → _how to fix_; match it against the diff:
 
 - **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
 - **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
@@ -143,23 +147,30 @@ If the spec is missing, skip the Spec sub-agent and note this in the final repor
 
 ## 5. Aggregate
 
-
 Do **not** merge or rerank findings — the two axes are deliberately separate. The Recommendations section may list a cross-axis fix order.
 
 Output:
+
 ## Spec
+
 ### Critical
+
 ### Important
+
 ### Minor
 
 ## Standards/Quality
+
 ### Critical
+
 ### Important
+
 ### Minor
 
 ## Recommendations
 
 ## Assessment
+
 Ready to merge: Yes | No | With fixes
 Reasoning: 1-2 sentences.
 Don't pick a single winner across axes in the findings; use Recommendations for fix order.
