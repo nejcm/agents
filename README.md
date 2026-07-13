@@ -25,7 +25,6 @@ The tree mirrors a global `~/.ulis/` source directory:
 | [`permissions.yaml`](./permissions.yaml) | Per-platform read/write/bash rules |
 | [`skills.yaml`](./skills.yaml) | External skill installs |
 | [`plugins.yaml`](./plugins.yaml) | Plugin installs |
-| [`commands.yaml`](./commands.yaml) | One-shot setup commands |
 | [`agents/`](./agents/) | Agent definitions (Markdown with YAML frontmatter) |
 | [`skills/`](./skills/) | Reusable OpenCode skills (`SKILL.md`) |
 | [`commands/`](./commands/) | OpenCode slash commands |
@@ -100,6 +99,24 @@ ulis install --global --source . --preset react-web --yes
 - Generated output is ignored by Git. Run `ulis build` to regenerate it.
 - Back up existing tool configs before running `ulis install --global`, or use `--backup`.
 - This configuration is a living baseline. Review generated files in `generated/` before installing if you have existing customizations.
+
+## Firecrawl web research
+
+The global install includes a lean Firecrawl skill for all targets. Its wrapper
+invokes the globally installed CLI, keeps page content in the OS temporary
+directory, and only returns search metadata or a local file path to the agent.
+
+Install the tested CLI version, authenticate, then run the normal global install:
+
+```bash
+npm install -g firecrawl-cli@1.19.26
+firecrawl login
+ulis install --global --source . --yes
+```
+
+For non-interactive environments, set `FIRECRAWL_API_KEY` instead of using
+`firecrawl login`. No Firecrawl MCP server or official all-agent skill install is
+required.
 
 ## Links
 
