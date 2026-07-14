@@ -1,5 +1,5 @@
 ---
-name: product-strategy-analyzer
+name: product-improvements
 description: Generates specific, evidence-grounded ideas for new features, ways to extend or improve existing features, and UX improvements for the current codebase — informed by what competing and comparable products actually offer, and tied to real files, modules, and user-facing patterns rather than generic SaaS advice. Use this whenever the user wants to brainstorm what to build next, extend what already exists, improve the user experience, see how the product compares to competitors, or explore product ideas for the repo they're in. This skill is product-focused only — it does not cover code quality, performance, or technical-debt recommendations.
 ---
 
