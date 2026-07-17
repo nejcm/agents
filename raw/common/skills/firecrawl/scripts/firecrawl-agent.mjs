@@ -171,6 +171,15 @@ function firecrawlInvocation(args) {
     return { command: "firecrawl", args };
   }
 
+  const pathResult = spawnSync("firecrawl", ["--version"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  if (!pathResult.error || pathResult.error.code !== "ENOENT") {
+    return { command: "firecrawl", args };
+  }
+
   const npmCli = join(
     dirname(process.execPath),
     "node_modules",
