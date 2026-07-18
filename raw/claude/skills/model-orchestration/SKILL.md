@@ -36,7 +36,10 @@ phases. Retry a failed delegation once with a concrete correction, then stop
 and re-plan. If a delegate is _interrupted_ mid-task (session/API limit,
 timeout) rather than wrong, resume it (`SendMessage` to its id or name) to
 preserve its transcript instead of cold-respawning; reserve the corrected
-retry for actually-wrong output. Describe a review or second opinion as
+retry for actually-wrong output. Infrastructure failures (Codex stdin block,
+shell-timeout cap, sandbox runner) are _not_ wrong output: fix the invocation
+and resume without spending the correction retry. That once-per-delegate budget
+is for genuinely wrong results and is counted per delegate. Describe a review or second opinion as
 independent only when another model actually performed it.
 
 ## Orchestration Patterns
@@ -57,7 +60,10 @@ dispatches subagents, passes artifacts between them, resumes existing agents,
 tracks progress, requests necessary user decisions, and reports the outcome.
 It does not author the plan, inspect or edit implementation files, perform the
 review, adjudicate findings, apply fixes, or run verification itself. All phase
-work and repository commands run inside the assigned subagents.
+work and repository commands run inside the assigned subagents. A final
+coordination action the user explicitly authorizes — e.g. committing or
+pushing the completed result — may run directly in the orchestrator
+rather than spawning a subagent.
 
 Keep phases sequential and prevent self-review. Follow this sequence:
 
@@ -93,12 +99,17 @@ security-sensitive, or held with low confidence.
   Codex in a thin host-native agent selected through `model-routing` (normally
   the **Cheap Worker** role). Its prompt writes a self-contained Codex prompt,
   runs `codex exec` via shell, and returns the report. Use the wrapper's
-  `schema` option when structured output is useful.
+  `schema` option when structured output is useful. A thin cheap wrapper cannot
+  reliably tell a genuine hang from a still-running job, so bake the standing
+  Codex invocation pattern (stdin redirect and background+poll, both below) into
+  its prompt rather than leaving it to diagnose failures on its own.
 - Prefix every wrapper label with `gpt-5.6:`, e.g.
   `{label: 'gpt-5.6:review-auth'}`. The workflow UI shows the wrapper's Claude
   model, so the label is the only indication of the real worker.
-- Codex runs can exceed shell 10-minute timeout: set an explicit longer
-  timeout, or run in the background and poll for the report artifact.
+- Codex runs routinely exceed the Bash tool's 10-minute (600000 ms) cap.
+  Default to running the wrapper's `codex exec` in the background and polling
+  for the `-o` artifact plus process exit; do not block a foreground call and
+  then read its timeout as a Codex hang.
 - Parallel Codex implementation wrappers must use `isolation: 'worktree'`;
   never give parallel writers the same worktree.
 - Workflow token budgets count only Claude tokens. Codex usage is invisible to
@@ -121,7 +132,7 @@ Investigation (read-only):
 mkdir -p "$ARTIFACT_DIR"
 codex exec -m gpt-5.6-sol -C "$PWD" -s read-only \
   -c "model_reasoning_effort=<selected-effort>" \
-  -o "$ARTIFACT_DIR/result.md" "<focused investigation prompt>"
+  -o "$ARTIFACT_DIR/result.md" "<focused investigation prompt>" < /dev/null
 ```
 
 Implementation: prefer a separate branch. State the permitted files,
@@ -140,6 +151,13 @@ needs stated explicitly, or it stalls or fails:
   host's sandbox-disable flag only when user and host policy permit it, keep
   the prompt tightly scoped, and disclose the reduced isolation. Don't spend
   multiple retries on the same broken mode.
+- **Stdin block (Windows).** `codex exec` can hang on `Reading additional
+input from stdin...` when it does not receive the prompt as an argument.
+  Always pass the prompt as the final positional argument and redirect stdin
+  from empty — `codex exec … "$(cat "$ARTIFACT_DIR/prompt.txt")" < /dev/null`;
+  never pipe the prompt in through stdin. This is a distinct failure from the
+  sandbox timeout above — same ~10-minute stall, different cause — so don't
+  misdiagnose it as a sandbox or long-run problem.
 
 Review — select exactly one target (`--uncommitted`, `--base <branch>`, or
 `--commit <sha>`). A focus prompt cannot be combined with a target flag; the
