@@ -23,8 +23,7 @@ Where they conflict, this file wins.
 
 Model names are preferences, not guarantees. Before dispatching, discover the
 installed CLIs, available models, supported effort levels, and tool access.
-Never invent a model ID, provider, effort level, permission mode, or
-capability. If a preferred model is unavailable, use the next capable one and
+If a preferred model is unavailable, use the next capable one and
 disclose the fallback.
 
 ### Model Defaults

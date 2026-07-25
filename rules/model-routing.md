@@ -19,12 +19,12 @@ Do not orchestrate solely because a task is non-trivial. Higher-priority host po
 
 Concrete model IDs are preferences, not guarantees. Discover available providers, models, and effort levels before dispatching.
 
-| Role               | Use                                                           | Preferred order                                              |
-| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5 → GPT-5.6 → Opus 5                                   |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6 → Opus 5 → strongest discovered code-capable model   |
-| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5 → Opus 5 → GPT-5.6                                   |
-| **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | Lowest-cost capable OpenCode model → GPT mini → Haiku        |
+| Role               | Use                                                           | Preferred order                                                |
+| ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| **Planner**        | Architecture, ambiguous requirements, implementation planning | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
+| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-sol → Opus 5 → strongest discovered code-capable model |
+| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
+| **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-luna → Haiku                                           |
 
 Prefer a different model family for independent review. If unavailable, use the best same-family fallback and disclose the reduced independence.
 
@@ -39,4 +39,4 @@ Choose effort from risk and ambiguity, independently of role. Skill names are ad
 | `high`   | Architecture, planning, ambiguity, security, adversarial review, code review, difficult debugging     |
 | `xhigh`  | One narrow, high-stakes decision where extra reasoning has clear value                                |
 
-Use at most one automatic `xhigh` delegate. Never select `max` or `ultracode` without an explicit user request. Request delegation only for a specialist, independent judgment, parallel work, or context compression. Follow platform-specific instructions for dispatch mechanics, orchestration patterns, limits, fallbacks, and reporting.
+Use at most one automatic `xhigh` delegate. Never select `max` or `ultracode` without an explicit user request. Follow platform-specific instructions for dispatch mechanics, orchestration patterns, limits, fallbacks, and reporting.
