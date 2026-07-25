@@ -105,11 +105,18 @@ security-sensitive, or held with low confidence.
   its prompt rather than leaving it to diagnose failures on its own.
 - Prefix every wrapper label with `gpt-5.6:`, e.g.
   `{label: 'gpt-5.6:review-auth'}`. The workflow UI shows the wrapper's Claude
-  model, so the label is the only indication of the real worker.
-- Codex runs routinely exceed the Bash tool's 10-minute (600000 ms) cap.
-  Default to running the wrapper's `codex exec` in the background and polling
-  for the `-o` artifact plus process exit; do not block a foreground call and
-  then read its timeout as a Codex hang.
+  model, so the label is the only indication of the real worker. A wrapper
+  reused across phases keeps its original label; rename or disclose when its
+  role changes so the label doesn't misstate what it is doing now.
+- Codex runs routinely exceed the Bash tool's 10-minute (600000 ms) cap, so the
+  wrapper launches `codex exec` in the background — but a thin wrapper reliably
+  ends its turn the moment that launch succeeds, and its completion notification
+  fires while Codex is still running. Do not read that notification as the
+  result. Have the **orchestrator** own the watch: a background Bash until-loop
+  polling for the `-o` artifact _or_ the Codex process disappearing (covers a
+  crash as well as success), then resume the wrapper by id to collect the report
+  once the artifact exists. Don't block a foreground call and then read its
+  timeout as a Codex hang.
 - Parallel Codex implementation wrappers must use `isolation: 'worktree'`;
   never give parallel writers the same worktree.
 - Workflow token budgets count only Claude tokens. Codex usage is invisible to

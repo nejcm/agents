@@ -42,7 +42,7 @@ Rankings are relative preferences from 1–10; higher is better.
 | ------------------- | ---: | -----------: | ----: | -------------------------------------------------------------------------------------------------- |
 | GPT-5.6 (via Codex) |    9 |            8 |     5 | Implementation, mechanical changes, migrations, data analysis, logs, large documents, computer use |
 | Sonnet 5            |    5 |            5 |     6 | Thin Codex wrapper agents and bounded coordination                                                 |
-| Opus 4.8            |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment                                          |
+| Opus 5              |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment                                          |
 | Fable 5             |    2 |            9 |     9 | Architecture, ambiguous planning, product judgment, final synthesis, difficult review              |
 
 How to apply:
@@ -57,7 +57,7 @@ How to apply:
 - Bulk or mechanical work with a clear spec (implementation, migrations, data
   analysis) goes to GPT-5.6 — it is very cost effective.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7.
-- Review plans and implementations with Fable 5 or Opus 4.8, optionally adding
+- Review plans and implementations with Fable 5 or Opus 5, optionally adding
   GPT-5.6 as an extra cross-family perspective. Never review with Haiku.
 - Prefer different model families for independent review. If unavailable, disclose reduced independence.
 - If computer use would help complete or verify work, shell out to GPT-5.6
