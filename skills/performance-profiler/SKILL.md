@@ -2,6 +2,7 @@
 name: performance-profiler
 description: CPU/memory profiling and performance benchmarking with advanced analysis
 category: performance
+disable-model-invocation: true
 ---
 
 # Performance Profiler Skill

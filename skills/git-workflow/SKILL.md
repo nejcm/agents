@@ -1,54 +1,53 @@
 ---
 name: git-workflow
-description: Manage Git operations including branches, commits, and pull requests
+description: Manage safe Git workflows: status, branches, commits, pushes, and pull requests. Use for repository changes, commit preparation, branch management, or PR creation.
 category: workflow
 ---
 
-# Git Workflow Skill
+# Git Workflow
 
-This skill provides structured Git operations for the development workflow.
+## Workflow
 
-## Purpose
+### 1. Inspect
 
-Handle common Git operations with safety checks:
+```bash
+git status --porcelain
+git diff --stat
+```
 
-- Create feature branches
-- Commit changes
-- Create pull requests
-- Check repository status
-- Manage branch operations
+- **Confirm** the current branch.
+- **Preserve** unrelated user changes.
+- **Identify** staged, unstaged, and untracked files.
+- **Check** divergence from the base branch.
 
-## Operations
-
-### 1. Create Feature Branch
+### 2. Branch
 
 ```bash
 git checkout -b feature/user-profiles
 ```
 
-**Safety Checks:**
+- **Start** from the intended base.
+- **Update** the base when safe.
+- **Require** a clean worktree when switching risks conflicts.
+- **Follow** branch naming rules.
 
-- Ensure working directory is clean
-- Verify base branch is up to date
-- Follow branch naming conventions
+### 3. Commit
 
-### 2. Commit Changes
+- **Stage** only intended files.
+- **Review** the staged diff.
+- **Keep** commits atomic.
+- **Run** relevant lint, types, and fast tests.
+- **Never** commit secrets, credentials, or debug code.
 
 ```bash
-git add .
-git commit -m "feat: add user profile editing
-
-- Add profile controller
-- Create profile update endpoint
-- Add validation for bio field
-- Update tests
-
-Implements: specs/2026-02-13-user-profiles.md"
+git add <files>
+git diff --cached
+git commit -m "feat: add profile editing"
 ```
 
-**Commit Message Format:**
+**Format**
 
-```
+```text
 <type>: <subject>
 
 <body>
@@ -56,111 +55,72 @@ Implements: specs/2026-02-13-user-profiles.md"
 <footer>
 ```
 
-**Types:**
+**Types**
 
-- `feat`: New feature
-- `fix`: Bug fix
-- `refactor`: Code refactoring
-- `test`: Adding tests
-- `docs`: Documentation
-- `chore`: Maintenance
+- `feat` — New feature
+- `fix` — Bug fix
+- `refactor` — Structural change
+- `test` — Test change
+- `docs` — Documentation
+- `chore` — Maintenance
 
-### 3. Create Pull Request
+**Messages**
 
-Using GitHub CLI:
+- **Use** specific, imperative subjects.
+- **Explain** motivation in the body.
+- **Link** issues or specs in the footer.
+- **Avoid** generic subjects like `fix` or `update`.
+
+### 4. Push
+
+- **Run** the relevant full test suite.
+- **Check** base-branch divergence.
+- **Resolve** conflicts before pushing.
+- **Keep** hooks enabled unless justified.
+- **Never** force-push `main` or `master`.
+
+### 5. Pull Request
 
 ```bash
-gh pr create \
-  --title "feat: Add user profile editing" \
-  --body "$(cat <<EOF
+gh pr create --title "feat: add profile editing" --body-file pr.md
+```
+
+**PR body**
+
+```markdown
 ## Summary
-- Implements user profile editing functionality
-- Adds validation for profile fields
-- Includes comprehensive tests
+- Describe the change.
+- Explain its purpose.
 
 ## Spec
-specs/2026-02-13-user-profiles.md
+- Link the issue or specification.
 
 ## Testing
-- [x] Unit tests pass
-- [x] Integration tests pass
-- [x] Manual testing complete
+- [ ] List completed checks.
 
 ## Checklist
-- [x] Code follows style guide
-- [x] Tests added
-- [x] Documentation updated
-- [x] No security issues
-EOF
-)"
+- [ ] Tests added or updated.
+- [ ] Documentation updated.
+- [ ] Security reviewed.
 ```
 
-### 4. Repository Status
+## Safety
 
-```bash
-git status --porcelain
-git diff --stat
-```
+- **Never** overwrite unrelated changes.
+- **Never** use destructive Git commands without approval.
+- **Never** push broken or unverified code.
+- **Avoid** generated files and large binaries.
+- **Report** failed checks before continuing.
 
-**Output Format:**
+## Agent Responsibilities
 
-```json
-{
-  "branch": "feature/user-profiles",
-  "modified": ["src/user.controller.ts", "src/user.service.ts"],
-  "added": ["tests/user.spec.ts"],
-  "deleted": [],
-  "staged": true,
-  "commits_ahead": 3,
-  "commits_behind": 0
-}
-```
+- **Builder** — Branch, implement, test, commit, push.
+- **Planner** — Inspect history and diffs.
+- **Reviewer** — Review diffs, commits, and PR text.
 
-## Safety Features
+## Results
 
-### Pre-commit Checks
-
-- Linting passes
-- Type checking passes
-- Tests pass (fast tests only)
-- No debug statements
-- No TODOs without tickets
-
-### Pre-push Checks
-
-- All tests pass
-- Branch is up to date with base
-- No merge conflicts
-- CI checks would pass
-
-### Never Allow
-
-- ❌ Force push to main/master
-- ❌ Commit secrets or credentials
-- ❌ Push broken code
-- ❌ Skip hooks without reason
-
-## Integration with Agents
-
-### Builder Agent
-
-- Create feature branch
-- Commit implementation
-- Push to remote
-
-### Planner Agent
-
-- Read commit history
-- Understand changes
-- Plan based on git diff
-
-### Reviewer Agent
-
-- Review git diff
-- Check commit messages
-- Validate PR description
-
-## Output Format
+**Success**
 
 ```json
 {
@@ -178,7 +138,7 @@ git diff --stat
 }
 ```
 
-## Error Handling
+**Failure**
 
 ```json
 {
@@ -186,31 +146,18 @@ git diff --stat
   "status": "error",
   "error": {
     "type": "working_directory_not_clean",
-    "message": "Cannot commit: working directory has unstaged changes",
-    "resolution": "Stage or stash changes before committing"
+    "message": "Unstaged changes remain.",
+    "resolution": "Stage, stash, or exclude them."
   }
 }
 ```
 
-## Best Practices
+## Branch Names
 
-- ✅ Use conventional commits
-- ✅ Reference spec files in commits
-- ✅ Keep commits atomic
-- ✅ Write descriptive PR descriptions
-- ✅ Link to issues/specs
-- ❌ Don't commit large binaries
-- ❌ Don't commit generated files
-- ❌ Don't use generic messages ("fix", "update")
-
-## Branch Naming Conventions
-
-```
+```text
 feature/short-description
 bugfix/issue-number-description
 hotfix/critical-issue
 refactor/component-name
 docs/update-readme
 ```
-
-This skill enables safe, structured Git operations throughout the development workflow.
