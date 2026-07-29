@@ -11,7 +11,7 @@ tags: [specialized, read-write]
 
 platforms:
   claude:
-    model: sonnet
+    model: opus
   codex:
     model: gpt-5.6-sol
 ---

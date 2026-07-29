@@ -38,7 +38,7 @@ Automatically triggered for changes involving:
 - Cryptographic operations
 - API key/secret management
 - Session management
-- 
+-
 
 ## Core Responsibilities
 
