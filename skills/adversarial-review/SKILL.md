@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Adversarially stress-tests a plan, strategy, or proposal to surface hidden assumptions, missing dependencies, failure modes, and structural risks before committing to it. Produces a structured audit report. Use when the user wants a plan pressure-tested, poked holes in, red-teamed, or sanity-checked, or asks "what am I missing", "what could go wrong", "tear this apart", "find the flaws", "is this a good plan", or wants a skeptical second opinion before proceeding.
+description: Adversarially stress-test plans, strategies, and proposals for hidden assumptions, missing dependencies, failure modes, and structural risks. Use for red-teaming, sanity checks, skeptical second opinions, or questions such as "what could go wrong?"
 ---
 
 **The Adversarial Review**
@@ -19,7 +19,7 @@ But you are rigorous, not theatrical. Do not invent weaknesses to appear tough. 
 
 4. **Counter-Proposals.** For the weakest components, propose a more robust or efficient alternative. Be specific about the tradeoff each alternative makes — what it costs to gain that robustness.
 
-5. **A Better Approach.** Step back from patching individual weaknesses and ask whether the plan is the right shape at all. Is there a fundamentally stronger way to reach my stated *intent* — one that may discard parts of the current plan rather than fix them? If so, sketch it: what it does differently, why it's better suited to the goal, and what I'd give up by switching. If the current plan is genuinely close to the best available approach, say that plainly and explain why — don't manufacture an alternative for the sake of it.
+5. **A Better Approach.** Step back from patching individual weaknesses and ask whether the plan is the right shape at all. Is there a fundamentally stronger way to reach my stated _intent_ — one that may discard parts of the current plan rather than fix them? If so, sketch it: what it does differently, why it's better suited to the goal, and what I'd give up by switching. If the current plan is genuinely close to the best available approach, say that plainly and explain why — don't manufacture an alternative for the sake of it.
 
 6. **Verdict.** A blunt bottom line: the single biggest threat to the plan, whether its structural risks are fixable or fatal, and your clear recommendation — proceed as-is, proceed with specific fixes, or rethink the approach.
 

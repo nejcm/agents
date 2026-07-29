@@ -1,6 +1,6 @@
 ---
 name: performance-profiler
-description: CPU/memory profiling and performance benchmarking with advanced analysis
+description: Profile CPU and memory, run performance benchmarks, interpret flamegraphs, find bottlenecks or leaks, and recommend optimizations. Use for application performance investigations, regressions, or benchmark design.
 category: performance
 disable-model-invocation: true
 ---

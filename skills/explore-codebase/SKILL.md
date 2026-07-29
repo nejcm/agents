@@ -1,6 +1,6 @@
 ---
 name: explore-codebase
-description: Systematic codebase exploration methodology
+description: Systematically map an unfamiliar codebase's stack, entry points, request and data flow, architecture, authentication, tests, and deployment. Use when orienting in a repository or tracing how it works.
 category: workflow
 ---
 

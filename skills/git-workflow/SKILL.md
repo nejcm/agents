@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Manage safe Git workflows: status, branches, commits, pushes, and pull requests. Use for repository changes, commit preparation, branch management, or PR creation.
+description: Safely manage Git status, branches, commits, pushes, and pull requests while preserving unrelated work. Use for commit preparation, branch operations, publishing changes, or PR creation.
 category: workflow
 ---
 

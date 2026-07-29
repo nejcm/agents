@@ -1,6 +1,6 @@
 ---
 name: implement-plan
-description: Execute an approved, existing implementation plan from a file, issue, PRD, pasted checklist or plan from current chat. Use this skill whenever the user asks to implement a plan, continue a plan, execute phases, work through checkboxes, or resume planned development, even if they only say "do the next phase" or "continue from the plan."
+description: Execute or resume an approved implementation plan from a file, issue, PRD, checklist, or the current conversation. Use when implementing a plan, completing its next phase, or continuing unfinished planned work.
 ---
 # Implement Plan
 

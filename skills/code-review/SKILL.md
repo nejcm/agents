@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Request a read-only code review of completed work, a branch, or a PR before proceeding or merging. Use when the user asks for code review, review since a ref, review recent work, verify implementation against requirements, or check quality before merge. Combines fixed-point diff review with separate Spec and Standards/Quality axes, severity-based findings, and clear merge readiness.
+description: Perform a read-only review of completed work, a branch, or a pull request against both requirements and engineering quality. Use for code reviews, pre-merge checks, recent-change reviews, or implementation verification.
 ---
 
 # Code Review

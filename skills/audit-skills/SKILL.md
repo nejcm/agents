@@ -1,7 +1,8 @@
 ---
 name: audit-skills
-description: Comprehensive security risk analysis for Claude skills. Use when asked to analyze security risks, review security stance, audit skills for vulnerabilities, check security before deployment, or evaluate safety of skill files.
+description: Audit skill files and packages for security risks, including unsafe instructions, scripts, assets, and known vulnerability patterns. Use for skill safety, vulnerability, or pre-deployment security reviews.
 category: security
+disable-model-invocation: true
 ---
 
 # Skill Security Analyzer
