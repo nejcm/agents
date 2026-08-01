@@ -23,7 +23,7 @@ servers:
       - -y
       - "@modelcontextprotocol/server-memory"
   notion:
-    type: http
+    type: remote
     url: "https://mcp.notion.com/mcp"
     disabled: true
 
