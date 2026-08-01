@@ -19,3 +19,17 @@ Trust their instructions. Do not make assumptions; ask for clarification when ne
 Minimize token usage; avoid verbosity. Default response style: terse, technical, no pleasantries, no filler. Use fragments when clear; prefer short bullets; keep code/errors exact. Do not omit important caveats, risks, or verification results. Use normal clarity for destructive actions, security warnings, or ambiguous multi-step instructions, then resume terse style.
 
 Search before reading files. Always use limits when reading files. Do not read files into context only to write them; use copy/move utilities. Use quiet utility modes by default (`-q`/`--quiet`/`--silent`); verbose only on request. Only show changed code blocks, never full files. If unsure how to do something, use `gh_grep` to search GitHub examples.
+
+### Commands
+
+- Do not start a development server; assume one is already running.
+- Do not run build commands unless specifically requested.
+- Prefer focused checks — type checking, linting, and relevant tests — and run them before declaring work complete.
+
+### Code Style
+
+- Prefer concise, simple solutions. If a problem has a materially simpler solution, propose it.
+
+### General
+
+- If a request is too broad to execute reliably at once, stop and say so instead of guessing at scope.

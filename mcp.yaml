@@ -22,6 +22,11 @@ servers:
     args:
       - -y
       - "@modelcontextprotocol/server-memory"
+  notion:
+    type: http
+    url: "https://mcp.notion.com/mcp"
+    disabled: true
+
   # sequential-thinking:
   #   type: local
   #   command: npx

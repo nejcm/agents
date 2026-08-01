@@ -1,21 +1,5 @@
 @AGENTS.md
 
-## Personal Preferences
-
-### Commands
-
-- Do not start a development server; assume one is already running.
-- Do not run build commands unless specifically requested.
-- Prefer focused checks — type checking, linting, and relevant tests — and run them before declaring work complete.
-
-### Code Style
-
-- Prefer concise, simple solutions. If a problem has a materially simpler solution, propose it.
-
-### General
-
-- If a request is too broad to execute reliably at once, stop and say so instead of guessing at scope.
-
 ## Model Orchestration
 
 Claude Code-specific mechanics for the model-routing policy imported above.
@@ -66,8 +50,8 @@ How to apply:
 
 Follow the routing policy's effort table and default Fable to `high` when
 the work benefits from it. Reasoning effort controls thought per step, not how
-long an agent can continue. Claude wrapper agents may use only `low`, `medium`,
-or `high`; do not auto-select `xhigh` for a wrapper.
+long an agent can continue. Claude wrapper agents may use only `low` or `medium`;
+do not auto-select `xhigh` for a wrapper.
 
 ### Execution mechanics
 
