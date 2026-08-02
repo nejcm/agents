@@ -1,6 +1,12 @@
 # Skills
 
-OpenCode skill definitions — reusable, invocable capabilities that agents can call during a session. Each skill lives in its own subdirectory with a `SKILL.md` and optional `config/` or `references/` directories.
+Reusable, invocable capabilities that agents can call during a session. Each
+skill lives in its own subdirectory with a `SKILL.md` and optional `config/`,
+`references/`, `scripts/`, or `assets/` directories.
+
+Skills contain procedures and output contracts, not model selection, tool
+permissions, authorization, or isolated-agent behavior. Keep those concerns in
+`agents/`.
 
 ## Structure
 
@@ -14,7 +20,9 @@ skills/
 
 ## How It's Used
 
-The build system copies `skills/` directly into `generated/[PLATFORM]/skills/` at the repo root. No transformation is applied — files are used as-is by OpenCode.
+The build system copies `skills/` directly into `generated/[PLATFORM]/skills/`
+at the repo root. No transformation is applied, so keep each `SKILL.md`
+self-contained and avoid platform-specific assumptions unless documented.
 
 ## Adding a New Skill
 

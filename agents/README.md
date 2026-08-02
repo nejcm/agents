@@ -1,6 +1,9 @@
 # Agents
 
-Canonical agent definitions shared across all AI tools. Each file is a Markdown document with YAML frontmatter that controls how the agent is configured per tool.
+Canonical execution profiles shared across all AI tools. Each file is a Markdown document with YAML frontmatter that controls how the agent is configured per tool.
+
+Agents are for named, isolated execution with model selection, tool policy, or
+platform-specific routing. Reusable procedures belong in `skills/`.
 
 ## File Format
 

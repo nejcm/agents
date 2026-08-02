@@ -26,7 +26,7 @@ The tree mirrors a global `~/.ulis/` source directory:
 | [`skills.yaml`](./skills.yaml) | External skill installs |
 | [`plugins.yaml`](./plugins.yaml) | Plugin installs |
 | [`agents/`](./agents/) | Agent definitions (Markdown with YAML frontmatter) |
-| [`skills/`](./skills/) | Reusable OpenCode skills (`SKILL.md`) |
+| [`skills/`](./skills/) | Reusable skill definitions (`SKILL.md`) |
 | [`commands/`](./commands/) | OpenCode slash commands |
 | [`rules/`](./rules/) | Shared coding rules |
 | [`presets/`](./presets/) | Stack-specific skill presets (`react-web`, `react-native`, `web-growth-audit`) |
@@ -63,7 +63,7 @@ This deploys to `~/.claude/`, `~/.codex/`, `~/.cursor/`, `~/.config/opencode/`, 
 ## Adding configuration
 
 - **Agents**: add a Markdown file under [`agents/`](./agents/) with YAML frontmatter.
-- **Skills**: create a directory under [`skills/`](./skills/) with a `SKILL.md`.
+- **Skills**: create a directory under [`skills/`](./skills/) with a `SKILL.md`; use them for reusable procedures rather than execution policy.
 - **Slash commands**: add a Markdown file under [`commands/`](./commands/).
 - **Rules**: add Markdown files under [`rules/`](./rules/) or a language-specific folder.
 - **Raw platform overrides**: place files in [`raw/<platform>/`](./raw/) to copy them verbatim into generated output.
