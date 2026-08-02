@@ -1,6 +1,6 @@
 ---
 name: explore-codebase
-description: Systematically map an unfamiliar codebase's stack, entry points, request and data flow, architecture, authentication, tests, and deployment. Use when orienting in a repository or tracing how it works.
+description: Map an unfamiliar codebase's stack, entry points, data flow, architecture, auth, tests, and deployment. Use when orienting in a repository or tracing behavior.
 category: workflow
 ---
 

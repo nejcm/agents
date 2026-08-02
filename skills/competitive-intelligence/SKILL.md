@@ -1,6 +1,6 @@
 ---
 name: competitive-intelligence
-description: Map competitors, benchmark products and pricing, analyze positioning and strategic intent, and identify threats and opportunities from public evidence. Use for competitor research, market positioning, feature comparisons, SWOT analysis, and competitive monitoring plans.
+description: Research competitors, products, pricing, positioning, strategic intent, threats, and opportunities from public evidence. Use for benchmarks, SWOT, market positioning, and monitoring plans.
 disable-model-invocation: true
 ---
 

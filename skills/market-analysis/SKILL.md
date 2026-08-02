@@ -1,6 +1,6 @@
 ---
 name: market-analysis
-description: Analyze markets, customer segments, demand signals, growth, market size, trends, and entry opportunities using explicit assumptions and evidence. Use for TAM/SAM/SOM, segmentation, consumer behavior, market-entry, pricing, channel, and opportunity analysis.
+description: Analyze markets, segments, demand, size, growth, trends, pricing, channels, and entry opportunities with explicit assumptions and evidence. Use for TAM/SAM/SOM and opportunity analysis.
 disable-model-invocation: true
 ---
 
