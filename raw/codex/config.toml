@@ -15,3 +15,61 @@ hide_full_access_warning = true
 
 [features]
 hooks = true
+
+# Skills installed under ~/.codex/skills.
+[[skills.config]]
+path = "skills/audit-skills/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "skills/competitive-intelligence/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "skills/idea-validation/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "skills/market-analysis/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "skills/product-improvements/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "skills/refactor-code/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "skills/research-analyst/SKILL.md"
+enabled = false
+
+# Skills installed under ~/.agents/skills.
+[[skills.config]]
+path = "../.agents/skills/grill-me/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/grill-with-docs/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/handoff/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/improve-codebase-architecture/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/thermo-nuclear-code-quality-review/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/to-spec/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/wayfinder/SKILL.md"
+enabled = false
