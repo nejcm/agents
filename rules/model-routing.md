@@ -22,11 +22,28 @@ Concrete model IDs are preferences, not guarantees. Discover available providers
 | Role               | Use                                                           | Preferred order                                                |
 | ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------- |
 | **Planner**        | Architecture, ambiguous requirements, implementation planning | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-sol → Opus 5 → strongest discovered code-capable model |
+| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-5.6-sol by difficulty → Opus 5 → strongest capable model |
 | **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
 | **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-luna → Haiku                                           |
 
 Prefer a different model family for independent review. If unavailable, use the best same-family fallback and disclose the reduced independence.
+
+GPT-5.6 variants are selected by role and task difficulty below. If a selected
+variant or effort is unavailable, use the next capable fallback and disclose
+it.
+
+## Builder Routing
+
+Use difficulty to select the variant and effort to select the depth of work:
+
+| Task profile | Model | Effort |
+| ------------ | ----- | ------ |
+| Bounded, simple-to-medium work | GPT-5.6-luna | `xhigh` by default; `max` when extra depth is worth the latency |
+| Medium work with integration or uncertainty through very complex work | GPT-5.6-sol | `medium` for routine work; `high` for complexity, ambiguity, or higher risk |
+
+The medium band overlaps intentionally: choose Luna only when the task is
+bounded and easily verified; choose Sol when integration, uncertainty, or
+correctness risk matters more than cost.
 
 ## Effort
 
@@ -37,6 +54,9 @@ Choose effort from risk and ambiguity, independently of role. Skill names are ad
 | `low`    | Mechanical, bounded, easily verified work: exploration, status, documentation, formatting, validation |
 | `medium` | Routine implementation, refactoring, and analysis                                                     |
 | `high`   | Architecture, planning, ambiguity, security, adversarial review, code review, difficult debugging     |
-| `xhigh`  | One narrow, high-stakes decision where extra reasoning has clear value                                |
+| `xhigh`  | One narrow, high-stakes decision or bounded Luna Builder task where extra reasoning has clear value  |
+| `max`    | Extra-depth execution for a bounded Builder task routed to Luna when latency and token cost are acceptable |
 
-Use at most one automatic `xhigh` delegate. Never select `max` or `ultracode` without an explicit user request. Follow platform-specific instructions for dispatch mechanics, orchestration patterns, limits, fallbacks, and reporting.
+Use at most one automatic `xhigh` delegate. `max` is allowed only for the
+Luna Builder path above; never select `ultracode`. Avoid Luna when latency is
+more important than cost.

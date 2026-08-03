@@ -87,8 +87,14 @@ transcripts.
 ## GPT-5.6 via Codex
 
 When routing selects GPT-5.6, use `codex exec` or `codex exec review` with
-`-m gpt-5.6-sol`. If host workflows accept only Claude models, use a thin
-host-native wrapper selected by the Claude-specific model defaults (normally
+`-m <variant selected by model-routing>`. For Builder dispatches, apply the
+Builder matrix: use `gpt-5.6-luna` at `xhigh` (or `max` when extra depth is
+worth the latency) for bounded simple-to-medium work, and `gpt-5.6-sol` at
+`medium` or `high` for medium-to-very-complex work. In the overlapping medium
+band, select Luna only for bounded, easily verified work; otherwise select Sol.
+Do not hard-code one GPT-5.6 variant for every role. If host workflows accept
+only Claude models, use a thin host-native wrapper selected by the
+Claude-specific model defaults (normally
 Sonnet 5) that runs Codex and returns its artifact. Use its schema option when
 structured output helps. Prefix its label with `gpt-5.6:` so the UI does not
 misrepresent the actual worker; if a reused wrapper changes roles, rename it or
@@ -97,11 +103,11 @@ invisible to Claude workflow token budgets, so track it separately when a
 budget matters.
 
 Before relying on an invocation, check the installed CLI help. Give Codex a
-self-contained prompt and pass the selected effort separately:
+self-contained prompt and pass the selected variant and effort separately:
 
 ```bash
 mkdir -p "$ARTIFACT_DIR"
-codex exec -m gpt-5.6-sol -C "$PWD" -s read-only \
+codex exec -m <selected-variant> -C "$PWD" -s read-only \
   -c "model_reasoning_effort=<selected-effort>" \
   -o "$ARTIFACT_DIR/result.md" \
   "<focused prompt>" < /dev/null
@@ -125,7 +131,7 @@ findings caused only by unrelated scratch or local-settings files. Do not rerun
 an unchanged, already-triaged diff to force findings.
 
 ```bash
-codex exec review -m gpt-5.6-sol --uncommitted \
+codex exec review -m <selected-variant> --uncommitted \
   -c "model_reasoning_effort=<selected-effort>" \
   -o "$ARTIFACT_DIR/review.md"
 ```
