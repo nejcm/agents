@@ -1,0 +1,3 @@
+# yaml-language-server: $schema=https://unpkg.com/@nejcm/ulis/schemas/extensions.schema.json
+
+# Add package-runner extension installs here when needed.

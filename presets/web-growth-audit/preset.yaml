@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../dist/schemas/preset.schema.json
+# yaml-language-server: $schema=https://unpkg.com/@nejcm/ulis/schemas/preset.schema.json
 
 name: Web Growth Audit
 description: SEO, quality audit, and optimization skills for shipped web experiences.

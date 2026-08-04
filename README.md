@@ -24,7 +24,7 @@ The tree mirrors a global `~/.ulis/` source directory:
 | [`mcp.yaml`](./mcp.yaml) | MCP server definitions |
 | [`permissions.yaml`](./permissions.yaml) | Per-platform read/write/bash rules |
 | [`skills.yaml`](./skills.yaml) | External skill installs |
-| [`plugins.yaml`](./plugins.yaml) | Plugin installs |
+| [`extensions.yaml`](./extensions.yaml) | External CLI extension installs |
 | [`agents/`](./agents/) | Agent definitions (Markdown with YAML frontmatter) |
 | [`skills/`](./skills/) | Reusable skill definitions (`SKILL.md`) |
 | [`commands/`](./commands/) | OpenCode slash commands |
@@ -97,6 +97,7 @@ ulis install --global --source . --preset react-web --yes
 ## Important notes
 
 - Generated output is ignored by Git. Run `ulis build` to regenerate it.
+- YAML config files reference the published ULIS schemas, so autocomplete works with the global CLI installation.
 - Back up existing tool configs before running `ulis install --global`, or use `--backup`.
 - This configuration is a living baseline. Review generated files in `generated/` before installing if you have existing customizations.
 

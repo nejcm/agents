@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://unpkg.com/@nejcm/ulis/schemas/skills.schema.json
+
+"*":
+  skills:
+    - name: https://github.com/elayadesign/ai-design-skills/blob/main/skills/landing-page-design
+      key: ai-design-skills/landing-page-design
+    - name: https://www.skills.sh/anthropics/skills/frontend-design
+      key: anthropics/frontend-design
+    - name: https://www.skills.sh/leonxlnx/taste-skill/design-taste-frontend
+      key: leonxlnx/taste-skill/design-taste-frontend
+    - name: https://www.skills.sh/leonxlnx/taste-skill/redesign-existing-projects
+      key: leonxlnx/taste-skill/redesign-existing-projects
+    - name: https://www.skills.sh/leonxlnx/taste-skill/redesign-existing-projects
+      key: leonxlnx/taste-skill/redesign-existing-projects
