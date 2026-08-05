@@ -1,0 +1,5 @@
+interface:
+  display_name: "Idea Validation"
+  short_description: "Pressure-test product and business ideas"
+policy:
+  allow_implicit_invocation: false

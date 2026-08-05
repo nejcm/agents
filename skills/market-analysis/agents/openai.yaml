@@ -1,0 +1,5 @@
+interface:
+  display_name: "Market Analysis"
+  short_description: "Analyze markets and opportunities"
+policy:
+  allow_implicit_invocation: false

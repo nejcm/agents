@@ -1,0 +1,5 @@
+interface:
+  display_name: "Product Improvements"
+  short_description: "Generate grounded product improvements"
+policy:
+  allow_implicit_invocation: false

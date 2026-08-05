@@ -1,0 +1,5 @@
+interface:
+  display_name: "Research Analyst"
+  short_description: "Conduct evidence-based research"
+policy:
+  allow_implicit_invocation: false
