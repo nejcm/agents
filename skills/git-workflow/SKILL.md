@@ -104,6 +104,10 @@ gh pr create --title "feat: add profile editing" --body-file pr.md
 - [ ] Security reviewed.
 ```
 
+### Stacked PRs
+
+For large or dependent changes that should land as a chain of small reviewable PRs, use `gh stack` instead of a single branch/PR. See [gh-stack.md](./gh-stack.md) for setup, commands, and workflow.
+
 ## Safety
 
 - **Never** overwrite unrelated changes.
