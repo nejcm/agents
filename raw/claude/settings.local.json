@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(npx *)",
       "Bash(opencode --version)",
       "Bash(bun pm *)",
       "Bash(bun install *)",

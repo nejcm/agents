@@ -22,10 +22,10 @@ servers:
     args:
       - -y
       - "@modelcontextprotocol/server-memory"
-  notion:
-    type: remote
-    url: "https://mcp.notion.com/mcp"
-    disabled: true
+  # notion:
+  #   type: remote
+  #   url: "https://mcp.notion.com/mcp"
+  #   disabled: true
 
   # sequential-thinking:
   #   type: local
