@@ -1,6 +1,6 @@
 ---
 name: model-orchestration
-description: Dispatch and coordinate multi-model work in Claude Code, including delegation patterns, GPT-5.6 through Codex CLI, compact task packets, long-running runs, and independent review. Use whenever implementing an approved plan or design, delegating or parallelizing work, shelling out to Codex, or starting medium- or high-complexity work where plan → build → review → fix materially reduces risk.
+description: Dispatch and coordinate multi-model work in Claude Code, including delegation patterns, Builder CLIs (Codex default, Agent CLI fallback), compact task packets, long-running runs, and independent review. Use whenever implementing an approved plan or design, delegating or parallelizing work, shelling out to `agent` or Codex, or starting medium- or high-complexity work where plan → build → review → fix materially reduces risk.
 ---
 
 # Model Orchestration
@@ -15,7 +15,8 @@ At each dispatch, apply `model-routing`, then confirm that the chosen mechanism
 supports the model, effort, tools, and isolation needed. Prefer:
 
 1. A capable host-native subagent/workflow.
-2. A non-interactive CLI (`codex exec` or `claude -p`).
+2. A non-interactive CLI (`codex exec` for the default Builder, `agent` for the
+   Cursor Auto/Composer fallback, or `claude -p`).
 3. Local work, disclosing any lost specialization or independent review.
 
 Never invent a capability or identifier. Local fallback is unavailable during
@@ -39,6 +40,19 @@ to preserve context. Give genuinely wrong output one corrected retry, then stop
 and re-plan. Invocation, sandbox, timeout, or infrastructure failures require
 fixing the launch rather than spending that retry. Call a result independent
 only if another model actually produced it.
+
+## Builder CLIs
+
+After `model-routing` selects a Builder path, read only the matching reference
+before dispatching:
+
+| Path                      | When                                                     | Read                      |
+| ------------------------- | -------------------------------------------------------- | ------------------------- |
+| Codex / GPT-5.6           | Default Builder                                          | `references/codex.md`     |
+| Agent CLI (Auto/Composer) | Codex unavailable, or user requests Cursor Auto/Composer | `references/agent-cli.md` |
+
+Do not load both unless switching paths mid-run or comparing mechanisms. Keep
+CLI flags, auth, resume, and tool-specific long-run details in those files.
 
 ## Staged Implementation
 
@@ -84,82 +98,20 @@ Pass the accepted plan, result/diff report, and unresolved risks between
 phases. Enforce the `Return` contract and summarize results rather than relaying
 transcripts.
 
-## GPT-5.6 via Codex
-
-When routing selects GPT-5.6, use `codex exec` or `codex exec review` with
-`-m <variant selected by model-routing>`. For Builder dispatches, apply the
-Builder matrix: use `gpt-5.6-luna` at `xhigh` (or `max` when extra depth is
-worth the latency) for bounded simple-to-medium work, and `gpt-5.6-sol` at
-`medium` or `high` for medium-to-very-complex work. In the overlapping medium
-band, select Luna only for bounded, easily verified work; otherwise select Sol.
-Do not hard-code one GPT-5.6 variant for every role. If host workflows accept
-only Claude models, use a thin host-native wrapper selected by the
-Claude-specific model defaults (normally
-Sonnet 5) that runs Codex and returns its artifact. Use its schema option when
-structured output helps. Prefix its label with `gpt-5.6:` so the UI does not
-misrepresent the actual worker; if a reused wrapper changes roles, rename it or
-disclose the mismatch. Parallel writers need separate worktrees. Codex usage is
-invisible to Claude workflow token budgets, so track it separately when a
-budget matters.
-
-Before relying on an invocation, check the installed CLI help. Give Codex a
-self-contained prompt and pass the selected variant and effort separately:
-
-```bash
-mkdir -p "$ARTIFACT_DIR"
-codex exec -m <selected-variant> -C "$PWD" -s read-only \
-  -c "model_reasoning_effort=<selected-effort>" \
-  -o "$ARTIFACT_DIR/result.md" \
-  "<focused prompt>" < /dev/null
-```
-
-For implementation, state permitted files, required behavior, exclusions,
-branch authority, and verification. Prefer an isolated branch or worktree;
-working directly on one branch is valid for sequential phases because there
-are no parallel writers to isolate. Prompt as the final positional argument and
-redirect empty stdin: on Windows, piped or absent stdin can stall at `Reading
-additional input from stdin...`. Distinguish that stall from a sandbox failure.
-If the sandbox fails before commands start, repair that mode and retry once
-with broader isolation only when host and user policy permit it. Keep the prompt
-tightly scoped and disclose the reduced isolation.
-
-For review, select exactly one target (`--uncommitted`, `--base`, or `--commit`)
-_or_ use a focused prompt; the CLI does not allow both. A clean review is a
-valid result. Reports must name the inspected target and clearly state when
-there are no findings. `--uncommitted` includes untracked files, so discard
-findings caused only by unrelated scratch or local-settings files. Do not rerun
-an unchanged, already-triaged diff to force findings.
-
-```bash
-codex exec review -m <selected-variant> --uncommitted \
-  -c "model_reasoning_effort=<selected-effort>" \
-  -o "$ARTIFACT_DIR/review.md"
-```
-
-`codex exec resume <session-id>` preserves context but not necessarily the
-recorded model: always supply `-m`. Check that any prompt file is non-empty
-before resuming. Store prompts and reports in a temporary or gitignored
-artifact directory and remove or disclose leftovers.
-
-For computer use, state the flow, environment, whether edits are allowed, and
-the screenshot, video, or other evidence required. Confirm that the invoked
-Codex environment exposes the necessary tools; CLI availability alone does not
-establish computer-use availability.
-
 ## Long Runs and Results
 
-Launch lengthy Codex runs in the background and have the orchestrator watch the
-captured PID, output artifact, and a per-run JSONL log created by redirecting
-`--json` stdout. Poll about once a minute and emit a heartbeat at least every
-ten minutes. Stop when the artifact appears or the captured PID exits without
-one, and report which condition occurred. Treat 15 minutes without log growth
-as a diagnostic signal, not proof of a hang or a reason to terminate a live
-process. On Windows, poll the captured PID with `tasklist`, not `kill -0` or a
-process-name check.
+Launch lengthy Builder CLI runs in the background and have the orchestrator
+watch the captured PID, output artifact, and the per-run log described in the
+active Builder CLI reference. Poll about once a minute and emit a heartbeat at
+least every ten minutes. Stop when the artifact appears or the captured PID
+exits without one, and report which condition occurred. Treat 15 minutes
+without log growth as a diagnostic signal, not proof of a hang or a reason to
+terminate a live process. On Windows, poll the captured PID with `tasklist`,
+not `kill -0` or a process-name check.
 
-A wrapper's completion only confirms that it launched Codex. Resume it after
-the artifact exists to collect the outcome. Before retrying or resuming after a
-timeout, inspect the PID, artifact, and log.
+A wrapper's completion only confirms that it launched the delegate. Resume it
+after the artifact exists to collect the outcome. Before retrying or resuming
+after a timeout, inspect the PID, artifact, and log.
 
 Require cited test, repository-tool, or primary-source evidence. Treat broad or
 slow fixes as higher-risk and give them additional Reviewer/Judge scrutiny.

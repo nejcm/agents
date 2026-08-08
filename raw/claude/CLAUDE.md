@@ -21,12 +21,13 @@ Rankings are relative preferences from 1–10; higher is better.
   latency, tokens), not list price. A constraint and tiebreaker, never a
   reason to accept weak output.
 
-| Model               | Cost | Intelligence | Taste | Default work                                                                                       |
-| ------------------- | ---: | -----------: | ----: | -------------------------------------------------------------------------------------------------- |
-| GPT-5.6 (via Codex) |    9 |            8 |     5 | Implementation, mechanical changes, migrations, data analysis, logs, large documents, computer use |
-| Sonnet 5            |    5 |            5 |     6 | Thin Codex wrapper agents and bounded coordination                                                 |
-| Opus 5              |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment                                          |
-| Fable 5             |    2 |            9 |     9 | Architecture, ambiguous planning, product judgment, final synthesis, difficult review              |
+| Model                      | Cost | Intelligence | Taste | Default work                                                                                       |
+| -------------------------- | ---: | -----------: | ----: | -------------------------------------------------------------------------------------------------- |
+| Cursor Auto / Composer     |    8 |            7 |     6 | Fallback Builder via `agent` when Codex is unavailable or explicitly requested                     |
+| GPT-5.6 (via Codex)        |    9 |            8 |     5 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use     |
+| Sonnet 5                   |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                           |
+| Opus 5                     |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment                                          |
+| Fable 5                    |    2 |            9 |     9 | Architecture, ambiguous planning, product judgment, final synthesis, difficult review              |
 
 How to apply:
 
@@ -37,11 +38,15 @@ How to apply:
 - Use cheaper models to gather evidence and try bounded approaches before
   escalating.
 - Cost is a tie-breaker only; when axes conflict for anything that ships, intelligence > taste > cost.
+- Prefer GPT-5.6 via Codex for Builder implementation. Fall through to Cursor
+  Auto or Composer via `agent` when Codex is unavailable or the user explicitly
+  requests Cursor Auto/Composer.
 - Bulk or mechanical work with a clear spec (implementation, migrations, data
   analysis) goes to GPT-5.6 — it is very cost effective.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7.
 - Review plans and implementations with Fable 5 or Opus 5, optionally adding
   GPT-5.6 as an extra cross-family perspective. Never review with Haiku.
+- Do not use the Builder to review its own diff.
 - Prefer different model families for independent review. If unavailable, disclose reduced independence.
 - If computer use would help complete or verify work, shell out to GPT-5.6
   through Codex.
@@ -55,10 +60,11 @@ do not auto-select `xhigh` for a wrapper.
 
 ### Execution mechanics
 
-Dispatch order, orchestration patterns, the Codex CLI (`codex exec` /
-`codex exec review`), the wrapper pattern for running GPT-5.6, delegation
+Dispatch order, orchestration patterns, Builder CLI selection, delegation
 packets, result handling, and long-running work live in the
-`model-orchestration` skill. Load it when implementing a plan or approved
-design, when starting a medium-to-high complexity task, or when delegating,
-parallelizing, or shelling out to Codex. The platform-agnostic routing policy
-(roles, effort, model preferences) stays in `@rules/model-routing.md`.
+`model-orchestration` skill. After routing picks a Builder path, that skill
+points at `references/codex.md` or `references/agent-cli.md` for CLI details.
+Load the skill when implementing a plan or approved design, when starting a
+medium-to-high complexity task, or when delegating, parallelizing, or shelling
+out to Codex or `agent`. The platform-agnostic routing policy (roles, effort,
+model preferences) stays in `@rules/model-routing.md`.

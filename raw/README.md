@@ -45,8 +45,10 @@ Cross-platform agent instructions injected into every tool's config. Contains:
 ### `claude/CLAUDE.md`
 
 Claude Code-specific model orchestration policy. It imports `AGENTS.md` and
-defines model selection, effort limits, delegation patterns, workflows, Codex
-CLI usage, verification, and failure handling.
+defines model selection, effort limits, delegation patterns, workflows,
+verification, and failure handling. Mechanics live in
+`raw/claude/skills/model-orchestration/SKILL.md`, with Builder CLI details in
+`references/codex.md` and `references/agent-cli.md`.
 
 ## When to Use `raw/` vs Other Directories
 

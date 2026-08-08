@@ -17,24 +17,22 @@ Do not orchestrate solely because a task is non-trivial. Higher-priority host po
 
 ## Capability Roles
 
-Concrete model IDs are preferences, not guarantees. Discover available providers, models, and effort levels before dispatching.
+Concrete model IDs are preferences, not guarantees. Discover available providers, models, and effort levels before dispatching. If a selected model, variant, or effort is unavailable, use the next capable fallback and disclose it.
 
 | Role               | Use                                                           | Preferred order                                                |
 | ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------- |
 | **Planner**        | Architecture, ambiguous requirements, implementation planning | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-5.6-sol by difficulty → Opus 5 → strongest capable model |
+| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-5.6-sol by difficulty → Cursor Auto / Composer via `agent` → Opus 5 → strongest capable model |
 | **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
 | **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-luna → Haiku                                           |
 
 Prefer a different model family for independent review. If unavailable, use the best same-family fallback and disclose the reduced independence.
 
-GPT-5.6 variants are selected by role and task difficulty below. If a selected
-variant or effort is unavailable, use the next capable fallback and disclose
-it.
+For Builder, advance down the preferred order only when the current option is unavailable or the user explicitly selects a later one. CLI dispatch lives in the `model-orchestration` skill.
 
 ## Builder Routing
 
-Use difficulty to select the variant and effort to select the depth of work:
+On the GPT-5.6 Builder path, pick variant and effort from difficulty:
 
 | Task profile | Model | Effort |
 | ------------ | ----- | ------ |
