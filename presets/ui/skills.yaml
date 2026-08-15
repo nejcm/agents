@@ -10,5 +10,15 @@
       key: leonxlnx/taste-skill/design-taste-frontend
     - name: https://www.skills.sh/leonxlnx/taste-skill/redesign-existing-projects
       key: leonxlnx/taste-skill/redesign-existing-projects
-    - name: https://www.skills.sh/leonxlnx/taste-skill/redesign-existing-projects
-      key: leonxlnx/taste-skill/redesign-existing-projects
+    - name: https://github.com/emilkowalski/skills
+      key: emilkowalski/skills/find-animation-opportunities
+      args:
+        - --skill find-animation-opportunities
+    - name: https://github.com/emilkowalski/skills
+      key: emilkowalski/skills/improve-animations
+      args:
+        - --skill improve-animations
+    - name: https://github.com/vercel-labs/agent-skills
+      key: vercel-labs/agent-skills/vercel-react-view-transitions
+      args:
+        - --skill vercel-react-view-transitions
