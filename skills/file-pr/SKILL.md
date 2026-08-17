@@ -45,11 +45,12 @@ Report the PR number and URL when you are done.
 Conventional Commits, lowercase, scoped where it helps. The title usually becomes the
 squash commit message, so it has to stand on its own in `git log`.
 
-Say what changed and why it matters, not which files moved.
+Say what changed and why it matters, not which files moved. Prefer a
+concise, human-readable title that explains why the change matters:
 
 - Bad: `perf: negotiate per-message deflate on the websocket`
 - Good: `perf: cut websocket frame size by 70% with gzip`
-- Good, from this repo's history: `refactor: centralize Convex auth gating in useAuthGate hook`
+- Good: `refactor: centralize Convex auth gating in useAuthGate hook`
 
 ## Body
 
@@ -94,6 +95,7 @@ setup produced which work:
 
 ```markdown
 ---
+
 🤖 <model> via <harness>
 ```
 

@@ -47,3 +47,4 @@ Search before reading files. Always use limits when reading files. Do not read f
 - If a request is too broad to execute reliably at once, stop and say so instead of guessing at scope.
 - A question gets an answer, not an edit. "Is it possible to…", "should I…", "what is causing…", "can you…" ask for a reply; propose the change and wait for a yes.
 - Never write to a file outside the working repo — global config, dotfiles, tool settings — without explicit instruction, regardless of permission mode.
+- Keep docs and comments up to date
