@@ -74,6 +74,10 @@ perform all repository inspection, planning, edits, review, and checks.
    inspect every fix diff and relevant check; resume a full second review when
    fixes are material or touch logic.
 
+Commit after each phase that changed the repository, once its checks pass, in
+the orchestrator and scoped to that phase, so phases stay separately
+reviewable and revertable. Never push or open a PR without explicit approval.
+
 Do not have a Builder decide objections to its own review. The Reviewer/Judge
 adjudicates disputed findings. Ask the user when a product or safety decision
 cannot be inferred. Direct coordination the user explicitly authorizes (such as
