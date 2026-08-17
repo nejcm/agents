@@ -21,12 +21,12 @@ Rankings are relative preferences from 1–10; higher is better.
   latency, tokens), not list price. A constraint and tiebreaker, never a
   reason to accept weak output.
 
-| Model                      | Cost | Intelligence | Taste | Default work                                                                                       |
-| -------------------------- | ---: | -----------: | ----: | -------------------------------------------------------------------------------------------------- |
-| Cursor Auto / Composer     |    8 |            7 |     6 | Fallback Builder via `agent` when Codex is unavailable or explicitly requested                     |
-| GPT-5.6 (via Codex)        |    9 |            8 |     5 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use     |
-| Sonnet 5                   |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                           |
-| Opus 5                     |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning        |
+| Model                  | Cost | Intelligence | Taste | Default work                                                                                   |
+| ---------------------- | ---: | -----------: | ----: | ---------------------------------------------------------------------------------------------- |
+| Cursor Auto / Composer |    8 |            7 |     6 | Fallback Builder via `agent` when Codex is unavailable or explicitly requested                 |
+| GPT-5.6 (via Codex)    |    9 |            8 |     5 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use |
+| Sonnet 5               |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                       |
+| Opus 5                 |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning    |
 
 How to apply:
 
@@ -63,7 +63,5 @@ Dispatch order, orchestration patterns, Builder CLI selection, delegation
 packets, result handling, and long-running work live in the
 `model-orchestration` skill. After routing picks a Builder path, that skill
 points at `references/codex.md` or `references/agent-cli.md` for CLI details.
-Load the skill when implementing a plan or approved design, when starting a
-medium-to-high complexity task, or when delegating, parallelizing, or shelling
-out to Codex or `agent`. The platform-agnostic routing policy (roles, effort,
-model preferences) stays in `@rules/model-routing.md`.
+The platform-agnostic routing policy (roles, effort, model preferences)
+stays in `@rules/model-routing.md`.

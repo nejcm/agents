@@ -1,6 +1,6 @@
 ---
 name: validate-external-review
-description: Use when the user pastes findings from another model, a review bot, or a teammate and asks whether they are real — validate, triage, or cross-check them against the actual code.
+description: Use when the user provides or points to findings from another model, a review bot, or a teammate and asks whether they are real — validate, triage, or cross-check them against the actual code. For a fresh review of the code itself use code-review.
 ---
 
 # Validate External Review

@@ -18,8 +18,27 @@ and I have forgotten why this branch exists.
 - **Detect** the base branch — it is not always `main`. Some repos here target `develop`.
   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`, and check what
   recent merged PRs targeted.
+- **Verify** before filing, not after: relevant lint, types, and tests pass locally. Do not
+  open a PR on work you know is broken.
 - **Open a real PR, not a draft**, so CI and any review automation runs. Draft only when
-  explicitly asked.
+  explicitly asked, or when submitting a stack (see Related).
+
+## Filing
+
+Write the body to a temp file and pass it with `--body-file`. Do not inline a multi-line
+body in `--body`; shells mangle the newlines and backticks.
+
+```bash
+gh pr create --base "$BASE" --title "feat: add profile editing" --body-file pr.md
+```
+
+Updating a PR that already exists:
+
+```bash
+gh pr edit <number> --title "..." --body-file pr.md
+```
+
+Report the PR number and URL when you are done.
 
 ## Title
 
@@ -89,4 +108,6 @@ diff, mention them in your reply to me — not in the branch, and not in the PR 
 ## Related
 
 - Branching, commits, pushes, and untangling git state: the `git-workflow` skill.
-- A chain of dependent PRs: see `gh-stack.md` in that skill.
+- A chain of dependent PRs: [`../git-workflow/gh-stack.md`](../git-workflow/gh-stack.md).
+  `gh stack submit` writes its own titles and bodies — pass `--open` so they are not drafts,
+  then rewrite each one to the conventions above with `gh pr edit --body-file`.

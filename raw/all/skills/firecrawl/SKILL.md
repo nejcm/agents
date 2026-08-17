@@ -1,6 +1,6 @@
 ---
 name: firecrawl
-description: Use when the user asks to search the web, crawl or map a site, or pull page content, and full pages should stay out of agent context. Requires Firecrawl access.
+description: Use when the user asks to research something on the web, search, crawl or map a site, or pull content from URLs. Retrieves selectively so full pages stay out of agent context. Requires Firecrawl access.
 ---
 
 # Firecrawl web research

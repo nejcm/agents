@@ -1,6 +1,7 @@
 ---
 name: model-orchestration
-description: Use when delegating work to another model, shelling out to Codex or `agent`, running agents in parallel, or implementing an approved plan where plan then build then review then fix is worth the ceremony.
+description: Multi-model dispatch for Claude Code — delegation patterns, Builder CLI selection (Codex, `agent`), task packets, long-running runs, and independent review.
+disable-model-invocation: true
 ---
 
 # Model Orchestration

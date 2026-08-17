@@ -14,7 +14,7 @@ git config remote.pushDefault origin   # required if repo has >1 remote
 
 - `gh stack init <branch>` — start a stack, checkout its branch
 - `gh stack add <branch>` — add the next layer on top of the current branch
-- `gh stack submit --auto` — push all branches, open draft PRs (`--open` for review-ready)
+- `gh stack submit --auto --open` — push all branches, open review-ready PRs. Always pass `--open`; without it the stack lands as drafts, which skips CI and review automation
 - `gh stack view --json` — machine-readable stack state (use over `--short`, which is for humans)
 - `gh stack sync [--prune]` — fetch, reconcile with GitHub, rebase, push; `--prune` deletes local branches for merged PRs
 - `gh stack rebase --upstack [--continue|--abort]` — replay branches above onto a change; use after editing a lower layer
@@ -25,7 +25,7 @@ git config remote.pushDefault origin   # required if repo has >1 remote
 ## Workflow
 
 1. `gh stack init auth` → commit → `gh stack add api` → commit → `gh stack add frontend` → commit
-2. `gh stack submit --auto` → `gh stack view --json` to confirm
+2. `gh stack submit --auto --open` → `gh stack view --json` to confirm
 3. To fix a lower layer: `gh stack checkout <branch>` → commit → `gh stack rebase --upstack` → `gh stack top` → `gh stack push`
 4. Periodically: `gh stack sync --prune`
 5. Land: `gh stack merge <target> --yes`
@@ -35,6 +35,6 @@ git config remote.pushDefault origin   # required if repo has >1 remote
 - Always pass non-interactive flags (`--json`, `--auto`, `--yes`) — commands detect TTY and otherwise open blocking prompts/TUIs.
 - Always pass `--remote <name>` on push/submit/sync/rebase/link unless `pushDefault` is configured.
 - No non-interactive reorder/removal — `gh stack modify` is TUI-only; restructure via `unstack` + `init` instead.
-- PR titles/bodies are auto-generated; edit after with `gh pr edit`.
+- PR titles/bodies are auto-generated and will not match the house conventions; rewrite each one afterwards with `gh pr edit --body-file` per the `file-pr` skill.
 - Exit codes: `3` = rebase conflict (resolve, `git add`, `rebase --continue`), `6` = branch in multiple stacks, `9` = stacked PRs not enabled on repo.
 - Divergent local/remote stacks: `sync` aborts cleanly rather than guessing — resolve manually.

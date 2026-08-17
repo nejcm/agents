@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Use when the user asks to branch, commit, push, rebase, or untangle git state. Preserves unrelated work in progress. To open a PR use file-pr.
+description: Use when the user asks to branch, commit, push, rebase, set up stacked PRs, or untangle git state. Preserves unrelated work in progress. To open or write a PR use file-pr.
 category: workflow
 ---
 
@@ -108,13 +108,12 @@ For large or dependent changes that should land as a chain of small reviewable P
 
 ```json
 {
-  "operation": "create_pr",
+  "operation": "push",
   "status": "success",
   "data": {
-    "pr_number": 123,
-    "url": "https://github.com/org/repo/pull/123",
     "branch": "feature/user-profiles",
     "base": "main",
+    "commits": 3,
     "files_changed": 5,
     "insertions": 234,
     "deletions": 45

@@ -1,6 +1,6 @@
 ---
 name: competitive-intelligence
-description: Use when the user asks about competitors, rival products, pricing comparisons, positioning, or a SWOT. For market size use market-analysis; for general sourced research use research-analyst.
+description: Use when the user asks about named competitors or rival products — comparisons, pricing, positioning, strategic intent, SWOT, or monitoring them over time. For market size or demand use market-analysis; for codebase-grounded feature ideas use product-improvements.
 disable-model-invocation: true
 ---
 

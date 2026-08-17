@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Use when the user asks what could go wrong, what they are missing, or for a red-team, pre-mortem, devil's advocate, sanity check, or skeptical second opinion on a plan, architecture, or consequential decision.
+description: Use when the user asks to pressure-test, stress-test, red-team, or poke holes in a plan, architecture, or decision, or asks what could go wrong, what they are missing, or for a pre-mortem or skeptical second opinion.
 ---
 
 # Adversarial Review

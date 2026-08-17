@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Use when the user asks to review code, a branch, a PR, or recent changes, or asks whether an implementation is correct and ready to merge. Read-only; judges against both the requirements and engineering quality.
+description: Use when the user asks to review code, a branch, a PR, or recent changes, or asks whether an implementation is correct and ready to merge. Read-only; reports findings rather than fixing them. To check findings someone else produced use validate-external-review; to actually perform the cleanup use refactor-code.
 ---
 
 # Code Review

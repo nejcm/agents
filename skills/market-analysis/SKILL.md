@@ -1,6 +1,6 @@
 ---
 name: market-analysis
-description: Use when the user asks about market size, TAM/SAM/SOM, segments, demand, growth, or entry opportunity. For named competitors use competitive-intelligence.
+description: Use when the user asks about market size, TAM/SAM/SOM, segments, demand, growth, pricing, channels, or trends, or whether a market is worth entering. For named competitors use competitive-intelligence.
 disable-model-invocation: true
 ---
 

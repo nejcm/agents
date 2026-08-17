@@ -1,6 +1,6 @@
 ---
 name: product-improvements
-description: Use when the user asks what to build next, for feature or UX ideas, or for roadmap suggestions grounded in the codebase. Not for code quality, performance, or tech debt.
+description: Use when the user asks what to build next, for feature or UX ideas, or for a roadmap grounded in their own codebase. Not for code quality, performance, or tech debt; for competitor comparisons use competitive-intelligence.
 disable-model-invocation: true
 ---
 

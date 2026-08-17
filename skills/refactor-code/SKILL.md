@@ -1,6 +1,6 @@
 ---
 name: refactor-code
-description: Use when the user asks to clean up, simplify, deduplicate, or restructure existing code without changing its behavior or public API.
+description: Use when the user asks to clean up, simplify, deduplicate, or restructure existing code without changing its behavior or public API. This one edits the code; to only report problems use code-review.
 disable-model-invocation: true
 ---
 
