@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Use when the user asks to branch, commit, push, open a PR, or untangle git state. Preserves unrelated work in progress.
+description: Use when the user asks to branch, commit, push, rebase, or untangle git state. Preserves unrelated work in progress. To open a PR use file-pr.
 category: workflow
 ---
 
@@ -81,28 +81,8 @@ git commit -m "feat: add profile editing"
 
 ### 5. Pull Request
 
-```bash
-gh pr create --title "feat: add profile editing" --body-file pr.md
-```
-
-**PR body**
-
-```markdown
-## Summary
-- Describe the change.
-- Explain its purpose.
-
-## Spec
-- Link the issue or specification.
-
-## Testing
-- [ ] List completed checks.
-
-## Checklist
-- [ ] Tests added or updated.
-- [ ] Documentation updated.
-- [ ] Security reviewed.
-```
+Filing the PR itself — title, body, base branch, attribution — lives in the `file-pr`
+skill. Use it rather than composing a PR body here.
 
 ### Stacked PRs
 
