@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Adversarially stress-test plans, strategies, proposals, architectures, and consequential decisions for hidden assumptions, missing dependencies, failure modes, second-order effects, and structural risks. Use for red-teaming, pre-mortems, sanity checks, skeptical second opinions, or questions such as "what could go wrong?" or "what am I missing?"
+description: Use when the user asks what could go wrong, what they are missing, or for a red-team, pre-mortem, devil's advocate, sanity check, or skeptical second opinion on a plan, architecture, or consequential decision.
 ---
 
 # Adversarial Review

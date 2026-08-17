@@ -1,6 +1,6 @@
 ---
 name: product-improvements
-description: Generate codebase- and competitor-grounded product, feature, UX, and roadmap ideas. Use for product ideation and competitive comparisons; exclude code quality, performance, and technical debt.
+description: Use when the user asks what to build next, for feature or UX ideas, or for roadmap suggestions grounded in the codebase. Not for code quality, performance, or tech debt.
 disable-model-invocation: true
 ---
 

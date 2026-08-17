@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Perform a read-only review of completed work, a branch, or a pull request against both requirements and engineering quality. Use for code reviews, pre-merge checks, recent-change reviews, or implementation verification.
+description: Use when the user asks to review code, a branch, a PR, or recent changes, or asks whether an implementation is correct and ready to merge. Read-only; judges against both the requirements and engineering quality.
 ---
 
 # Code Review

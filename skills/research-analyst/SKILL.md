@@ -1,6 +1,6 @@
 ---
 name: research-analyst
-description: Conduct evidence-based multi-source research, assess source quality, synthesize findings, and produce actionable reports. Use for market, technology, industry, policy, and competitor research beyond a quick lookup.
+description: Use when the user asks for deep multi-source research on a technology, industry, policy, or market that needs sourced, weighed evidence rather than a quick lookup.
 disable-model-invocation: true
 ---
 

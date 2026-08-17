@@ -1,6 +1,6 @@
 ---
 name: refactor-code
-description: Audit and incrementally refactor existing code to remove duplication, simplify control flow, reduce complexity while preserving behavior. Use when an agent is asked to clean up, deduplicate, simplify, or restructure code without changing its public inputs, outputs, side effects, or dependencies.
+description: Use when the user asks to clean up, simplify, deduplicate, or restructure existing code without changing its behavior or public API.
 disable-model-invocation: true
 ---
 

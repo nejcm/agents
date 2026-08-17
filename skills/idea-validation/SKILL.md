@@ -1,6 +1,6 @@
 ---
 name: idea-validation
-description: Pressure-test product or business ideas against demand, competitors, differentiation, feasibility, distribution, monetization, and adoption risk. Use for viability, build/no-build, pivot, or MVP decisions.
+description: Use when the user asks whether a product or business idea is worth building — viability, build or skip, pivot, or MVP scoping.
 disable-model-invocation: true
 ---
 

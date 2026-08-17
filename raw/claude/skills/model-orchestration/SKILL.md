@@ -1,6 +1,6 @@
 ---
 name: model-orchestration
-description: Dispatch and coordinate multi-model work in Claude Code, including delegation patterns, Builder CLIs (Codex default, Agent CLI fallback), compact task packets, long-running runs, and independent review. Use whenever implementing an approved plan or design, delegating or parallelizing work, shelling out to `agent` or Codex, or starting medium- or high-complexity work where plan → build → review → fix materially reduces risk.
+description: Use when delegating work to another model, shelling out to Codex or `agent`, running agents in parallel, or implementing an approved plan where plan then build then review then fix is worth the ceremony.
 ---
 
 # Model Orchestration

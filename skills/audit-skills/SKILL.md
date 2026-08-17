@@ -1,6 +1,6 @@
 ---
 name: audit-skills
-description: Audit skill files and packages for security risks, including unsafe instructions, scripts, assets, and known vulnerability patterns. Use for skill safety, vulnerability, or pre-deployment security reviews.
+description: Use when the user asks to audit, vet, or security-review a skill or skill package, or before installing a third-party skill.
 category: security
 disable-model-invocation: true
 ---

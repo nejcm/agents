@@ -1,6 +1,6 @@
 ---
 name: competitive-intelligence
-description: Research competitors, products, pricing, positioning, strategic intent, threats, and opportunities from public evidence. Use for benchmarks, SWOT, market positioning, and monitoring plans.
+description: Use when the user asks about competitors, rival products, pricing comparisons, positioning, or a SWOT. For market size use market-analysis; for general sourced research use research-analyst.
 disable-model-invocation: true
 ---
 

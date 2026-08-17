@@ -26,8 +26,7 @@ Rankings are relative preferences from 1–10; higher is better.
 | Cursor Auto / Composer     |    8 |            7 |     6 | Fallback Builder via `agent` when Codex is unavailable or explicitly requested                     |
 | GPT-5.6 (via Codex)        |    9 |            8 |     5 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use     |
 | Sonnet 5                   |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                           |
-| Opus 5                     |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment                                          |
-| Fable 5                    |    2 |            9 |     9 | Architecture, ambiguous planning, product judgment, final synthesis, difficult review              |
+| Opus 5                     |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning        |
 
 How to apply:
 
@@ -44,8 +43,8 @@ How to apply:
 - Bulk or mechanical work with a clear spec (implementation, migrations, data
   analysis) goes to GPT-5.6 — it is very cost effective.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7.
-- Review plans and implementations with Fable 5 or Opus 5, optionally adding
-  GPT-5.6 as an extra cross-family perspective. Never review with Haiku.
+- Review plans and implementations with Opus 5, optionally adding GPT-5.6 as an
+  extra cross-family perspective. Never review with Haiku.
 - Do not use the Builder to review its own diff.
 - Prefer different model families for independent review. If unavailable, disclose reduced independence.
 - If computer use would help complete or verify work, shell out to GPT-5.6
@@ -53,8 +52,8 @@ How to apply:
 
 ### Effort
 
-Follow the routing policy's effort table and default Fable to `high` when
-the work benefits from it. Reasoning effort controls thought per step, not how
+Follow the routing policy's effort table and default Planner and Reviewer roles
+to `high` when the work benefits from it. Reasoning effort controls thought per step, not how
 long an agent can continue. Claude wrapper agents may use only `low` or `medium`;
 do not auto-select `xhigh` for a wrapper.
 

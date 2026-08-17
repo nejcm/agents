@@ -1,6 +1,6 @@
 ---
 name: market-analysis
-description: Analyze markets, segments, demand, size, growth, trends, pricing, channels, and entry opportunities with explicit assumptions and evidence. Use for TAM/SAM/SOM and opportunity analysis.
+description: Use when the user asks about market size, TAM/SAM/SOM, segments, demand, growth, or entry opportunity. For named competitors use competitive-intelligence.
 disable-model-invocation: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: firecrawl
-description: Lean external web research using Firecrawl search, map, summary, and selective page retrieval without loading full pages into agent context.
+description: Use when the user asks to search the web, crawl or map a site, or pull page content, and full pages should stay out of agent context. Requires Firecrawl access.
 ---
 
 # Firecrawl web research

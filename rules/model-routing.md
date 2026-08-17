@@ -21,9 +21,9 @@ Concrete model IDs are preferences, not guarantees. Discover available providers
 
 | Role               | Use                                                           | Preferred order                                                |
 | ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------- |
-| **Planner**        | Architecture, ambiguous requirements, implementation planning | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
+| **Planner**        | Architecture, ambiguous requirements, implementation planning | Opus 5 → GPT-5.6-sol                                           |
 | **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-5.6-sol by difficulty → Cursor Auto / Composer via `agent` → Opus 5 → strongest capable model |
-| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Opus 5 → Fable 5 → GPT-5.6-sol                                 |
+| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Opus 5 → GPT-5.6-sol                                           |
 | **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-luna → Haiku                                           |
 
 Prefer a different model family for independent review. If unavailable, use the best same-family fallback and disclose the reduced independence.

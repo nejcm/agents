@@ -1,6 +1,6 @@
 ---
 name: javascript-testing-patterns
-description: Design and implement JavaScript or TypeScript tests with Jest, Vitest, and Testing Library, including unit, integration, end-to-end, mocking, and fixtures. Use for test infrastructure, test authoring, or TDD/BDD workflows.
+description: Use when the user asks to write, fix, or structure JavaScript or TypeScript tests with Jest, Vitest, or Testing Library, including mocking, fixtures, and end-to-end setup.
 ---
 
 # JavaScript Testing Patterns

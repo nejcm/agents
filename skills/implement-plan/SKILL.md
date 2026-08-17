@@ -1,6 +1,6 @@
 ---
 name: implement-plan
-description: Execute or resume an approved implementation plan from a file, issue, PRD, checklist, or the current conversation. Use when implementing a plan, completing its next phase, or continuing unfinished planned work.
+description: Use when the user asks to implement, execute, resume, or continue an approved plan, spec, PRD, issue, or checklist, including "do the next phase".
 ---
 # Implement Plan
 

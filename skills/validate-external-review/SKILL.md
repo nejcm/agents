@@ -1,6 +1,6 @@
 ---
 name: validate-external-review
-description: Verify findings from another LLM, teammate, or review tool against the actual codebase and classify each as valid, invalid, or partial. Use when asked to validate, triage, or cross-check an external review.
+description: Use when the user pastes findings from another model, a review bot, or a teammate and asks whether they are real — validate, triage, or cross-check them against the actual code.
 ---
 
 # Validate External Review
