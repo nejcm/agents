@@ -16,12 +16,6 @@ servers:
   gh_grep:
     type: remote
     url: https://mcp.grep.app
-  memory:
-    type: local
-    command: npx
-    args:
-      - -y
-      - "@modelcontextprotocol/server-memory"
   # notion:
   #   type: remote
   #   url: "https://mcp.notion.com/mcp"
