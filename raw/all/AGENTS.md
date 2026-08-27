@@ -41,6 +41,7 @@ Search before reading files. Always use limits when reading files. Do not read f
 ### Code Style
 
 - Prefer concise, simple solutions. If a problem has a materially simpler solution, propose it.
+- Prefer code that explains what it does over comments. Add short, concise comments only when needed; longer comments only when something is critical.
 
 ### General
 
