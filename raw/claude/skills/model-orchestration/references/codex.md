@@ -53,6 +53,18 @@ codex exec review -m <selected-variant> --uncommitted \
   -o "$ARTIFACT_DIR/review.md"
 ```
 
+## Sandbox mode
+
+`-s` takes `read-only`, `workspace-write`, or `danger-full-access`. Choose it
+by whether the dispatch must *execute* the project's checks.
+
+`read-only` blocks the temp directory too, so a dispatch that runs tests or a
+build fails partway with `EROFS` rather than at launch, and retrying it
+unchanged reproduces it. Reasoning over a diff keeps `read-only` — hand it the
+verification result instead of the assignment. Anything that must run checks
+needs `-s workspace-write` in a throwaway worktree (`--add-dir` for writable
+paths outside it). Require reports to name the checks actually executed.
+
 `codex exec resume <session-id>` preserves context but not necessarily the
 recorded model: always supply `-m`. Check that any prompt file is non-empty
 before resuming. Store prompts and reports in a temporary or gitignored
