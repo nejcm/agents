@@ -21,12 +21,13 @@ Rankings are relative preferences from 1–10; higher is better.
   latency, tokens), not list price. A constraint and tiebreaker, never a
   reason to accept weak output.
 
-| Model                  | Cost | Intelligence | Taste | Default work                                                                                   |
-| ---------------------- | ---: | -----------: | ----: | ---------------------------------------------------------------------------------------------- |
-| Cursor Auto / Composer |    8 |            7 |     6 | Fallback Builder via `agent` when Codex is unavailable or explicitly requested                 |
-| GPT-5.6 (via Codex)    |    9 |            8 |     5 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use |
-| Sonnet 5               |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                       |
-| Opus 5                 |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning    |
+| Model                     | Cost | Intelligence | Taste | Default work                                                                                   |
+| ------------------------- | ---: | -----------: | ----: | ---------------------------------------------------------------------------------------------- |
+| Cursor Composer, Grok 4.6 |    9 |            6 |     6 | Fallback Builder via `agent` when Codex is unavailable or explicitly requested                 |
+| Codex GPT-5.6             |    8 |            8 |     7 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use |
+| Sonnet 5                  |    5 |            5 |     5 | Thin Builder-CLI wrapper agents and bounded coordination                                       |
+| Opus 5                    |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning    |
+| Fable                     |    3 |            9 |     9 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning    |
 
 How to apply:
 
