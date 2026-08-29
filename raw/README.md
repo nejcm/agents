@@ -42,14 +42,6 @@ Cross-platform agent instructions injected into every tool's config. Contains:
 - **Efficiency rules** — minimize tokens, search before reading, use quiet flags, show diffs not full files
 - **Coding rule** — always apply the `coding-principles` skill before writing, reviewing, or refactoring code
 
-### `claude/CLAUDE.md`
-
-Claude Code-specific model orchestration policy. It imports `AGENTS.md` and
-defines model selection, effort limits, delegation patterns, workflows,
-verification, and failure handling. Mechanics live in
-`raw/claude/skills/model-orchestration/SKILL.md`, with Builder CLI details in
-`references/codex.md` and `references/agent-cli.md`.
-
 ## When to Use `raw/` vs Other Directories
 
 | Use case                                              | Where to put it   |

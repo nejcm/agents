@@ -1,37 +1,34 @@
-# GPT-5.6 via Codex
+# Codex CLI
 
-Default Builder path. Use when `model-routing` selects GPT-5.6 / Codex, or
-when the Builder fallback is not needed.
+Calling a model through the Codex CLI. Do not use this path from inside Codex
+itself — dispatch natively there.
 
-Use `codex exec` or `codex exec review` with
-`-m <variant selected by model-routing>`. For Builder dispatches, apply the
-Builder matrix: use `gpt-5.6-luna` at `xhigh` (or `max` when extra depth is
-worth the latency) for bounded simple-to-medium work, and `gpt-5.6-sol` at
-`medium` or `high` for medium-to-very-complex work. In the overlapping medium
-band, select Luna only for bounded, easily verified work; otherwise select Sol.
+Codex is a harness, not a model. It reaches whichever models the install
+exposes, and the lineup changes independently of the flags, so list the
+available ids rather than assuming one. `codex --help` and the config docs are
+the source of truth for both ids and effort levels.
 
-Do not hard-code one GPT-5.6 variant for every role. If host workflows accept
-only Claude models, use a thin host-native wrapper selected by the
-Claude-specific model defaults (normally Sonnet 5) that runs Codex and returns
-its artifact. Use its schema option when structured output helps. Prefix its
-label with `gpt-5.6:` so the UI does not misrepresent the actual worker; if a
-reused wrapper changes roles, rename it or disclose the mismatch. Parallel
-writers need separate worktrees. Codex usage is invisible to Claude workflow
-token budgets, so track it separately when a budget matters.
+`codex exec` runs a prompt; `codex exec review` runs a review. Both take the
+model as `-m <model>` and the effort as a config override,
+`-c "model_reasoning_effort=<level>"` — the two are passed separately, so carry
+whichever model and level the caller specified rather than defaulting either.
+
+If the host can only dispatch its own family natively, run Codex behind a thin
+wrapper agent — see "Wrapping Another Family" in `SKILL.md`.
 
 Before relying on an invocation, check the installed CLI help. Give Codex a
-self-contained prompt and pass the selected variant and effort separately:
+self-contained prompt and pass the selected model and effort separately:
 
 ```bash
 mkdir -p "$ARTIFACT_DIR"
-codex exec -m <selected-variant> -C "$PWD" -s read-only \
+codex exec -m <selected-model> -C "$PWD" -s read-only \
   -c "model_reasoning_effort=<selected-effort>" \
   -o "$ARTIFACT_DIR/result.md" \
   "<focused prompt>" < /dev/null
 ```
 
-For implementation, state permitted files, required behavior, exclusions,
-branch authority, and verification. Prefer an isolated branch or worktree;
+For a dispatch that edits, state permitted files, required behavior,
+exclusions, branch authority, and verification. Prefer an isolated branch or worktree;
 working directly on one branch is valid for sequential phases because there
 are no parallel writers to isolate. Prompt as the final positional argument and
 redirect empty stdin: on Windows, piped or absent stdin can stall at `Reading
@@ -48,7 +45,7 @@ findings caused only by unrelated scratch or local-settings files. Do not rerun
 an unchanged, already-triaged diff to force findings.
 
 ```bash
-codex exec review -m <selected-variant> --uncommitted \
+codex exec review -m <selected-model> --uncommitted \
   -c "model_reasoning_effort=<selected-effort>" \
   -o "$ARTIFACT_DIR/review.md"
 ```
