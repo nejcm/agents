@@ -13,17 +13,7 @@ servers:
         - "@upstash/context7-mcp"
         - --api-key
         - ${CONTEXT7_API_KEY}
-  gh_grep:
-    type: remote
-    url: https://mcp.grep.app
   # notion:
   #   type: remote
   #   url: "https://mcp.notion.com/mcp"
   #   disabled: true
-
-  # sequential-thinking:
-  #   type: local
-  #   command: npx
-  #   args:
-  #     - -y
-  #     - "@modelcontextprotocol/server-sequential-thinking"
