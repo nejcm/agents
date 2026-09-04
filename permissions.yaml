@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://unpkg.com/@nejcm/ulis/schemas/permissions.schema.json
 
 claude:
-  defaultMode: default
+  defaultMode: auto
   allow:
     - Bash(bun lint*)
     - Bash(bun add *)
