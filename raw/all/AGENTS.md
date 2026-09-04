@@ -40,11 +40,31 @@ Search before reading files. Always use limits when reading files. Do not read f
 ### Code Style
 
 - Prefer concise, simple solutions. If a problem has a materially simpler solution, propose it.
-- Prefer code that explains what it does over comments. Add short, concise comments only when needed; longer comments only when something is critical.
+
+#### Comments
+
+Default: write no comment. Make the code self-explanatory instead — name the variable, extract the function, split the branch. A comment is a last resort for what naming cannot carry, not a companion to it.
+
+Write a comment only when one of these is true:
+
+- **Why, not what.** A non-obvious reason, tradeoff, or constraint a reader would otherwise "fix" — a workaround, a spec quirk, an ordering requirement, a perf choice.
+- **A link.** Issue, RFC, spec, or upstream bug that explains the code.
+- **A real trap.** Behaviour that will surprise the next reader and is not visible from the code.
+
+Hard rules:
+
+- One line. Two only if the reason genuinely needs it. Almost never a paragraph.
+- Never restate the code (`// increment counter`, `// loop over users`, `// return the result`).
+- No section banners, no `// ---- Helpers ----`, no ASCII dividers, no step numbering (`// Step 1:`), no narration of the diff (`// now we also handle X`).
+- No JSDoc/docstrings on internal functions whose signature already says it. Public/exported API only, and then one line — skip `@param`/`@returns` that just retype the types.
+- No "in the future", "note that", "this is important", or explaining what you did for my benefit — that belongs in the chat reply, not the file.
+- Match the file: if surrounding code has no comments, add none.
+
+When in doubt, delete the comment. If you notice you're explaining code you just wrote, rewrite the code instead.
 
 ### General
 
 - If a request is too broad to execute reliably at once, stop and say so instead of guessing at scope.
 - A question gets an answer, not an edit. "Is it possible to…", "should I…", "what is causing…", "can you…" ask for a reply; propose the change and wait for a yes.
 - Never write to a file outside the working repo — global config, dotfiles, tool settings — without explicit instruction, regardless of permission mode.
-- Keep docs and comments up to date
+- Keep docs and existing comments up to date; updating a comment does not mean adding new ones.
