@@ -89,7 +89,7 @@ On the Codex Builder path, pick variant and effort from difficulty:
 | Task profile | Model | Effort |
 | ------------ | ----- | ------ |
 | Bounded, simple-to-medium work | GPT-5.6-luna | `xhigh` by default; `max` when extra depth is worth the latency |
-| Medium work with integration or uncertainty through very complex work | GPT-6-astra | `medium` for routine work; `high` for complexity, ambiguity, or higher risk |
+| Medium work with integration or uncertainty through very complex work | GPT-6-astra | `medium` for routine work to semi complex work; `high` for complexity, ambiguity, or higher risk |
 
 The medium band overlaps intentionally: choose Luna only when the task is
 bounded and easily verified; choose Astra when integration, uncertainty, or
