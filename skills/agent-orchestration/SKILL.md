@@ -71,9 +71,9 @@ How to apply:
 
 | Role               | Use                                                           | Preferred order                                                |
 | ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------- |
-| **Planner**        | Architecture, ambiguous requirements, implementation planning | Opus 5 → GPT-5.6-sol                                           |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-5.6-sol by difficulty → Cursor Auto / Composer via `agent` → Opus 5 → strongest capable model |
-| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Opus 5 → GPT-5.6-sol                                           |
+| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5.1 → Opus 5 → GPT-6-astra                                           |
+| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-6-astra by difficulty → Cursor Auto / Composer via `agent` → Opus 5 → strongest capable model |
+| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5.1 → Opus 5 → GPT-6-astra                                           |
 | **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-luna → Haiku                                           |
 
 Prefer a different model family for independent review. If unavailable, use the
@@ -84,15 +84,15 @@ unavailable or the user explicitly selects a later one.
 
 ## Builder Routing
 
-On the GPT-5.6 Builder path, pick variant and effort from difficulty:
+On the Codex Builder path, pick variant and effort from difficulty:
 
 | Task profile | Model | Effort |
 | ------------ | ----- | ------ |
 | Bounded, simple-to-medium work | GPT-5.6-luna | `xhigh` by default; `max` when extra depth is worth the latency |
-| Medium work with integration or uncertainty through very complex work | GPT-5.6-sol | `medium` for routine work; `high` for complexity, ambiguity, or higher risk |
+| Medium work with integration or uncertainty through very complex work | GPT-6-astra | `medium` for routine work; `high` for complexity, ambiguity, or higher risk |
 
 The medium band overlaps intentionally: choose Luna only when the task is
-bounded and easily verified; choose Sol when integration, uncertainty, or
+bounded and easily verified; choose Astra when integration, uncertainty, or
 correctness risk matters more than cost.
 
 ## Effort
