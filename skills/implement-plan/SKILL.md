@@ -76,9 +76,10 @@ Per-phase cadence (default, unless user says otherwise):
 1. Implement the phase — mark tasks in todo list, edit only the requested scope, match existing patterns.
 2. Verify — run the plan's checks, then lint/typecheck/tests as appropriate.
 3. Review — dispatch code review against the phase's diff. Fix valid findings.
-4. Commit — `git add` + commit with a conventional commit message describing the phase. Do not ask.
-5. Update — mark tasks complete in todo list. Check off plan file checkboxes if appropriate.
-6. Report — brief progress report: what changed, verification result, commit SHA.
+4. Fix findings — fix valid findings from the review step
+5. Commit — `git add` + commit with a conventional commit message describing the phase. Do not ask.
+6. Update — mark tasks complete in todo list. Check off plan file checkboxes if appropriate.
+7. Report — brief progress report: what changed, verification result, commit SHA.
 
 Use subagents only when the user has allowed delegation and the work can be split into independent, bounded tasks. Keep blocking or tightly coupled work local.
 

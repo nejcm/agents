@@ -172,9 +172,13 @@ perform all repository inspection, planning, edits, review, and checks.
    executed checks.
 3. **Review:** assign an independent Reviewer/Judge with the plan and diff to
    review requirements, repository rules, and correctness.
-4. **Verify and Fix:** resume the Builder for actionable findings. Have the Reviewer/Judge
-   inspect every fix diff and relevant check; resume a full second review when
-   fixes are material or touch logic.
+4. **Verify and Fix:** resume the Builder for actionable findings. The Builder
+   first validates each finding against the actual code — confirming, correcting,
+   or rejecting it with evidence — and fixes only the confirmed ones, reporting
+   any it rejects and why instead of silently skipping them. Have the
+   Reviewer/Judge inspect every fix diff and relevant check, and adjudicate
+   rejected findings; resume a full second review when fixes are material or
+   touch logic.
 
 Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
