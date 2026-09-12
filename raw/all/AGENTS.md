@@ -65,6 +65,6 @@ When in doubt, delete the comment. If you notice you're explaining code you just
 ### General
 
 - If a request is too broad to execute reliably at once, stop and say so instead of guessing at scope.
-- A question gets an answer, not an edit. "Is it possible to…", "should I…", "what is causing…", "can you…" ask for a reply; propose the change and wait for a yes.
+- Treat requests to perform work as authorization within their stated scope, including "can you…". Answer feasibility, advice, and diagnostic questions without editing unless a change is requested.
 - Never write to a file outside the working repo — global config, dotfiles, tool settings — without explicit instruction, regardless of permission mode.
 - Keep docs and existing comments up to date; updating a comment does not mean adding new ones.

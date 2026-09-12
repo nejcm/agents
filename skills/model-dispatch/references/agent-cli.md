@@ -105,8 +105,5 @@ and confirm the session cannot write before trusting the result.
 
 ## Long Agent CLI runs
 
-Launch lengthy `agent -p` runs in the background. Watch the captured PID and
-`$ARTIFACT_DIR/build.json` (or redirected log). Poll about once a minute; emit a
-heartbeat at least every ten minutes. Stop when the artifact is complete or the
-PID exits without one, and report which condition occurred. Treat 15 minutes
-without log growth as a diagnostic signal, not proof of a hang.
+Follow [Watching Long Runs](../SKILL.md#watching-long-runs). Capture the child
+PID and the per-run structured output, such as `$ARTIFACT_DIR/build.json`.

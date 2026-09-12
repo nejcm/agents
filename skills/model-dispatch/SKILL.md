@@ -85,21 +85,29 @@ Label the wrapper with the model that actually does the work, not the CLI and
 not the wrapper's own model, so the host UI credits the right one. If a reused
 wrapper changes model or role, rename it or disclose the mismatch.
 
-A wrapper's completion only confirms that it launched the delegate. Resume it
-after the artifact exists to collect the outcome.
+The wrapper returns the delegate's session ID, exit status, final artifact, and
+blockers only after the delegate exits. Report launch separately. If the wrapper
+ends early, the parent must still collect the delegate's result.
 
 ## Watching Long Runs
 
-Launch lengthy runs in the background and watch the captured PID, the output
-artifact, and the per-run log described in that CLI's reference. Poll about
-once a minute and emit a heartbeat at least every ten minutes. Stop when the
-artifact appears or the captured PID exits without one, and report which
-condition occurred.
+Capture the child PID or native task ID, fresh per-run artifacts, and separate
+structured stdout from stderr. Collect the actual exit status with `wait` or the
+host's task tool; artifact appearance and wrapper completion prove neither exit
+nor success. Check terminal events and the final response for blockers and evidence.
 
-Treat 15 minutes without log growth as a diagnostic signal, not proof of a hang
-or a reason to terminate a live process. Before retrying or resuming after a
-timeout, inspect the PID, artifact, and log. On Windows, poll the captured PID
-with `tasklist`, not `kill -0` or a process-name check.
+Prefer native completion notifications; otherwise poll about once a minute.
+Check log freshness before reporting progress. Quiet logs and internal tool
+errors do not prove a hang or process failure. After a timeout, inspect the
+captured task and ensure it stopped before retrying. Never use process-name
+matching or idle sentinel loops to monitor delegates. Notify on meaningful
+changes or requested updates.
+
+On a usage-limit error, wait for the reported reset, then check availability once.
+If no reset is available or that check fails, report blocked; further polling
+needs an explicit schedule and deadline. Other launch failures get one retry
+after correcting the cause within existing permissions. Failure does not prove
+zero charges or available quota.
 
 ## Reporting a Dispatch
 

@@ -5,7 +5,7 @@ description: Use when the user asks to review code, a branch, a PR, or recent ch
 
 # Code Review
 
-Dispatch reviewer sub-agents with crafted work-product context, never session history. Review early and often so issues do not compound.
+A delegated subagent reviewer reviews its assigned scope directly. Coordinators pass crafted work-product context, never session history.
 
 Review on two axes:
 
@@ -26,7 +26,8 @@ Review on two axes:
 - Migration/backward compatibility if schemas or APIs changed
 - Possible code smells: mysterious names, duplication, feature envy, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle man, refused bequest
 
-Both axes run as parallel sub-agents so they don't pollute each other's context and triage findings by severity inside each axis.
+Cover both axes in one review by default. A coordinator may split distinct,
+substantial scopes across independent terminal reviewers when useful and allowed.
 
 Severity:
 
@@ -45,7 +46,7 @@ For every issue include:
 
 Mandatory:
 
-- After each task in subagent-driven development.
+- After meaningful task batches or risky changes in subagent-driven development.
 - After completing a major feature.
 - Before merge to main.
 
@@ -120,30 +121,34 @@ Each smell reads _what it is_ → _how to fix_; match it against the diff:
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-## 4. Spawn both sub-agents in parallel
+## 4. Assign review scope
 
-Send a single message with two `Agent` tool calls. Use the `general-purpose` subagent for both.
+Review directly when already assigned. Otherwise use a supported host-native
+reviewer for both axes, splitting only for distinct scopes. Include "Do not
+delegate further."
 
-Pass these placeholders to both sub-agents:
+Pass the relevant work-product context:
 
 - `{DESCRIPTION}`: brief summary of what changed.
 - `{PLAN_OR_REQUIREMENTS}`: what the work should do, or "no spec available".
 - `{BASE_REF}`: fixed point.
 - `{HEAD_REF}`: usually `HEAD`, unless the user requested an exact range.
 
-**Standards sub-agent prompt** — include:
+**Standards brief** — include:
 
 - The full diff command and commit list.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
 - The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
-**Spec sub-agent prompt** — include:
+**Spec brief** — include:
 
 - The diff command and commit list.
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+If the spec is missing, report that limitation. Treat supplied claims as
+unverified; check evidence provenance and whether reproductions match the
+production path. Carry prior finding dispositions and evidence into follow-ups.
 
 ## 5. Aggregate
 
@@ -197,4 +202,6 @@ Red flags:
 - Do not proceed with unresolved Important issues unless documented.
 - Do not argue with valid technical feedback.
 
-After fixes, rerun the review on the new range or targeted fix diff when risk remains.
+After fixes, review the fix diff and affected behavior. Repeat a full review
+only when scope or affected boundaries changed; do not rerun unchanged,
+already-triaged code to force findings.

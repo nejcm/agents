@@ -62,10 +62,21 @@ verification result instead of the assignment. Anything that must run checks
 needs `-s workspace-write` in a throwaway worktree (`--add-dir` for writable
 paths outside it). Require reports to name the checks actually executed.
 
-`codex exec resume <session-id>` preserves context but not necessarily the
-recorded model: always supply `-m`. Check that any prompt file is non-empty
-before resuming. Store prompts and reports in a temporary or gitignored
-artifact directory and remove or disclose leftovers.
+`codex exec resume` has different flags from `codex exec`: check its own help.
+Set the repository cwd through the launcher; do not pass fresh-run `-C` or `-s`
+flags to `resume`. Supply the explicit session ID, model, and effort. Verify the
+resumed sandbox matches the assignment; use supported configuration overrides
+or a fresh scoped dispatch when it does not.
+
+```bash
+test -s "$PROMPT_FILE" &&
+codex exec resume -m "$MODEL" -c "model_reasoning_effort=$EFFORT" \
+  -o "$ARTIFACT_DIR/resume.md" "$SESSION_ID" "$(cat "$PROMPT_FILE")" < /dev/null
+```
+
+Check whether the target application itself launches Codex. Where practical,
+run that application through the outer host's shell and give Codex its artifacts
+for analysis, avoiding another nested sandbox. Do not widen access automatically.
 
 For computer use, state the flow, environment, whether edits are allowed, and
 the screenshot, video, or other evidence required. Confirm that the invoked
@@ -74,9 +85,8 @@ establish computer-use availability.
 
 ## Long Codex runs
 
-Launch lengthy `codex exec` runs in the background. Watch the captured PID,
-output artifact, and a per-run JSONL log created by redirecting `--json`
-stdout. Poll about once a minute; emit a heartbeat at least every ten minutes.
-Stop when the artifact appears or the captured PID exits without one, and
-report which condition occurred. Treat 15 minutes without log growth as a
-diagnostic signal, not proof of a hang.
+Follow [Watching Long Runs](../SKILL.md#watching-long-runs). Capture `--json`
+stdout as per-run JSONL and stderr separately; use `-o` for the final response.
+Inspect terminal events such as `turn.completed`, `turn.failed`, and `error`
+alongside the process exit status. A command failure inside a turn does not
+establish that the Codex process failed.

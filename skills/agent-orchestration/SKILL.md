@@ -154,8 +154,8 @@ rather than creating a fourth worker. Resume an interrupted delegate by id/name
 to preserve context.
 
 Give genuinely wrong output one corrected retry, then stop and re-plan.
-Invocation, sandbox, timeout, or infrastructure failures require fixing the
-launch rather than spending that retry.
+Launch and quota failures use the separate bounded retry policy in
+`model-dispatch`; they are not model-quality failures or unlimited retries.
 
 ## Staged Implementation
 
@@ -172,13 +172,13 @@ perform all repository inspection, planning, edits, review, and checks.
    executed checks.
 3. **Review:** assign an independent Reviewer/Judge with the plan and diff to
    review requirements, repository rules, and correctness.
-4. **Verify and Fix:** resume the Builder for actionable findings. The Builder
-   first validates each finding against the actual code — confirming, correcting,
-   or rejecting it with evidence — and fixes only the confirmed ones, reporting
-   any it rejects and why instead of silently skipping them. Have the
-   Reviewer/Judge inspect every fix diff and relevant check, and adjudicate
-   rejected findings; resume a full second review when fixes are material or
-   touch logic.
+4. **Verify & Fix:** resume the Builder with actionable findings. The Builder
+   validates each against the code, confirms, corrects, or rejects it with
+   evidence, and fixes only confirmed findings. The Reviewer/Judge inspects the
+   fix diff and affected behavior and adjudicates rejected findings. Repeat a
+   full review only when scope or affected boundaries changed. Carry confirmed,
+   rejected, and unresolved findings forward with their evidence and resulting
+   changes in the existing review report.
 
 Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
@@ -201,13 +201,15 @@ Context: <compressed relevant files, facts, commands, links>
 Constraints: <scope, user requirements, repository rules, safety, budget>
 Workspace: <read-only or isolated writable worktree>
 Do not: <explicit exclusions>
-Verify with: <tests, checks, evidence>
+Delegation: <terminal worker by default; explicit child scope if needed>
+Verify with: <exact allowed checks, required writable paths and network access>
 Return: <outcome, evidence, changed files, checks, confidence, blockers>
 ```
 
-Pass the accepted plan, result/diff report, and unresolved risks between
-phases. Enforce the `Return` contract and summarize results rather than relaying
-transcripts.
+Pass the accepted plan, result/diff report, and unresolved risks between phases.
+Label observed output, supplied claims, and inference. Give evidence artifacts'
+generating command and revision, or mark provenance unknown. Verify reproductions
+match the production path. Enforce `Return`; summarize rather than relay transcripts.
 
 ## Results
 

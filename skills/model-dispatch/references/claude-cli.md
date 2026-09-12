@@ -108,9 +108,6 @@ plan that resumes later.
 
 ## Long Claude runs
 
-`--bg` starts the session as a background agent and returns immediately; manage
-those with `claude agents`. Otherwise background the process yourself and watch
-the captured PID and artifact. Either way, poll about once a minute, emit a
-heartbeat at least every ten minutes, and stop when the artifact appears or the
-PID exits without one — reporting which occurred. Treat 15 minutes without log
-growth as a diagnostic signal, not proof of a hang.
+`--bg` returns after launch; collect the native task result with `claude agents`.
+Otherwise capture the child PID. In either case, follow
+[Watching Long Runs](../SKILL.md#watching-long-runs) for completion and retries.

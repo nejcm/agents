@@ -63,9 +63,6 @@ resumed by accident. `--fork` branches from a session instead of continuing it
 
 ## Long OpenCode runs
 
-Launch lengthy `opencode run` invocations in the background. Watch the captured
-PID and the JSON artifact; add `--print-logs` (stderr) and `--log-level` when a
-run needs diagnosis. Poll about once a minute, emit a heartbeat at least every
-ten minutes, and stop when the artifact appears or the PID exits without one —
-reporting which occurred. Treat 15 minutes without log growth as a diagnostic
-signal, not proof of a hang.
+Follow [Watching Long Runs](../SKILL.md#watching-long-runs). Capture the child
+PID and per-run JSON output. Add `--print-logs` on stderr and `--log-level` when
+needed for diagnosis.
