@@ -199,12 +199,31 @@ Success criteria: <observable result>
 Role / effort: <selected above>
 Context: <compressed relevant files, facts, commands, links>
 Constraints: <scope, user requirements, repository rules, safety, budget>
+Style: <code-style rules, quoted, for any file this agent writes>
 Workspace: <read-only or isolated writable worktree>
 Do not: <explicit exclusions>
 Delegation: <terminal worker by default; explicit child scope if needed>
 Verify with: <exact allowed checks, required writable paths and network access>
 Return: <outcome, evidence, changed files, checks, confidence, blockers>
 ```
+
+### Instruction inheritance
+
+A delegate does not reliably inherit your instruction files. An in-process
+subagent can start without the global `AGENTS.md`; another provider's CLI reads
+its own config, not yours. Any rule that shapes written output — comment budget,
+naming, dependency policy, test conventions — travels in the packet or it does
+not apply.
+
+Quote the rule; never cite it by filename. A delegate that cannot see
+`AGENTS.md` cannot open it either, and "follow AGENTS.md" reads as satisfied
+without changing anything.
+
+For any assignment that writes code, carry the comment budget verbatim: **one
+line, two if the reason needs it, never a paragraph; default zero; no JSDoc on
+unexported functions.** It is the rule most often lost in delegation and the
+easiest to check in the returned diff — reject output that ignores it rather
+than reformatting it yourself.
 
 Pass the accepted plan, result/diff report, and unresolved risks between phases.
 Label observed output, supplied claims, and inference. Give evidence artifacts'

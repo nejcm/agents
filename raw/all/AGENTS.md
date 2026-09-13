@@ -43,24 +43,15 @@ Search before reading files. Always use limits when reading files. Do not read f
 
 #### Comments
 
-Default: write no comment. Make the code self-explanatory instead — name the variable, extract the function, split the branch. A comment is a last resort for what naming cannot carry, not a companion to it.
+Budget: one line. Two if the reason genuinely needs it. Never a paragraph — an explanation that wants three lines belongs in the chat reply or a doc, not in the file.
 
-Write a comment only when one of these is true:
+Default is zero comments. Make the code carry it instead — name the variable, extract the function, split the branch. A comment is a last resort for what naming cannot hold, not a companion to it.
 
-- **Why, not what.** A non-obvious reason, tradeoff, or constraint a reader would otherwise "fix" — a workaround, a spec quirk, an ordering requirement, a perf choice.
-- **A link.** Issue, RFC, spec, or upstream bug that explains the code.
-- **A real trap.** Behaviour that will surprise the next reader and is not visible from the code.
+Spend the budget only on a non-obvious why (a workaround, a spec quirk, an ordering or perf constraint a reader would otherwise "fix"), a link (issue, RFC, upstream bug), or a trap the code does not show.
 
-Hard rules:
+Never: restating the code (`// increment counter`); section banners, ASCII dividers, step numbering, or narration of the diff (`// now we also handle X`); JSDoc or docstrings on anything unexported — on exported API one line only, and no `@param`/`@returns` that retype the types; "note that", "in the future", or telling me what you just did.
 
-- One line. Two only if the reason genuinely needs it. Almost never a paragraph.
-- Never restate the code (`// increment counter`, `// loop over users`, `// return the result`).
-- No section banners, no `// ---- Helpers ----`, no ASCII dividers, no step numbering (`// Step 1:`), no narration of the diff (`// now we also handle X`).
-- No JSDoc/docstrings on internal functions whose signature already says it. Public/exported API only, and then one line — skip `@param`/`@returns` that just retype the types.
-- No "in the future", "note that", "this is important", or explaining what you did for my benefit — that belongs in the chat reply, not the file.
-- Match the file: if surrounding code has no comments, add none.
-
-When in doubt, delete the comment. If you notice you're explaining code you just wrote, rewrite the code instead.
+Match the file — if the surrounding code has no comments, add none. When in doubt, delete it. If you are explaining code you just wrote, rewrite the code instead.
 
 ### General
 
