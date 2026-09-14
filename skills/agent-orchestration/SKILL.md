@@ -197,7 +197,9 @@ Send only the context needed to complete and verify the assignment:
 Objective: <specific outcome>
 Success criteria: <observable result>
 Role / effort: <selected above>
-Context: <compressed relevant files, facts, commands, links>
+Target: <repo, exact base/head revisions or working-tree diff>
+Context: <relevant entry points, governing docs, facts, links>
+Checked: <commands already run, results, and revision checked>
 Constraints: <scope, user requirements, repository rules, safety, budget>
 Style: <code-style rules, quoted, for any file this agent writes>
 Workspace: <read-only or isolated writable worktree>
@@ -226,6 +228,8 @@ easiest to check in the returned diff — reject output that ignores it rather
 than reformatting it yourself.
 
 Pass the accepted plan, result/diff report, and unresolved risks between phases.
+For reviews, include prior findings and dispositions. Require only documents
+governing the affected behavior; expand reading when evidence warrants it.
 Label observed output, supplied claims, and inference. Give evidence artifacts'
 generating command and revision, or mark provenance unknown. Verify reproductions
 match the production path. Enforce `Return`; summarize rather than relay transcripts.
