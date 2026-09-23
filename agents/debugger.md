@@ -13,7 +13,7 @@ platforms:
   claude:
     model: sonnet
   codex:
-    model: gpt-6-astra
+    model: gpt-5.6-sol
 ---
 
 # Debugger Agent

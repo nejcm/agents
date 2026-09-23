@@ -41,12 +41,15 @@ Rankings are relative preferences from 1–10; higher is better.
   latency, tokens), not list price. A constraint and tiebreaker, never a
   reason to accept weak output.
 
-| Model                  | Invoke via                            | Cost | Intelligence | Taste | Default work                                                                                   |
-| ---------------------- | ------------------------------------- | ---: | -----------: | ----: | ---------------------------------------------------------------------------------------------- |
-| GPT-5.6                | `codex exec`, or native inside Codex  |    9 |            8 |     5 | Preferred Builder; implementation, mechanical changes, migrations, data analysis, computer use |
-| Cursor Auto / Composer | `agent -p`, or native inside Cursor   |    8 |            7 |     6 | Fallback Builder when Codex is unavailable or explicitly requested                             |
-| Sonnet 5               | host-native subagent, or `claude -p`  |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                       |
-| Opus 5                 | host-native subagent, or `claude -p`  |    4 |            7 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning    |
+| Model                  | Invoke via                           | Cost | Intelligence | Taste | Default work                                                                                |
+| ---------------------- | ------------------------------------ | ---: | -----------: | ----: | ------------------------------------------------------------------------------------------- |
+| Fable 5.1              | host-native subagent, or `claude -p` |    3 |           10 |     9 | Hardest planning, review, and judgment                                                      |
+| GPT-6-Astra            | `codex exec`, or native inside Codex |    4 |            9 |     7 | Cross-family counterpart to Fable: complex planning, review, hardest builds                 |
+| Opus 5.5               | host-native subagent, or `claude -p` |    5 |            8 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning |
+| GPT-5.6-Sol            | `codex exec`, or native inside Codex |    7 |            8 |     6 | Heavy Builder: integration work, migrations, difficult implementation, computer use         |
+| GPT-5.6-Luna           | `codex exec`, or native inside Codex |    9 |            6 |     5 | Light Builder: bounded implementation, mechanical changes, search and inventory             |
+| Cursor Auto / Composer | `agent -p`, or native inside Cursor  |    8 |            7 |     6 | Fallback Builder when Codex is unavailable or explicitly requested                          |
+| Sonnet 5               | host-native subagent, or `claude -p` |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                    |
 
 How to apply:
 
@@ -59,22 +62,24 @@ How to apply:
 - Cost is a tie-breaker only; when axes conflict for anything that ships,
   intelligence > taste > cost.
 - Bulk or mechanical work with a clear spec (implementation, migrations, data
-  analysis) goes to GPT-5.6 — it is very cost effective.
+  analysis) goes to the Codex Builder path — Luna when bounded, Sol when the
+  work carries integration or correctness risk. Both are very cost effective.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7.
-- Review plans and implementations with Opus 5, optionally adding GPT-5.6 as an
-  extra cross-family perspective. Never review with Haiku.
+- Review plans and implementations with Fable 5.1 or Opus 5.5, optionally
+  adding GPT-6-Astra as an extra cross-family perspective. Never review with
+  Haiku or Luna.
 - Do not use the Builder to review its own diff.
-- If computer use would help complete or verify work, dispatch to GPT-5.6
+- If computer use would help complete or verify work, dispatch to GPT-5.6-Sol
   through Codex.
 
 ## Capability Roles
 
-| Role               | Use                                                           | Preferred order                                                |
-| ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------- |
-| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5.1 → Opus 5 → GPT-6-astra                                           |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-luna or GPT-6-astra by difficulty → Cursor Auto / Composer via `agent` → Opus 5 → strongest capable model |
-| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5.1 → Opus 5 → GPT-6-astra                                           |
-| **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-luna → Haiku                                           |
+| Role               | Use                                                           | Preferred order                                                                                                     |
+| ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5.1 → GPT-6-Astra → Opus 5.5                                                                                  |
+| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-Luna or GPT-5.6-Sol by difficulty → Cursor Auto / Composer via `agent` → Opus 5.5 → strongest capable model |
+| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5.1 → GPT-6-Astra                                                                                  |
+| **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-Luna → Sonnet 5                                                                                            |
 
 Prefer a different model family for independent review. If unavailable, use the
 best same-family fallback and disclose the reduced independence.
@@ -88,12 +93,14 @@ On the Codex Builder path, pick variant and effort from difficulty:
 
 | Task profile | Model | Effort |
 | ------------ | ----- | ------ |
-| Bounded, simple-to-medium work | GPT-5.6-luna | `xhigh` by default; `max` when extra depth is worth the latency |
-| Medium work with integration or uncertainty through very complex work | GPT-6-astra | `medium` for routine work to semi complex work; `high` for complexity, ambiguity, or higher risk |
+| Bounded, simple-to-medium work | GPT-5.6-Luna | `xhigh` by default; `max` when extra depth is worth the latency |
+| Medium work with integration or uncertainty through very complex work | GPT-5.6-Sol | `medium` for routine work to semi complex work; `high` for complexity, ambiguity, or higher risk |
+| Work at the edge of what a Builder can do unsupervised: cross-cutting design, deep debugging, high blast radius | GPT-6-Astra | `high` |
 
 The medium band overlaps intentionally: choose Luna only when the task is
-bounded and easily verified; choose Astra when integration, uncertainty, or
-correctness risk matters more than cost.
+bounded and easily verified; choose Sol when integration, uncertainty, or
+correctness risk matters more than cost. Reserve Astra for work a Builder
+would otherwise have to escalate — it is the frontier tier, not the default.
 
 ## Effort
 
@@ -112,7 +119,8 @@ advisory signals, not automatic model switches.
 Default Planner and Reviewer/Judge roles to `high` when the work benefits from
 it. Use at most one automatic `xhigh` delegate. `max` is allowed only for the
 Luna Builder path above; never select an unbounded host mode such as
-`ultracode`. Avoid Luna when latency is more important than cost.
+`ultracode`, or an effort that delegates on its own such as Codex `ultra`.
+Avoid Luna when latency is more important than cost.
 
 A wrapper agent — one that only launches another CLI and returns its artifact —
 gets the cheapest model that can drive a CLI reliably, at `low` or `medium`.
