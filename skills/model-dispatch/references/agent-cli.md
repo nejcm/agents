@@ -28,20 +28,29 @@ when a budget matters.
 
 Use print/headless mode so the orchestrator can drive it non-interactively:
 
+Use a fresh `ARTIFACT_DIR` per run (`mktemp -d`) and write the packet to
+`$ARTIFACT_DIR/build.prompt.md` first; a reused directory lets a stale packet
+pass the check.
+
 ```bash
-mkdir -p "$ARTIFACT_DIR"
-CHAT_ID=$(agent create-chat)
+PROMPT_FILE="$ARTIFACT_DIR/build.prompt.md"
+test -s "$PROMPT_FILE" || { printf 'Missing prompt: %s\n' "$PROMPT_FILE" >&2; exit 1; }
+
+CHAT_ID="$(agent create-chat)" && test -n "$CHAT_ID" ||
+  { printf 'Cursor did not return a chat id\n' >&2; exit 1; }
+printf '%s\n' "$CHAT_ID" > "$ARTIFACT_DIR/chat-id"
 
 agent -p --trust --force \
   --model <id-from-agent-models> \
   --workspace "$PWD" \
   --resume "$CHAT_ID" \
   --output-format json \
-  --sandbox disabled \
-  "$(cat <<'EOF'
-<delegation packet>
-EOF
-)" < /dev/null | tee "$ARTIFACT_DIR/build.json"
+  --sandbox enabled \
+  "$(cat "$PROMPT_FILE")" < /dev/null \
+  > "$ARTIFACT_DIR/build.json" 2> "$ARTIFACT_DIR/build.stderr.log"
+status=$?
+printf '%s\n' "$status" > "$ARTIFACT_DIR/build.exit-status"
+exit "$status"
 ```
 
 Required headless flags:
@@ -60,39 +69,57 @@ Optional:
 | ---- | ---- |
 | `--worktree [name]` | Isolate writes; required for parallel writers |
 | `--worktree-base <ref>` | Base the worktree on a branch other than HEAD |
-| `--sandbox enabled` | Tighter command isolation when policy requires it |
+| `--sandbox enabled` | Default for delegated work; host launcher access is handled separately |
+| `--sandbox disabled` | Only with explicit authorization and host-policy approval; never to fix host access to Cursor's state files |
 | `--approve-mcps` | Only if the packet needs MCP and prompts would block |
 
 Default mode is full Agent (edits allowed). Use `--mode ask` or `--plan` only
 for read-only survey or planning dispatches.
+
+## Recovering from setup and launch errors
+
+- `EAI_AGAIN` from `agent models` is a DNS/network lookup failure, not evidence
+  that the requested model is unavailable. Check connectivity and retry once;
+  if discovery still fails, report that blocker instead of guessing an id or
+  switching to `auto`.
+- `unable to open database file` can come from the host process being unable to
+  access Cursor's own state database. Diagnose the path and use the host's
+  approved access mechanism if needed, while keeping `--sandbox enabled` for
+  the delegate. Do not turn the Cursor sandbox off to fix a host-level denial.
+- If the expected prompt file is missing or empty, rebuild it from the current
+  authorized task packet and verify it before launching; never send an empty prompt.
+- If a background run appears stalled, inspect its task or process ID, stderr,
+  and exit-status file before retrying. Verify the prompt file is present, passed as one quoted argument,
+  and stdin is redirected; do not start a duplicate while the first process is
+  still running. Resume fixes with the saved chat id and same model.
 
 For dispatches that edit, state permitted files, required behavior,
 exclusions, branch/worktree authority, and verification. Prefer an isolated
 worktree when parallel writers exist; a single shared branch is fine for
 sequential staged phases.
 
-Prompt as the final argument and redirect empty stdin so the CLI cannot stall
-waiting for input. Store `CHAT_ID`, the JSON artifact, and any prompt text in a
-temporary or gitignored artifact directory; remove or disclose leftovers.
-
 ## Resume for fixes
 
-Reuse the same chat so the delegate keeps context:
+Reuse the same chat so the delegate keeps context. Write each round's packet to
+a new `fix-$ROUND.prompt.md`:
 
 ```bash
+CHAT_ID="$(cat "$ARTIFACT_DIR/chat-id")"
+FIX="$ARTIFACT_DIR/fix-$ROUND"
+test -n "$CHAT_ID" && test -s "$FIX.prompt.md" ||
+  { printf 'Missing chat id or fix prompt\n' >&2; exit 1; }
+
 agent -p --trust --force \
   --model <same-model-as-build> \
   --workspace "$PWD" \
   --resume "$CHAT_ID" \
   --output-format json \
-  "$(cat <<'EOF'
-Fix the actionable review findings below. Do not expand scope.
-Verify with: <checks>
-Findings:
-<bulleted actionable items from the review>
-Return: changed files, checks, remaining blockers
-EOF
-)" < /dev/null | tee "$ARTIFACT_DIR/fix.json"
+  --sandbox enabled \
+  "$(cat "$FIX.prompt.md")" < /dev/null \
+  > "$FIX.json" 2> "$FIX.stderr.log"
+status=$?
+printf '%s\n' "$status" > "$FIX.exit-status"
+exit "$status"
 ```
 
 `agent --continue` resumes the latest session when you did not keep a chat id;

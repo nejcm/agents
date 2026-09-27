@@ -21,7 +21,7 @@ when a budget matters.
 ## Dispatch
 
 ```bash
-mkdir -p "$ARTIFACT_DIR"
+test -s "$PROMPT_FILE" || { printf 'Missing prompt: %s\n' "$PROMPT_FILE" >&2; exit 1; }
 opencode run \
   --model <provider/model> \
   --variant <provider-specific effort> \
@@ -29,10 +29,7 @@ opencode run \
   --format json \
   --auto \
   --session "$SESSION_ID" \
-  "$(cat <<'PROMPT'
-<delegation packet>
-PROMPT
-)" < /dev/null | tee "$ARTIFACT_DIR/run.json"
+  "$(cat "$PROMPT_FILE")" < /dev/null | tee "$ARTIFACT_DIR/run.json"
 ```
 
 | Flag | Why |

@@ -54,12 +54,19 @@ These hold for every CLI, whatever the reference adds:
   some as a provider-specific variant with no clean mapping. Translate the
   requested level onto what the CLI offers, and tell the caller when there is
   no equivalent instead of silently taking the default.
-- **Prompt last, stdin empty.** Pass the packet as the final positional
-  argument and redirect `< /dev/null`; piped or absent stdin can stall a CLI
-  that is waiting for more input.
+- **Prompt last, stdin empty.** Write multiline packets to a fresh temporary
+  file, verify it is non-empty, then pass its contents as one quoted final
+  positional argument. Redirect `< /dev/null`; avoid nested shell quoting that
+  can alter the packet or leave the CLI waiting for stdin. A packet over the
+  per-argument limit (128 KiB on Linux) fails with `Argument list too long`;
+  reference large inputs by path.
 - **Match isolation to the job.** Read-only for reasoning over a diff; a
   writable worktree for anything that must run checks. Parallel writers each
   need their own worktree.
+- **Separate launcher access from delegate isolation.** The host process's
+  access to the CLI's own state or cache files is separate from the delegate's
+  sandbox. Correct a diagnosed host-level denial under host policy; do not
+  disable the delegate sandbox as a workaround.
 - **Artifacts go to a temporary or gitignored directory.** Keep prompts and
   reports out of the working tree; remove or disclose leftovers.
 - **Resume by explicit id**, not "the last session", so a concurrent run cannot

@@ -36,7 +36,7 @@ The most common reason to reach for this CLI: reviewing or surveying work a
 different family produced. Constrain the tools so the dispatch cannot edit:
 
 ```bash
-mkdir -p "$ARTIFACT_DIR"
+test -s "$PROMPT_FILE" || { printf 'Missing prompt: %s\n' "$PROMPT_FILE" >&2; exit 1; }
 claude -p \
   --model <selected-model> \
   --effort <selected-effort> \
@@ -46,10 +46,7 @@ claude -p \
   --add-dir "$PWD" \
   --output-format json \
   --session-id "$REVIEW_SESSION" \
-  "$(cat <<'PROMPT'
-<delegation packet>
-PROMPT
-)" < /dev/null | tee "$ARTIFACT_DIR/review.json"
+  "$(cat "$PROMPT_FILE")" < /dev/null | tee "$ARTIFACT_DIR/review.json"
 ```
 
 Reports must name the inspected target and state plainly when there are no
