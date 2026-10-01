@@ -12,8 +12,6 @@ tags: [core, read-write]
 platforms:
   claude:
     model: sonnet
-  codex:
-    model: gpt-6.1-sol
 ---
 
 # Debugger Agent

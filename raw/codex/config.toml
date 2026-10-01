@@ -7,9 +7,6 @@ status_line = [
   "weekly-limit",
 ]
 
-[tui.model_availability_nux]
-"gpt-6.1-sol" = 4
-
 [notice]
 hide_full_access_warning = true
 

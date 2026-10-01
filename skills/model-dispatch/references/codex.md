@@ -3,10 +3,9 @@
 Calling a model through the Codex CLI. Do not use this path from inside Codex
 itself — dispatch natively there.
 
-Codex is a harness, not a model. It reaches whichever models the install
-exposes, and the lineup changes independently of the flags, so list the
-available ids rather than assuming one. `codex --help` and the config docs are
-the source of truth for both ids and effort levels.
+Use the selected family's ID from [models.md](models.md). Confirm it is
+available through native host metadata or app-server `model/list`; do not
+assume versionless Sol/Luna aliases. CLI help documents flags, not model IDs.
 
 `codex exec` runs a prompt; `codex exec review` runs a review. Both take the
 model as `-m <model>` and the effort as a config override,

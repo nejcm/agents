@@ -38,11 +38,15 @@ cursor:
 
 | Field            | Values                    | Description                                                   |
 | ---------------- | ------------------------- | ------------------------------------------------------------- |
-| `model`          | `opus`, `sonnet`, `haiku` | Model tier (mapped to current model IDs at build time)        |
+| `model`          | `opus`, `sonnet`, `fable` | Claude tier alias; other host IDs come from shared registry        |
 | `temperature`    | `0.0–1.0`                 | Lower = more deterministic. Use `0.0` for migrations/security |
 | `tools.*`        | `true/false`              | Which tools this agent may use                                |
 | `claude.mapping` | `rule`, `skill`, `skip`   | How the agent appears in Claude Code                          |
 | `codex.mapping`  | `instruction`, `skip`     | How the agent appears in Codex                                |
+
+Codex role profiles omit `model` so the caller can pass the family's current
+ID from `model-dispatch/references/models.md`. Omitting the field alone inherits
+configured defaults or the parent; the orchestrator must pass the selected ID.
 
 ## How It's Used
 

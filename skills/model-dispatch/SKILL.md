@@ -8,8 +8,8 @@ description: How to call another agent CLI — per-CLI invocation references (Co
 How to call another agent CLI correctly. Each CLI is a harness that can drive
 several models; the caller supplies which model and effort to use. This skill
 does not choose them, holds no model preferences, and takes no position on
-whether the work should have been delegated at all. Any model id appearing
-below is an illustrative placeholder — discover the real ids from the CLI.
+whether the work should have been delegated at all. Command examples use
+placeholders; current IDs live in [models.md](references/models.md).
 
 Nothing here assumes an orchestration pattern — use it for a single delegated
 call as readily as for one step of a larger workflow.
@@ -41,13 +41,21 @@ expresses effort, isolation, resume, and long-run watching.
 Do not load more than the current path needs; load a second only when
 switching paths mid-run or comparing mechanisms.
 
+## Model IDs
+
+Read [models.md](references/models.md) for the selected family's current ID.
+Use it unless the user specifies another release. Confirm host availability,
+effort, and tools; discover a replacement only if unavailable or asked to update.
+Pass the ID explicitly when spawning; Codex role inheritance alone does not
+select the requested family. Keep the original model on resume.
+
 ## Invocation Contract
 
 These hold for every CLI, whatever the reference adds:
 
 - **Never invent a capability or identifier.** Model ids, effort levels, flags,
-  and sandbox modes come from `--help` or a models listing, not from memory. A
-  CLI's model lineup changes without the flags changing; list before assuming.
+  and sandbox modes come from the shared registry and host documentation,
+  not memory. Confirm host-specific IDs when the registry ID is not accepted.
 - **Confirm the mechanism supports the assignment** — model, effort, tools, and
   isolation — before dispatching. If it cannot, pick another path or say so.
 - **Effort is per-CLI.** Some expose it as a flag, some as a config override,

@@ -15,10 +15,9 @@ Before the first dispatch in a session:
 2. Confirm auth and health: `claude doctor`. If unauthenticated, stop and tell
    the user to run `claude auth` (or `claude setup-token` for a long-lived
    token).
-3. `--model` takes a tier alias or a full id. Aliases track the latest model in
-   that tier, so prefer one when the caller named a tier and an exact id when
-   they named a specific model. Confirm the accepted values from
-   `claude --help` rather than from memory.
+3. `--model` accepts a tier alias or full ID. Use [models.md](models.md)
+   for family defaults; preserve explicit user model choices. Confirm accepted
+   values with `claude --help` rather than memory.
 4. Skim `claude --help` if flags may have changed.
 
 Claude usage is invisible to another host's token budget; track it separately

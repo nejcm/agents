@@ -33,17 +33,18 @@ policies and user instructions may restrict delegation.
 ## Model defaults
 
 Use these workload preferences. They are routing policy, not benchmark claims.
-The installed Claude CLI exposes `fable` and `opus` aliases. Verify availability
-and resolve any requested exact version against the host before dispatch.
+Use family names here and current IDs from
+`model-dispatch/references/models.md`. Explicit user model choices override
+the registry. `model-dispatch` handles host compatibility and invocation.
 
-| Model | Identifier | Default work |
-| ----- | ---------- | ------------ |
-| Fable 5.1 | `claude-fable-5-1` in Claude CLI; discover the host-native ID | Complex implementation, architecture, ambiguous planning; first choice in this tier |
-| Opus 5.5 | `claude-opus-5-5` in Claude CLI; discover the host-native ID | Complex implementation and planning when Fable is unavailable; independent review of GPT work |
-| GPT-6.1 Sol | `gpt-6.1-sol` | Medium implementation, integration, migrations, debugging, computer use; independent review of Fable or Opus work |
-| GPT-6 Luna | `gpt-6-luna` | Simple, bounded implementation, search, inventory, mechanical checks |
-| Cursor Auto / Composer | Discover the actual model family | Explicitly requested or unavailable-provider fallback; verify capacity and family before use |
-| Sonnet 5.5 | `claude-sonnet-5-5` | Thin CLI wrappers and bounded coordination |
+| Model | Default work |
+| ----- | ------------ |
+| Fable | Complex implementation, architecture, ambiguous planning; first choice in this tier |
+| Opus | Complex implementation and planning when Fable is unavailable; independent review of GPT work |
+| GPT Sol | Medium implementation, integration, migrations, debugging, computer use; independent review of Fable or Opus work |
+| GPT Luna | Simple, bounded implementation, search, inventory, mechanical checks |
+| Cursor Auto / Composer | Explicitly requested or unavailable-provider fallback; verify capacity and family before use |
+| Sonnet | Thin CLI wrappers and bounded coordination |
 
 How to apply:
 
@@ -77,8 +78,8 @@ How to apply:
 
 | Task profile | Model | Effort |
 | ------------ | ----- | ------ |
-| Simple, bounded, clearly specified and easily verified | GPT-6 Luna | `high` for mechanical work; `xhigh` for simple implementation |
-| Medium implementation with integration or correctness judgment | GPT-6.1 Sol | `medium`; `high` for uncertainty or elevated risk within this tier |
+| Simple, bounded, clearly specified and easily verified | GPT Luna | `high` for mechanical work; `xhigh` for simple implementation |
+| Medium implementation with integration or correctness judgment | GPT Sol | `medium`; `high` for uncertainty or elevated risk within this tier |
 | Complex implementation, cross-cutting design, deep debugging, high blast radius | Fable, then Opus | `high`, translated to the host's supported effort |
 
 Increasing effort does not replace escalation to the appropriate difficulty tier.
@@ -89,7 +90,7 @@ Choose the reviewer's actual model family from the author of each artifact:
 
 | Author | Reviewer |
 | ------ | -------- |
-| Fable or Opus | GPT-6.1 Sol at `high` |
+| Fable or Opus | GPT Sol at `high` |
 | GPT Sol or Luna | Fable, then Opus at `high` |
 
 Apply this to plans, implementations, and substantive fixes. Track the actual
@@ -125,8 +126,9 @@ Default Planner and Reviewer/Judge roles to `high` when the work benefits from
 it. Use at most one automatic `xhigh` delegate. Use `max` only for an explicitly
 requested, bounded Luna task; never select an unbounded host mode such as
 `ultracode`, or an effort that delegates on its own such as Codex `ultra`.
-Verify effort support for the actual model and host. Sol 6.1 supports `low`,
-`medium`, `high`, `xhigh`, and `max`; never send it `none` or `minimal`.
+Verify supported efforts for the resolved release and host rather than
+assuming a family keeps the same options. Preserve the requested effort when
+supported; otherwise disclose the nearest supported choice before dispatch.
 
 A wrapper agent — one that only launches another CLI and returns its artifact —
 gets the cheapest model that can drive a CLI reliably, at `low` or `medium`.

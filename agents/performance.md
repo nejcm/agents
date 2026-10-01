@@ -10,8 +10,6 @@ tags: [specialized, read-write]
 platforms:
   claude:
     model: sonnet
-  codex:
-    model: gpt-6.1-sol
 ---
 
 # Performance Agent

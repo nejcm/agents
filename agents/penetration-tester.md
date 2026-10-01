@@ -12,8 +12,6 @@ tags: [specialized, security]
 platforms:
   claude:
     model: opus
-  codex:
-    model: gpt-6.1-sol
 ---
 
 # Penetration Tester Agent

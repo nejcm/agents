@@ -13,7 +13,6 @@ platforms:
   claude:
     model: opus
   codex:
-    model: gpt-6.1-sol
     model_reasoning_effort: high
   cursor:
     readonly: true
