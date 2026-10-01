@@ -19,8 +19,12 @@ it as a lead to verify, never as a finding.
    compliance, team size, existing stack, budget, deadline), what a good
    outcome looks like, and how reversible the choice is. If the user supplied a
    codebase, read enough of it to know the real constraints; a library that
-   fails on the project's Node version or bundler is not a candidate. Label
-   assumptions you had to make.
+   fails on the project's Node version or bundler is not a candidate.
+   Ask now, not later: if a missing constraint would change the candidate
+   list, ask the user up to three targeted questions before gathering. For a
+   consequential or hard-to-reverse decision, offer the `grilling` skill to
+   stress-test the framing first. Once research starts, do not stop to ask;
+   label assumptions and report which answers would flip the recommendation.
 2. **Enumerate candidates.** List the serious options, including "do nothing",
    "write it ourselves", and the incumbent. Say why each made or missed the
    list. Stop at the handful that can plausibly win; ranking twelve options
