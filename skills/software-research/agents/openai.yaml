@@ -1,0 +1,5 @@
+interface:
+  display_name: "Software Research"
+  short_description: "Research libraries, frameworks, and system designs"
+policy:
+  allow_implicit_invocation: false

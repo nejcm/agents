@@ -1,6 +1,6 @@
 ---
 name: explore-codebase
-description: Use when the user asks how a repo works, where something lives, or to trace a request, feature, or data flow through the code, including getting oriented in an unfamiliar repo. For research outside the codebase use research-analyst.
+description: Use when the user asks how a repo works, where something lives, or to trace a request, feature, or data flow through the code, including getting oriented in an unfamiliar repo. For researching libraries, frameworks, or system designs use software-research.
 category: workflow
 ---
 
