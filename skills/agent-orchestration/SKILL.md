@@ -30,77 +30,82 @@ Delegate when doing so materially improves at least one of:
 Do not orchestrate solely because a task is non-trivial. Higher-priority host
 policies and user instructions may restrict delegation.
 
-## Model Defaults
+## Model defaults
 
-Rankings are relative preferences from 1–10; higher is better.
+Use these workload preferences. They are routing policy, not benchmark claims.
+The installed Claude CLI exposes `fable` and `opus` aliases. Verify availability
+and resolve any requested exact version against the host before dispatch.
 
-- **Intelligence**: how difficult a problem the model can solve unsupervised.
-- **Taste**: judgment in code quality, architecture, API design, UI/UX, and
-  copy.
-- **Cost**: effective cost efficiency in this environment (constrained usage,
-  latency, tokens), not list price. A constraint and tiebreaker, never a
-  reason to accept weak output.
-
-| Model                  | Invoke via                           | Cost | Intelligence | Taste | Default work                                                                                |
-| ---------------------- | ------------------------------------ | ---: | -----------: | ----: | ------------------------------------------------------------------------------------------- |
-| Fable 5.1              | host-native subagent, or `claude -p` |    3 |           10 |     9 | Hardest planning, review, and judgment                                                      |
-| GPT-6-Astra            | `codex exec`, or native inside Codex |    4 |            9 |     7 | Cross-family counterpart to Fable: complex planning, review, hardest builds                 |
-| Opus 5.5               | host-native subagent, or `claude -p` |    5 |            8 |     8 | API/SDK/UI review, user-facing work, independent judgment, architecture, ambiguous planning |
-| GPT-5.6-Sol            | `codex exec`, or native inside Codex |    7 |            8 |     6 | Heavy Builder: integration work, migrations, difficult implementation, computer use         |
-| GPT-5.6-Luna           | `codex exec`, or native inside Codex |    9 |            6 |     5 | Light Builder: bounded implementation, mechanical changes, search and inventory             |
-| Cursor Auto / Composer | `agent -p`, or native inside Cursor  |    8 |            7 |     6 | Fallback Builder when Codex is unavailable or explicitly requested                          |
-| Sonnet 5               | host-native subagent, or `claude -p` |    5 |            5 |     6 | Thin Builder-CLI wrapper agents and bounded coordination                                    |
+| Model | Identifier | Default work |
+| ----- | ---------- | ------------ |
+| Fable 5.1 | `claude-fable-5-1` in Claude CLI; discover the host-native ID | Complex implementation, architecture, ambiguous planning; first choice in this tier |
+| Opus 5.5 | `claude-opus-5-5` in Claude CLI; discover the host-native ID | Complex implementation and planning when Fable is unavailable; independent review of GPT work |
+| GPT-6.1 Sol | `gpt-6.1-sol` | Medium implementation, integration, migrations, debugging, computer use; independent review of Fable or Opus work |
+| GPT-6 Luna | `gpt-6-luna` | Simple, bounded implementation, search, inventory, mechanical checks |
+| Cursor Auto / Composer | Discover the actual model family | Explicitly requested or unavailable-provider fallback; verify capacity and family before use |
+| Sonnet 5.5 | `claude-sonnet-5-5` | Thin CLI wrappers and bounded coordination |
 
 How to apply:
 
-- These are defaults, not limits. You have standing permission to escalate: if
-  a cheaper model's output doesn't meet the bar, redo the work with a smarter
-  model without asking. Judge the output, not the price tag; escalating costs
-  less than shipping mediocre work.
-- Use cheaper models to gather evidence and try bounded approaches before
-  escalating.
-- Cost is a tie-breaker only; when axes conflict for anything that ships,
-  intelligence > taste > cost.
-- Bulk or mechanical work with a clear spec (implementation, migrations, data
-  analysis) goes to the Codex Builder path — Luna when bounded, Sol when the
-  work carries integration or correctness risk. Both are very cost effective.
-- Anything user-facing (UI, copy, API design) needs taste ≥ 7.
-- Review plans and implementations with Fable 5.1 or Opus 5.5, optionally
-  adding GPT-6-Astra as an extra cross-family perspective. Never review with
-  Haiku or Luna.
-- Do not use the Builder to review its own diff.
-- If computer use would help complete or verify work, dispatch to GPT-5.6-Sol
-  through Codex.
+- Route by uncertainty, scope, and correctness risk, not file count. Simple work
+  has a clear spec and a cheap, decisive check. Medium work needs integration
+  judgment. Complex work crosses architectural boundaries, has ambiguous
+  requirements, or carries high blast radius.
+- Escalate Luna to Sol, then Sol to Fable or Opus when the work exceeds its tier
+  or one corrected retry still fails. Do not keep a complex task on Sol merely
+  because the local host only exposes GPT models.
+- Fable is preferred to Opus for complex work when both are available. Use Opus
+  when Fable is unavailable or explicitly selected. Verify tools and isolation
+  before choosing either. Computer use goes to Sol when its tools are required;
+  complex design can go to Fable or Opus separately.
+- Discover capacity before a fallback. Prefer another capable model in the
+  required tier; if only a lower tier is available, disclose the limitation and
+  leave work blocked when it cannot meet the requirements reliably.
+- User choices override defaults. Never review a delegate's work in that same
+  delegate session. Never use Luna or a thin wrapper as the substantive reviewer.
 
-## Capability Roles
+## Capability roles
 
-| Role               | Use                                                           | Preferred order                                                                                                     |
-| ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Planner**        | Architecture, ambiguous requirements, implementation planning | Fable 5.1 → GPT-6-Astra → Opus 5.5                                                                                  |
-| **Builder**        | Implementation, refactoring, tests, repository commands       | GPT-5.6-Luna or GPT-5.6-Sol by difficulty → Cursor Auto / Composer via `agent` → Opus 5.5 → strongest capable model |
-| **Reviewer/Judge** | Code review, security review, plan or result evaluation       | Fable 5.1 → GPT-6-Astra                                                                                  |
-| **Cheap worker**   | Search, inventory, log summarization, mechanical checks       | GPT-5.6-Luna → Sonnet 5                                                                                            |
+| Role | Routing |
+| ---- | ------- |
+| Planner | Fable, then Opus for complex or ambiguous plans; Sol for medium plans; Luna for simple task breakdowns |
+| Builder | Luna for simple work; Sol for medium work; Fable, then Opus for complex work |
+| Reviewer/Judge | Select from the author's family using the review routing below |
+| Cheap worker | Luna for search, inventory, log summaries, and mechanical checks; Sonnet for a CLI wrapper when needed |
 
-Prefer a different model family for independent review. If unavailable, use the
-best same-family fallback and disclose the reduced independence.
-
-For Builder, advance down the preferred order only when the current option is
-unavailable or the user explicitly selects a later one.
-
-## Builder Routing
-
-On the Codex Builder path, pick variant and effort from difficulty:
+## Builder routing
 
 | Task profile | Model | Effort |
 | ------------ | ----- | ------ |
-| Bounded, simple-to-medium work | GPT-5.6-Luna | `xhigh` by default; `max` when extra depth is worth the latency |
-| Medium work with integration or uncertainty through very complex work | GPT-5.6-Sol | `medium` for routine work to semi complex work; `high` for complexity, ambiguity, or higher risk |
-| Work at the edge of what a Builder can do unsupervised: cross-cutting design, deep debugging, high blast radius | GPT-6-Astra | `high` |
+| Simple, bounded, clearly specified and easily verified | GPT-6 Luna | `high` for mechanical work; `xhigh` for simple implementation |
+| Medium implementation with integration or correctness judgment | GPT-6.1 Sol | `medium`; `high` for uncertainty or elevated risk within this tier |
+| Complex implementation, cross-cutting design, deep debugging, high blast radius | Fable, then Opus | `high`, translated to the host's supported effort |
 
-The medium band overlaps intentionally: choose Luna only when the task is
-bounded and easily verified; choose Sol when integration, uncertainty, or
-correctness risk matters more than cost. Reserve Astra for work a Builder
-would otherwise have to escalate — it is the frontier tier, not the default.
+Increasing effort does not replace escalation to the appropriate difficulty tier.
+
+## Review routing
+
+Choose the reviewer's actual model family from the author of each artifact:
+
+| Author | Reviewer |
+| ------ | -------- |
+| Fable or Opus | GPT-6.1 Sol at `high` |
+| GPT Sol or Luna | Fable, then Opus at `high` |
+
+Apply this to plans, implementations, and substantive fixes. Track the actual
+model that authored the artifact, including after a fallback; a GPT wrapper
+launching Fable makes Fable the author. A role name or CLI is not a model family.
+Use a fresh reviewer session with the requirements, artifact, and evidence.
+
+For mixed-family work, split review by authorship when the scopes are separable.
+For coupled changes, use one reviewer from each family and give both the full
+integration context. For unknown authorship or standalone reviews, prefer Fable,
+then Opus; report when cross-family independence cannot be established.
+
+If the opposite family is unavailable, disclose it. Use a fresh, capable
+same-family reviewer only as a fallback and label the reduced independence.
+Do not describe that result as cross-family review. Explicit user model choices
+may override this routing; report the actual model and any lost independence.
 
 ## Effort
 
@@ -113,14 +118,15 @@ advisory signals, not automatic model switches.
 | `low`    | Mechanical, bounded, easily verified work: exploration, status, documentation, formatting, validation |
 | `medium` | Routine implementation, refactoring, and analysis                                                     |
 | `high`   | Architecture, planning, ambiguity, security, adversarial review, code review, difficult debugging     |
-| `xhigh`  | One narrow, high-stakes decision or bounded Luna Builder task where extra reasoning has clear value  |
+| `xhigh`  | One narrow, high-stakes decision where extra reasoning has clear value  |
 | `max`    | Extra-depth execution for a bounded Builder task routed to Luna when latency and token cost are acceptable |
 
 Default Planner and Reviewer/Judge roles to `high` when the work benefits from
-it. Use at most one automatic `xhigh` delegate. `max` is allowed only for the
-Luna Builder path above; never select an unbounded host mode such as
+it. Use at most one automatic `xhigh` delegate. Use `max` only for an explicitly
+requested, bounded Luna task; never select an unbounded host mode such as
 `ultracode`, or an effort that delegates on its own such as Codex `ultra`.
-Avoid Luna when latency is more important than cost.
+Verify effort support for the actual model and host. Sol 6.1 supports `low`,
+`medium`, `high`, `xhigh`, and `max`; never send it `none` or `minimal`.
 
 A wrapper agent — one that only launches another CLI and returns its artifact —
 gets the cheapest model that can drive a CLI reliably, at `low` or `medium`.

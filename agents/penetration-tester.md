@@ -13,7 +13,7 @@ platforms:
   claude:
     model: opus
   codex:
-    model: gpt-6-astra
+    model: gpt-6.1-sol
 ---
 
 # Penetration Tester Agent

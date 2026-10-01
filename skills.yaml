@@ -11,9 +11,6 @@
     - name: cursor/plugins
       args:
         - --skill thermo-nuclear-code-quality-review
-    - name: obra/superpowers
-      args:
-        - --skill requesting-code-review
 
     - name: https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs
     - name: https://github.com/mattpocock/skills/tree/main/skills/productivity/grill-me
