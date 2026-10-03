@@ -27,3 +27,7 @@
     - name: https://github.com/cursor/plugins/tree/main/pstack/skills/unslop
     - name: https://github.com/cursor/plugins/tree/main/pstack/skills/blast-radius
     - name: https://github.com/cursor/plugins/tree/main/pstack/skills/how
+
+    - name: https://github.com/humanlayer/skills
+      args:
+        - --skill show-me
