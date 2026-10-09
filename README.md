@@ -107,10 +107,10 @@ The global install includes a lean Firecrawl skill for all targets. Its wrapper
 invokes the globally installed CLI, keeps page content in the OS temporary
 directory, and only returns search metadata or a local file path to the agent.
 
-Install the tested CLI version, authenticate, then run the normal global install:
+Install the CLI, authenticate, then run the normal global install:
 
 ```bash
-npm install -g firecrawl-cli@1.19.26
+npm install -g firecrawl-cli
 firecrawl login
 ulis install --global --source . --yes
 ```

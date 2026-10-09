@@ -306,5 +306,5 @@ function fail(message) {
 
 function missingCliMessage(detail) {
   const suffix = detail ? ` (${detail})` : "";
-  return `Global Firecrawl CLI not found. Run: npm install -g firecrawl-cli@1.19.26${suffix}`;
+  return `Global Firecrawl CLI not found. Run: npm install -g firecrawl-cli${suffix}`;
 }

@@ -55,7 +55,7 @@ Authentication is user-managed. Use `FIRECRAWL_API_KEY` or Firecrawl's stored
 login. Never ask for, print, persist, or commit an API key.
 
 The global `firecrawl` CLI must be installed. If it is missing, stop and tell
-the user to run `npm install -g firecrawl-cli@1.19.26`; do not substitute `npx`
+the user to run `npm install -g firecrawl-cli`; do not substitute `npx`
 or install Firecrawl's full agent-skill bundle.
 
 Optional environment variables:
