@@ -1,0 +1,49 @@
+# Whitelist-only gitignore: ignore everything by default, then
+# explicitly un-ignore only the dotfiles/configs we want to track.
+# When adding a new file inside an already-allowed directory, you must
+# also add an explicit "!" rule for it here (git won't recurse into
+# an ignored path unless every ancestor is un-ignored too).
+
+# 1) Deny everything at the root by default
+/*
+
+# 2) Shell config
+!/.bashrc
+!/.bash_profile
+!/.bash_logout
+!/.profile
+!/.zshrc
+
+# 3) Claude Code global config
+!/.claude.json
+!/.claude.local.json
+!/.claude/
+/.claude/*
+!/.claude/settings.json
+!/.claude/settings.local.json
+!/.claude/.claude.json
+!/.claude/themes/
+!/.claude/skills/
+/.claude/skills/.trash
+/.claude/skills/synced
+!/.claude/agents/
+
+# 4) Codex config
+!/.codex/
+/.codex/*
+!/.codex/config.toml
+!/.codex/skills/
+!/.codex/agents/
+/.codex/skills/.system/
+
+# 5) Cursor config
+#!/.cursor/
+#/.cursor/*
+#/.cursor/projects/
+#/.cursor/plugins/
+#!/.cursor/skills/
+#!/.cursor/agents/
+
+
+# 6) Cross-platform agents/skills folder (ulis-managed)
+!/.agents/
