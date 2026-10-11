@@ -63,16 +63,5 @@
     "git-workflow": "off",
     "playwright-cli": "off",
     "skill-creator": "off"
-  },
-  "modelSettings": {
-    "claude-fable-5-1": {
-      "autoCompactWindow": 300000
-    },
-    "claude-opus-5-5": {
-      "autoCompactWindow": 300000
-    },
-    "claude-sonnet-5-5": {
-      "autoCompactWindow": 300000
-    }
   }
 }
