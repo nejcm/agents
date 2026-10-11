@@ -100,9 +100,10 @@ Label the wrapper with the model that actually does the work, not the CLI and
 not the wrapper's own model, so the host UI credits the right one. If a reused
 wrapper changes model or role, rename it or disclose the mismatch.
 
-The wrapper returns the delegate's session ID, exit status, final artifact, and
-blockers only after the delegate exits. Report launch separately. If the wrapper
-ends early, the parent must still collect the delegate's result.
+The wrapper returns the delegate's session ID, exit status, final artifact path
+(not its body), and blockers only after the delegate exits. Report launch
+separately. If the wrapper ends early, the parent must still collect the
+delegate's result.
 
 ## Watching Long Runs
 

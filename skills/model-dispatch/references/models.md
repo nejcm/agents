@@ -7,8 +7,10 @@ Verified 2026-10-01. Update release IDs here; other skills refer to family names
 | Fable | `claude-fable-5-1` |
 | Opus | `claude-opus-5-5` |
 | Sonnet | `claude-sonnet-5-5` |
+| Haiku | `claude-haiku-5-5` |
 | Sol | `gpt-6.1-sol` |
 | Luna | `gpt-6-luna` |
+| DeepSeek Flash | `deepseek-v4.1-flash` (OpenCode: `opencode-go/deepseek-v4.1-flash`) |
 
 Use these IDs unless the user selects another release. Confirm host availability
 and effort support; discover a replacement only when an ID is unavailable or

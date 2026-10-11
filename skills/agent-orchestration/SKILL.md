@@ -200,6 +200,8 @@ Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
 reviewable and revertable. Never push or open a PR without explicit approval.
 
+Keep the orchestrator's context small.
+
 Do not have a Builder decide objections to its own review. The Reviewer/Judge
 adjudicates disputed findings. Ask the user when a product or safety decision
 cannot be inferred. Direct coordination the user explicitly authorizes (such as
@@ -222,8 +224,12 @@ Workspace: <read-only or isolated writable worktree>
 Do not: <explicit exclusions>
 Delegation: <terminal worker by default; explicit child scope if needed>
 Verify with: <exact allowed checks, required writable paths and network access>
-Return: <outcome, evidence, changed files, checks, confidence, blockers>
+Return: <outcome, evidence, changed files, checks, confidence, blockers, full report path>
 ```
+
+Delegates write the full report to a temporary or gitignored artifact directory
+and return at most ~10 lines plus that path. The orchestrator reads the file only
+when it needs the evidence, so a long report never enters the parent context.
 
 ### Instruction inheritance
 
@@ -248,7 +254,8 @@ For reviews, include prior findings and dispositions. Require only documents
 governing the affected behavior; expand reading when evidence warrants it.
 Label observed output, supplied claims, and inference. Give evidence artifacts'
 generating command and revision, or mark provenance unknown. Verify reproductions
-match the production path. Enforce `Return`; summarize rather than relay transcripts.
+match the production path. Enforce `Return`; summarize rather than relay
+transcripts or inline reports. Cite the written artifact by path.
 
 ## Results
 
