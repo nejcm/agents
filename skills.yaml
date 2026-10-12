@@ -25,6 +25,8 @@
     - name: https://github.com/cursor/plugins/tree/main/pstack/skills/blast-radius
     - name: https://github.com/cursor/plugins/tree/main/pstack/skills/how
 
+    - name: https://github.com/addyosmani/agent-skills/tree/main/skills/code-review-and-quality
+
     - name: humanlayer/skills
       args:
         - --skill show-me
