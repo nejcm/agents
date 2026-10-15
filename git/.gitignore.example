@@ -4,21 +4,22 @@
 # also add an explicit "!" rule for it here (git won't recurse into
 # an ignored path unless every ancestor is un-ignored too).
 
-# 1) Deny everything at the root by default
+# Deny everything at the root by default
 /*
 
-# 2) Shell config
+# Shell config
 !/.bashrc
 !/.bash_profile
 !/.bash_logout
 !/.profile
 !/.zshrc
 
-# 3) Claude Code global config
+# Claude Code
 !/.claude.json
 !/.claude.local.json
 !/.claude/
 /.claude/*
+!/.claude/AGENTS.md
 !/.claude/settings.json
 !/.claude/settings.local.json
 !/.claude/.claude.json
@@ -28,15 +29,16 @@
 /.claude/skills/synced
 !/.claude/agents/
 
-# 4) Codex config
+# Codex
 !/.codex/
 /.codex/*
 !/.codex/config.toml
+!/.codex/AGENTS.md
 !/.codex/skills/
 !/.codex/agents/
 /.codex/skills/.system/
 
-# 5) Cursor config
+# Cursor config
 #!/.cursor/
 #/.cursor/*
 #/.cursor/projects/
@@ -44,6 +46,17 @@
 #!/.cursor/skills/
 #!/.cursor/agents/
 
+# Opencode
+!/.config
+/.config/*
+!/.config/opencode
+/.config/opencode/*
+!/.config/opencode/AGENTS.md
+!/.config/opencode/opencode.json
+!/.config/opencode/settings.json
+!/.config/opencode/skills/
+!/.config/opencode/agents/
+!/.config/opencode/commands/
 
-# 6) Cross-platform agents/skills folder (ulis-managed)
+#Cross-platform agents/skills folder (ulis-managed)
 !/.agents/
