@@ -11,6 +11,9 @@ Verified 2026-10-01. Update release IDs here; other skills refer to family names
 | Sol | `gpt-6.1-sol` |
 | Luna | `gpt-6-luna` |
 | DeepSeek Flash | `deepseek-v4.1-flash` (OpenCode: `opencode-go/deepseek-v4.1-flash`) |
+| GLM | `glm-5.3` |
+| Grok | `grok-4.7` |
+| Qwen | `qwen3.8-max` |
 
 Use these IDs unless the user selects another release. Confirm host availability
 and effort support; discover a replacement only when an ID is unavailable or
