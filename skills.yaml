@@ -30,3 +30,5 @@
     - name: humanlayer/skills
       args:
         - --skill show-me
+
+    - name: https://github.com/cloudflare/security-audit-skill/tree/main/skills/security-audit

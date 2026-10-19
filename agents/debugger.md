@@ -8,10 +8,6 @@ tools:
   bash: true
   search: true
 tags: [core, read-write]
-
-platforms:
-  claude:
-    model: sonnet
 ---
 
 # Debugger Agent
