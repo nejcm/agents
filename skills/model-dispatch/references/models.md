@@ -2,18 +2,18 @@
 
 Verified 2026-10-01. Update release IDs here; other skills refer to family names.
 
-| Family | Current model ID |
-| ------ | ---------------- |
-| Fable | `claude-fable-5-1` |
-| Opus | `claude-opus-5-5` |
-| Sonnet | `claude-sonnet-5-5` |
-| Haiku | `claude-haiku-5-5` |
-| Sol | `gpt-6.1-sol` |
-| Luna | `gpt-6-luna` |
-| DeepSeek Flash | `deepseek-v4.1-flash` (OpenCode: `opencode-go/deepseek-v4.1-flash`) |
-| GLM | `glm-5.3` |
-| Grok | `grok-4.7` |
-| Qwen | `qwen3.8-max` |
+| Family | Current model ID | Preferred provider |
+| ------ | ---------------- | ------------------ |
+| Fable | `claude-fable-5-1` | Claude |
+| Opus | `claude-opus-5-5` | Claude |
+| Sonnet | `claude-sonnet-5-5` | Claude |
+| Haiku | `claude-haiku-5-5` | Claude |
+| Sol | `gpt-6.1-sol` | Codex |
+| Luna | `gpt-6-luna` | Codex |
+| DeepSeek Flash | `deepseek-v4.1-flash` (OpenCode: `opencode-go/deepseek-v4.1-flash`) | OpenCode |
+| GLM | `glm-5.3` | OpenCode |
+| Grok | `grok-4.7` | Cursor |
+| Qwen | `qwen3.8-max` | OpenCode |
 
 Use these IDs unless the user selects another release. Confirm host availability
 and effort support; discover a replacement only when an ID is unavailable or
