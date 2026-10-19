@@ -2,9 +2,11 @@
 
 "*":
   skills:
-    - name: https://skills.sh/coreyhaines31/marketingskills/seo-audit
+    - name: https://github.com/coreyhaines31/marketingskills
       key: coreyhaines31/marketingskills/seo-audit
-    - name: https://skills.sh/pbakaus/impeccable/audit
-      key: pbakaus/impeccable/audit
-    - name: https://skills.sh/pbakaus/impeccable/optimize
-      key: pbakaus/impeccable/optimize
+      args:
+        - --skill seo-audit
+    - name: https://github.com/pbakaus/impeccable
+      key: pbakaus/impeccable
+      args:
+        - --skill impeccable

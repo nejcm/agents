@@ -4,12 +4,18 @@
   skills:
     - name: https://github.com/elayadesign/ai-design-skills/blob/main/skills/landing-page-design
       key: ai-design-skills/landing-page-design
-    - name: https://www.skills.sh/anthropics/skills/frontend-design
+    - name: https://github.com/anthropics/skills
       key: anthropics/frontend-design
-    - name: https://www.skills.sh/leonxlnx/taste-skill/design-taste-frontend
+      args:
+        - --skill frontend-design
+    - name: https://github.com/leonxlnx/taste-skill
       key: leonxlnx/taste-skill/design-taste-frontend
-    - name: https://www.skills.sh/leonxlnx/taste-skill/redesign-existing-projects
+      args:
+        - --skill design-taste-frontend
+    - name: https://github.com/leonxlnx/taste-skill
       key: leonxlnx/taste-skill/redesign-existing-projects
+      args:
+        - --skill redesign-existing-projects
     - name: https://github.com/emilkowalski/skills
       key: emilkowalski/skills/find-animation-opportunities
       args:
