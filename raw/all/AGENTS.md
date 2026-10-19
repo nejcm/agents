@@ -36,6 +36,7 @@ Reuse instructions and file content still available and current in this session.
 - Do not run build commands unless specifically requested.
 - Prefer focused checks — type checking, linting, and relevant tests — and run them before declaring work complete.
 - Do not prefix commands with `cd`. Use absolute paths, or the tool's own cwd argument (`git -C <repo>`, `bun --cwd`, `npm --prefix`). Shell state does not persist between calls, so a `cd` prefix buys nothing and drifts the working directory.
+- Never chain `sleep` with other commands to wait; use a completion notification or a condition loop.
 
 ### Code Style
 

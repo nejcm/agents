@@ -112,16 +112,19 @@ structured stdout from stderr. Collect the actual exit status with `wait` or the
 host's task tool; artifact appearance and wrapper completion prove neither exit
 nor success. Check terminal events and the final response for blockers and evidence.
 
-Prefer native completion notifications; otherwise poll about once a minute.
-Check log freshness before reporting progress. Quiet logs and internal tool
+Run any delegate that may outlast the host's foreground command limit (Claude
+Code: 600 s) in the background. Wait on its native completion notification or
+a condition loop (Claude Code: Monitor with an until-loop); never `sleep N; cmd`,
+which Claude Code blocks. Check log freshness before reporting progress. Quiet logs and internal tool
 errors do not prove a hang or process failure. After a timeout, inspect the
 captured task and ensure it stopped before retrying. Never use process-name
 matching or idle sentinel loops to monitor delegates. Notify on meaningful
 changes or requested updates.
 
-On a usage-limit error, wait for the reported reset, then check availability once.
-If no reset is available or that check fails, report blocked; further polling
-needs an explicit schedule and deadline. Other launch failures get one retry
+On a usage-limit or usage-credit error, do not relaunch on the same model. Wait
+for a reported reset, then check availability once. If no reset is available or
+that check fails, report blocked and ask whether to switch model; further
+polling needs an explicit schedule and deadline. Other launch failures get one retry
 after correcting the cause within existing permissions. Failure does not prove
 zero charges or available quota.
 
