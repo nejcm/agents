@@ -87,6 +87,7 @@ Each directory has its own `README.md` with format details.
 - `react-web` — React, Next.js, shadcn/ui, frontend design
 - `react-native` — React Native, Expo, best practices
 - `web-growth-audit` — SEO, quality audit, optimization
+- `verification` — generate and maintain a project-local app verification skill
 
 Apply a preset at install time:
 
