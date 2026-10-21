@@ -52,7 +52,7 @@ contradicts a higher one is a lead to investigate, not evidence.
    the feature you are relying on; tests show what is actually guaranteed.
 2. Official documentation, changelogs, release notes, migration guides,
    and deprecation notices. Fetch current docs with the documentation tool
-   available in the session (such as Context7) or the web; do not quote an
+   available in the session (such as the find-docs skill) or the web; do not quote an
    API from memory.
 3. Issue tracker, pull requests, discussions, and security advisories. Open
    bugs with many reactions, stale maintainer responses, and "won't fix"

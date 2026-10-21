@@ -1,18 +1,6 @@
 # yaml-language-server: $schema=https://unpkg.com/@nejcm/ulis/schemas/mcp.schema.json
 
-servers:
-  context7:
-    type: remote
-    url: https://mcp.context7.com/mcp
-    headers:
-      CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
-    localFallback:
-      command: npx
-      args:
-        - -y
-        - "@upstash/context7-mcp"
-        - --api-key
-        - ${CONTEXT7_API_KEY}
+servers: {}
   # notion:
   #   type: remote
   #   url: "https://mcp.notion.com/mcp"

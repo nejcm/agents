@@ -120,6 +120,15 @@ For non-interactive environments, set `FIRECRAWL_API_KEY` instead of using
 `firecrawl login`. No Firecrawl MCP server or official all-agent skill install is
 required.
 
+## Context7 docs lookup
+
+Library docs come from the `find-docs` skill, which calls the Context7 CLI. No
+Context7 MCP server is configured. Run once per machine:
+
+```bash
+npx ctx7@latest setup
+```
+
 ## Links
 
 - [ULIS CLI repository](https://github.com/nejcm/ulis)
