@@ -70,7 +70,7 @@ How to apply:
 | Role | Routing |
 | ---- | ------- |
 | Planner | Fable, then Opus for complex or ambiguous plans; Sol for medium plans; Luna for simple task breakdowns |
-| Builder | Luna for simple work; Sol for medium work; Fable, then Opus for complex work |
+| Builder | Luna for simple work; Sol for medium work; Opus for complex work |
 | Reviewer/Judge | Select from the author's family using the review routing below |
 | Cheap worker | Luna for search, inventory, log summaries, and mechanical checks; Sonnet for a CLI wrapper when needed |
 

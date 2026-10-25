@@ -19,6 +19,3 @@ Use these IDs unless the user selects another release. Confirm host availability
 and effort support; discover a replacement only when an ID is unavailable or
 an update is requested. Cursor/OpenCode may require host-specific IDs or provider
 prefixes. Keep an existing delegate's model when resuming its work.
-
-Sources: [Claude models](https://platform.claude.com/docs/en/models/overview),
-[OpenAI models](https://developers.openai.com/api/docs/models).
