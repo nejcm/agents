@@ -88,20 +88,6 @@ Good, real:
 
 That one sentence contains the symptom, the cause, and the fix.
 
-## Attribution
-
-End the body with the model and harness that wrote the change, so I can tell later which
-setup produced which work:
-
-```markdown
----
-
-🤖 <model> via <harness>
-```
-
-State the model you are actually running as. If you genuinely do not know, write the
-harness alone rather than guessing a model name.
-
 ## Scope
 
 Do not let filing expand the change. If you notice unrelated problems while reading the

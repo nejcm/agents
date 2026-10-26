@@ -81,7 +81,7 @@ git commit -m "feat: add profile editing"
 
 ### 5. Pull Request
 
-Filing the PR itself — title, body, base branch, attribution — lives in the `file-pr`
+Filing the PR itself — title, body, base branch — lives in the `file-pr`
 skill. Use it rather than composing a PR body here.
 
 ### Stacked PRs
