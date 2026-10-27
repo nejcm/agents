@@ -1,6 +1,6 @@
 ---
 name: testing-best-practices
-description: "Use when writing, adding, or changing tests in any language, or when asked whether something needs a test."
+description: "Use when writing, adding, fixing, or structuring tests in any language (unit, integration, e2e, TDD, mocking, flaky tests), or when asked whether something needs a test."
 ---
 
 # Writing tests
@@ -12,7 +12,7 @@ Default to fewer tests. Every test is code to maintain; add one only if it earns
 Test behaviour that can break and matters:
 - branching logic, parsing, state transitions
 - money, security, data loss
-- a bug being fixed (add a regression test that fails before the fix)
+- a bug being fixed (write the failing reproduction first, then fix; keep it as the regression test)
 - public contracts (API, CLI output, file formats)
 
 Do NOT test:
@@ -23,7 +23,7 @@ Do NOT test:
 - a restatement of the implementation
 - permutations of the same code path
 
-If nothing above applies, write no test and say so.
+Coverage is a gap finder, not a target. If nothing above applies, write no test and say so.
 
 ## 2. Budget
 
@@ -43,17 +43,22 @@ If nothing above applies, write no test and say so.
 - No test-only methods in production code; put helpers in test utils.
 - Roundtrips, normalizers, sort/compare: prefer a property test (roundtrip, idempotence, invariant) if the repo already has a PBT library.
 - Edge cases worth it: boundaries (both sides of a threshold, off-by-one), empty/invalid input at trust boundaries, error paths that prevent data loss. Skip speculative cases with no plausible failure.
+- Arrange, Act, Assert. No logic in tests (loops, conditionals, recomputing the expected value); use literal expected values, and tables for input/output variants.
+- Build data with factories/builders; override only the fields the test cares about. Use realistic values, not `foo`.
+- A flaky test is a bug: find the cause (race, shared state, time, ordering). Don't add retries.
+- Levels: many fast unit tests for logic, fewer integration tests for wiring and I/O (Testcontainers for real services), few e2e tests for critical user flows (Playwright).
+- UI: query like a user (role, label, text); `data-testid` last. Assert what the user sees.
 - Name tests by behaviour: `rejects expired token`, not `test_validate_2`.
 - Failures must be readable: assert with actual vs expected diff or a message. One behaviour per test (table/subtests are fine).
 
 ## 4. Self-check before keeping a test
 
 - A new test must fail once against broken code (for a bug fix, against the unfixed code).
-- Mutate the code in your head (flip a comparison, change rounding, drop a branch). If the test still passes, it is worthless: fix or delete it.
+- Mutate the code in your head (flip a comparison, change rounding, drop a branch) or run mutation testing if the repo has it. If the test still passes, it is worthless: fix or delete it.
 - Would a harmless refactor break it? If yes, it is coupled to the implementation: rewrite it against behaviour.
 - Is it a near-duplicate of another test? Merge or delete.
 
 ## 5. Finish
 
-- Run the relevant tests (focused, not the whole suite unless needed) and confirm they pass.
+- Run the relevant tests (focused, not the whole suite unless needed) and confirm they pass. In CI, run fast unit tests first.
 - Report what is tested and what was deliberately not tested.
