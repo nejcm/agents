@@ -12,10 +12,6 @@
       key: leonxlnx/taste-skill/design-taste-frontend
       args:
         - --skill design-taste-frontend
-    - name: https://github.com/leonxlnx/taste-skill
-      key: leonxlnx/taste-skill/redesign-existing-projects
-      args:
-        - --skill redesign-existing-projects
     - name: https://github.com/emilkowalski/skills
       key: emilkowalski/skills/find-animation-opportunities
       args:
