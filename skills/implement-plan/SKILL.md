@@ -44,12 +44,16 @@ decision, or requested checkpoint.
 1. Implement the batch within scope, preserving existing user changes.
 2. Run required focused checks; review meaningful batches or risky changes under
    `code-review`, and validate findings before fixing them.
-3. Update progress. Commit only when authorized by the user or applicable
-   repository instructions.
+3. Update progress. Commit each batch that changed the repository once its
+   checks pass, scoped to that batch so batches stay separately reviewable and
+   revertable. Never push or open a PR without explicit approval.
 
 Delegate only when allowed and useful for independent, bounded work. Keep
-blocking or tightly coupled work local. Update only supplied checklist files or
-established repository trackers; external issue updates require authorization.
+blocking or tightly coupled work local. For multi-phase or risky work where
+independent review materially reduces risk, or when the user names models,
+hand execution to `agent-orchestration`, which owns model routing and
+cross-family review. Update only supplied checklist files or established
+repository trackers; external issue updates require authorization.
 
 ## Context Management
 
@@ -82,7 +86,7 @@ what remains unverified and continue independent authorized work.
 ## Progress and Resume
 
 Report changes, completed plan items, checks and results, and any blockers.
-Include a commit SHA only when a commit was authorized and made. If required
+Include the commit SHAs. If required
 manual validation remains, provide a concrete checklist and keep that item
 incomplete; continue work that does not depend on it.
 
@@ -94,6 +98,6 @@ state rather than restarting completed work.
 
 Confirm plan items against the resulting work and completed checks. Run only
 outstanding required verification; do not repeat passing checks without cause.
-Commit only if authorized. Report changes, checks and results, plan updates,
+Commit any uncommitted batch whose checks pass. Report changes, checks and results, plan updates,
 and unresolved blockers or manual validation. Do not claim completion while
 required work remains.

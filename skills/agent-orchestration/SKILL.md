@@ -37,28 +37,17 @@ Use family names here and current IDs from
 `model-dispatch/references/models.md`. Explicit user model choices override
 the registry. `model-dispatch` handles host compatibility and invocation.
 
-| Model | Default work |
-| ----- | ------------ |
-| Fable | Complex implementation, architecture, ambiguous planning; first choice in this tier |
-| Opus | Complex implementation and planning when Fable is unavailable; independent review of GPT work |
-| GPT Sol | Medium implementation, integration, migrations, debugging, computer use; independent review of Fable or Opus work |
-| GPT Luna | Simple, bounded implementation, search, inventory, mechanical checks |
-| Cursor Auto / Composer | Explicitly requested or unavailable-provider fallback; verify capacity and family before use |
-| Sonnet | Thin CLI wrappers and bounded coordination |
-
 How to apply:
 
 - Route by uncertainty, scope, and correctness risk, not file count. Simple work
   has a clear spec and a cheap, decisive check. Medium work needs integration
   judgment. Complex work crosses architectural boundaries, has ambiguous
   requirements, or carries high blast radius.
-- Escalate Luna to Sol, then Sol to Fable or Opus when the work exceeds its tier
+- Escalate Luna to Sol, then Sol to Opus and Fable when the work exceeds its tier
   or one corrected retry still fails. Do not keep a complex task on Sol merely
   because the local host only exposes GPT models.
-- Fable is preferred to Opus for complex work when both are available. Use Opus
-  when Fable is unavailable or explicitly selected. Verify tools and isolation
-  before choosing either. Computer use goes to Sol when its tools are required;
-  complex design can go to Fable or Opus separately.
+- Verify tools and isolation before choosing a model. Complex design can go to
+  Fable or Opus separately.
 - Discover capacity before a fallback. Prefer another capable model in the
   required tier; if only a lower tier is available, disclose the limitation and
   leave work blocked when it cannot meet the requirements reliably.
@@ -69,29 +58,19 @@ How to apply:
 
 | Role | Routing |
 | ---- | ------- |
-| Planner | Fable, then Opus for complex or ambiguous plans; Sol for medium plans; Luna for simple task breakdowns |
-| Builder | Luna for simple work; Sol for medium work; Opus for complex work |
+| Planner | Fable, then Opus for complex or ambiguous plans; Sol or Opus for medium plans; Luna or Sonnet for simple task breakdowns |
+| Builder | Luna or Sonnet for simple work; Sol for medium work; Opus or Sol for complex work; Fable extremely complex architecture work |
 | Reviewer/Judge | Select from the author's family using the review routing below |
-| Cheap worker | Luna for search, inventory, log summaries, and mechanical checks; Sonnet for a CLI wrapper when needed |
+| Verifier | Opus or Sol when computer-use tools are needed (browser, GUI); Luna or Sonnet for CLI or API checks. Read-only; reports evidence, never fixes |
+| Cheap worker | Sonnet or Luna for search, inventory, log summaries, mechanical checks and for a CLI wrapper when needed |
 
-## Builder routing
-
-| Task profile | Model | Effort |
-| ------------ | ----- | ------ |
-| Simple, bounded, clearly specified and easily verified | GPT Luna | `high` for mechanical work; `xhigh` for simple implementation |
-| Medium implementation with integration or correctness judgment | GPT Sol | `medium`; `high` for uncertainty or elevated risk within this tier |
-| Complex implementation, cross-cutting design, deep debugging, high blast radius | Fable, then Opus | `high`, translated to the host's supported effort |
-
-Increasing effort does not replace escalation to the appropriate difficulty tier.
+When Fable is not available default to Opus.
 
 ## Review routing
 
-Choose the reviewer's actual model family from the author of each artifact:
-
-| Author | Reviewer |
-| ------ | -------- |
-| Fable or Opus | GPT Sol at `high` |
-| GPT Sol or Luna | Fable, then Opus at `high` |
+Review cross-family, chosen from the actual author of each artifact: Claude
+(Fable, Opus, Sonnet) work goes to GPT Sol at `high`, GPT work to Fable, then
+Opus at `high`. Any other family defaults to a Claude reviewer.
 
 Apply this to plans, implementations, and substantive fixes. Track the actual
 model that authored the artifact, including after a fallback; a GPT wrapper
@@ -153,8 +132,8 @@ Use the smallest useful pattern:
 
 - **Specialist** — one bounded task needing distinct expertise or tools.
 - **Fan-out** — independent, read-only surveys or reviews; synthesize after.
-- **Staged implementation** — plan → build → independent review → fix and
-  re-verify.
+- **Staged implementation** — plan → per phase: build → independent
+  review/fix loop → live verification → fix and re-verify.
 - **Second opinion** — preferably a cross-family challenge for a consequential,
   disputed, low-confidence, or hard-to-reverse decision. Disclose when only a
   same-family fallback is available.
@@ -183,18 +162,38 @@ phase work, perform review, apply fixes, or run verification. Phase agents
 perform all repository inspection, planning, edits, review, and checks.
 
 1. **Plan:** forward an already accepted executable plan, otherwise assign a
-   Planner to produce scope, success criteria, risks, and checks.
-2. **Build:** assign a Builder to the accepted scope; require changed files and
+   Planner to produce scope, success criteria, risks, and checks. Split it into
+   ordered phases, each a separately reviewable and revertable unit with its own
+   success criteria and checks; keep the plan's own phases when it has them.
+   Run steps 2–5 per phase, sequentially. Phase N+1 starts only after phase N
+   is reviewed, live-verified (unless step 4 is skipped), fixed, and
+   committed.
+2. **Build:** assign a Builder to the phase scope; require changed files and
    executed checks.
-3. **Review:** assign an independent Reviewer/Judge with the plan and diff to
-   review requirements, repository rules, and correctness.
-4. **Verify & Fix:** resume the Builder with actionable findings. The Builder
-   validates each against the code, confirms, corrects, or rejects it with
-   evidence, and fixes only confirmed findings. The Reviewer/Judge inspects the
-   fix diff and affected behavior and adjudicates rejected findings. Repeat a
-   full review only when scope or affected boundaries changed. Carry confirmed,
-   rejected, and unresolved findings forward with their evidence and resulting
-   changes in the existing review report.
+3. **Review & fix loop:** assign an independent Reviewer/Judge with the plan,
+   phase, and diff to review requirements, repository rules, and correctness.
+   Resume the Builder with actionable findings. The Builder validates each
+   against the code, confirms, corrects, or rejects it with evidence, and fixes
+   only confirmed findings. The Reviewer/Judge inspects the fix diff and
+   affected behavior, adjudicates rejected findings, and re-reviews. Repeat
+   until no confirmed findings remain open. Carry confirmed, rejected, and
+   unresolved findings forward with their evidence and resulting changes in the
+   existing review report.
+4. **Live verify:** only after the loop is clean, and when the phase changes
+   behavior that can be run or seen, assign a Verifier to exercise the change by
+   running the app, CLI, TUI, server, or browser flow through the `run` skill.
+   It checks the phase's success criteria, not just that the app starts, and for
+   UI work captures screenshots and reads console and network errors. It does
+   not edit code. Use an already running instance unless the user authorized
+   starting one. It returns what it exercised, observed evidence (screenshot
+   paths, output), failures, and what it could not run and why. Skip only for
+   work with nothing runnable (docs, config, pure types) or if you deem it not
+   needed, and say so.
+5. **Live-verification fix:** skipped when step 4 passes or is skipped.
+   Otherwise resume the Builder with the failures, validated as in step 3. The
+   Reviewer/Judge inspects the fix diff, then the Verifier reruns the failed and
+   affected flows. Repeat until they pass or a blocker is reported. Run a full
+   review again only when the fix changed scope or affected boundaries.
 
 Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
