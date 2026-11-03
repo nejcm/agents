@@ -3,7 +3,8 @@
 Canonical execution profiles shared across all AI tools. Each file is a Markdown document with YAML frontmatter that controls how the agent is configured per tool.
 
 Agents are for named, isolated execution with model selection, tool policy, or
-platform-specific routing. Reusable procedures belong in `skills/`.
+platform-specific routing. Reusable procedures belong in `skills/`: keep the
+body thin and point it at the skill (see `security.md`).
 
 ## File Format
 
@@ -41,6 +42,7 @@ cursor:
 | `model`          | `opus`, `sonnet`, `fable` | Claude tier alias; other host IDs come from shared registry        |
 | `temperature`    | `0.0–1.0`                 | Lower = more deterministic. Use `0.0` for migrations/security |
 | `tools.*`        | `true/false`              | Which tools this agent may use                                |
+| `skills`         | skill names               | Skills preloaded into the agent (Claude Code `skills:`)       |
 | `claude.mapping` | `rule`, `skill`, `skip`   | How the agent appears in Claude Code                          |
 | `codex.mapping`  | `instruction`, `skip`     | How the agent appears in Codex                                |
 
@@ -55,4 +57,4 @@ The build system reads these files and generates:
 - **OpenCode** → agent blocks in `opencode.json` + copied to `generated/opencode/agents/`
 - **Claude Code** → orchestration table in `generated/claude/rules/common/agents.md`
 - **Codex** → embedded as instruction sections in `generated/codex/config.toml`
-- **Cursor** → skipped (no native agent support)
+- **Cursor** → `generated/cursor/agents/*.mdc` (subagents only; the main thread gets procedures from skills)

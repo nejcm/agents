@@ -45,7 +45,7 @@ Coverage is a gap finder, not a target. If nothing above applies, write no test 
 - Edge cases worth it: boundaries (both sides of a threshold, off-by-one), empty/invalid input at trust boundaries, error paths that prevent data loss. Skip speculative cases with no plausible failure.
 - Arrange, Act, Assert. No logic in tests (loops, conditionals, recomputing the expected value); use literal expected values, and tables for input/output variants.
 - Build data with factories/builders; override only the fields the test cares about. Use realistic values, not `foo`.
-- A flaky test is a bug: find the cause (race, shared state, time, ordering). Don't add retries.
+- A flaky test is a bug: find the cause (race, shared state, time, ordering). Don't add retries. To find the cause, use `debugging`.
 - Levels: many fast unit tests for logic, fewer integration tests for wiring and I/O (Testcontainers for real services), few e2e tests for critical user flows (Playwright).
 - UI: query like a user (role, label, text); `data-testid` last. Assert what the user sees.
 - Name tests by behaviour: `rejects expired token`, not `test_validate_2`.

@@ -62,6 +62,7 @@ How to apply:
 | Builder | Luna or Sonnet for simple work; Sol for medium work; Opus or Sol for complex work; Fable extremely complex architecture work |
 | Reviewer/Judge | Select from the author's family using the review routing below |
 | Verifier | Opus or Sol when computer-use tools are needed (browser, GUI); Luna or Sonnet for CLI or API checks. Read-only; reports evidence, never fixes |
+| Security reviewer | Read-only `security` agent (preloads `security-code-review`); pick the model via review routing at `high` |
 | Cheap worker | Sonnet or Luna for search, inventory, log summaries, mechanical checks and for a CLI wrapper when needed |
 
 When Fable is not available default to Opus.
@@ -223,6 +224,7 @@ Workspace: <read-only or isolated writable worktree>
 Do not: <explicit exclusions>
 Delegation: <terminal worker by default; explicit child scope if needed>
 Verify with: <exact allowed checks, required writable paths and network access>
+Skills: <skills the delegate must load, e.g. debugging, performance, security-code-review>
 Return: <outcome, evidence, changed files, checks, confidence, blockers, full report path>
 ```
 
