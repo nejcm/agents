@@ -2,6 +2,10 @@
 
 ## Playbook
 
+Order candidates cheapest first and stop when one meets the target: don't do it;
+don't do it again; do it less; do it later; do it when they're not looking; do it
+concurrently; do it cheaper.
+
 Choose only changes supported by evidence:
 
 - **Algorithms**: improve complexity or data structures before micro-optimizing syntax.

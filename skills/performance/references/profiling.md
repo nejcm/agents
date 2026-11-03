@@ -42,6 +42,11 @@ production-like workloads; reproduce invasive profiling in a safe environment.
 Correlate with wall time, CPU utilization, off-CPU time, request traces, and
 workload phase. A CPU profile cannot explain time spent waiting.
 
+Query large artifacts (`.cpuprofile`, heap snapshot) by loading them into sqlite,
+one row per sample or node, instead of reading them. A frame without a source
+mapping is not yet a diagnosis. Without a paired before/after capture to diff,
+call the finding a hypothesis.
+
 ## Memory
 
 Distinguish:

@@ -43,9 +43,10 @@ the missing fact and gather it instead of guessing.
 
 1. **Read the failure completely**: every error, warning, stack frame, path,
    code, and surrounding log line, not just the first message.
-2. **Reproduce and reduce.** Vary one dimension at a time: input, state, timing,
-   dependency version, config, concurrency. Not reproducible means collect more
-   evidence, not guess.
+2. **Reproduce and reduce** yourself, on the surface where it fails; ask the
+   user only with a specific reason you cannot reach it. Vary one dimension at a
+   time: input, state, timing, dependency version, config, concurrency. If it
+   will not fire, synthesize the trigger or instrument until it does; never guess.
 3. **Inspect changes and environment**: `git status`, the relevant diff, recent
    commits, lockfile and dependency changes, config, env propagation, platform
    and runtime differences. If it survives a restart, suspect persisted state
@@ -80,9 +81,9 @@ If true, <minimal test> should produce <predicted result>.
 ```
 
 Make the smallest diagnostic change, one variable only, and check the
-prediction. If it fails, revise with the new evidence and return to the relevant
-step; never stack another speculative change. If you do not understand
-something, say so and investigate or ask.
+prediction. If it fails, revert what it motivated, revise with the new evidence,
+and return to the relevant step; never stack another speculative change. If you
+do not understand something, say so and investigate or ask.
 
 ## Phase 4: Fix and Verify
 
@@ -96,9 +97,10 @@ Only after the root cause is supported by evidence:
    clamp) is a fix only if the state it handles is legitimate; otherwise it
    hides the bug.
 3. Run the regression test, focused checks, and the broader relevant suite when
-   practical. Re-run the original reproduction and check user-visible behavior,
-   not just a changed assertion. If verification fails, first suspect how you
-   observed it (stale build, wrong process or env, cached output, wrong log).
+   practical. Re-run the original reproduction on the same surface and check
+   user-visible behavior, not just a changed assertion; an inconclusive or
+   wrong-surface result is not a pass. If verification fails, first suspect how
+   you observed it (stale build, wrong process or env, cached output, wrong log).
 4. Check for regressions, changed logs/metrics, boundary behavior, operational
    side effects. Remove temporary instrumentation; inspect the final diff.
    Propose a cheap always-on signal (assertion, log line, metric) that would have
