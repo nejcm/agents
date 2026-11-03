@@ -21,6 +21,7 @@ Review on two axes:
 - Violations of documented repo standards
 - Architecture and separation of concerns
 - Error handling, edge cases, security, performance
+- Changes touching auth, input handling, secrets, dependencies, or infra config: also apply `security-code-review`
 - Type safety where applicable
 - Tests that verify real behavior
 - Migration/backward compatibility if schemas or APIs changed

@@ -80,7 +80,8 @@ pass, repeat or broaden them only for new changes, failures, or unresolved risk.
 
 When verification fails, inspect the output and actual code path before making
 one targeted fix and rerunning the failing check. Do not repeat a failed theory
-unchanged. Distinguish environment blockers from implementation failures; report
+unchanged. If the cause is not obvious from the output, switch to `debugging`
+before a second fix. Distinguish environment blockers from implementation failures; report
 what remains unverified and continue independent authorized work.
 
 ## Progress and Resume
