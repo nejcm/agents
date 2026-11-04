@@ -9,5 +9,9 @@
     "claude-sonnet-5-5": {
       "autoCompactWindow": 275000
     }
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }

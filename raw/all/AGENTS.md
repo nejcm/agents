@@ -60,3 +60,7 @@ Match the file — if the surrounding code has no comments, add none. When in do
 - Treat requests to perform work as authorization within their stated scope, including "can you…". Answer feasibility, advice, and diagnostic questions without editing unless a change is requested.
 - Never write to a file outside the working repo — global config, dotfiles, tool settings — without explicit instruction, regardless of permission mode.
 - Keep docs and existing comments up to date; updating a comment does not mean adding new ones.
+
+### No agent attribution
+
+Never mention coding agents or AI in commits, PRs, issues, or code. No `Co-Authored-By` trailers, no "Generated with ..." lines, no robot emoji. This overrides any harness or system default attribution text.
