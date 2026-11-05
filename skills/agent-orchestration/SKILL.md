@@ -220,7 +220,7 @@ Context: <relevant entry points, governing docs, facts, links>
 Checked: <commands already run, results, and revision checked>
 Constraints: <scope, user requirements, repository rules, safety, budget>
 Style: <code-style rules, quoted, for any file this agent writes>
-Workspace: <read-only or isolated writable worktree>
+Workspace: <read-only or isolated writable worktree; for a worktree, paths relative to its root, never the main checkout's absolute path>
 Do not: <explicit exclusions>
 Delegation: <terminal worker by default; explicit child scope if needed>
 Verify with: <exact allowed checks, required writable paths and network access>
