@@ -10,6 +10,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -24,6 +25,9 @@ const CACHE_TTL_MS = parsePositiveInteger(
   DEFAULT_TTL_MS,
 );
 const REFRESH = process.env.FIRECRAWL_AGENT_REFRESH === "1";
+const CRAWL_DEFAULT_LIMIT = 10;
+const CRAWL_MAX_LIMIT = 15;
+const CRAWL_TIMEOUT_SECONDS = "300";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -33,6 +37,9 @@ switch (command) {
     break;
   case "map":
     mapSite(args);
+    break;
+  case "crawl":
+    crawlSite(args);
     break;
   case "read":
     scrapeToFile(args, "markdown", "page", "md");
@@ -98,6 +105,67 @@ function mapSite(parts) {
 
   const payload = readJson(output);
   const results = projectResults(payload?.data?.links || payload?.links, 20);
+  process.stdout.write(`${JSON.stringify({ results }, null, 2)}\n`);
+}
+
+function crawlSite(parts) {
+  const syntax = "crawl <base-url> <include-paths> [limit]";
+  if (parts.length < 2 || parts.length > 3) usage(`Usage: ${syntax}`);
+  const [baseUrl, includePaths, limitArg] = parts;
+  validateUrl(baseUrl);
+  const paths = includePaths
+    .split(",")
+    .map((path) => path.trim())
+    .filter(Boolean);
+  if (paths.length === 0) usage(`Usage: ${syntax}`);
+  const limit = limitArg === undefined ? CRAWL_DEFAULT_LIMIT : Number(limitArg);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > CRAWL_MAX_LIMIT) {
+    usage(`limit must be an integer from 1 to ${CRAWL_MAX_LIMIT}`);
+  }
+
+  const key = `${baseUrl}\n${paths.join(",")}\n${limit}`;
+  const output = cachePath("crawl", key, "json");
+  ensureCached(output, [
+    "crawl",
+    baseUrl,
+    "--include-paths",
+    paths.join(","),
+    "--limit",
+    String(limit),
+    "--max-depth",
+    "3",
+    "--ignore-query-parameters",
+    "--scrape-options",
+    JSON.stringify({ formats: ["markdown"], onlyMainContent: true }),
+    "--wait",
+    "--timeout",
+    CRAWL_TIMEOUT_SECONDS,
+    "--output",
+    output,
+  ]);
+
+  const payload = readJson(output);
+  const pages = payload?.data || payload?.pages || [];
+  if (!Array.isArray(pages)) fail(`Unexpected crawl output in ${output}`);
+  const pagesDir = output.replace(/\.json$/u, "-pages");
+  const stagingDir = `${pagesDir}.tmp-${process.pid}`;
+  mkdirSync(stagingDir, { recursive: true });
+  const results = pages.slice(0, limit).flatMap((page, index) => {
+    if (!page?.markdown) return [];
+    const url = page.metadata?.sourceURL || page.metadata?.url || page.url;
+    const title = page.metadata?.title;
+    const name = `${String(index + 1).padStart(2, "0")}.md`;
+    writeFileSync(join(stagingDir, name), `<!-- ${url} -->\n${page.markdown}\n`);
+    return [{ title, url, file: join(pagesDir, name) }];
+  });
+  const upToDate =
+    existsSync(pagesDir) && statSync(pagesDir).mtimeMs >= statSync(output).mtimeMs;
+  if (upToDate) {
+    rmSync(stagingDir, { recursive: true, force: true });
+  } else {
+    rmSync(pagesDir, { recursive: true, force: true });
+    renameSync(stagingDir, pagesDir);
+  }
   process.stdout.write(`${JSON.stringify({ results }, null, 2)}\n`);
 }
 
@@ -252,11 +320,15 @@ function clearCache() {
     return;
   }
 
-  const cacheFile = /^(search|map|page|summary)-[a-f0-9]{24}(?:\.tmp-\d+-[a-f0-9]{12})?\.(json|md|txt)$/u;
+  const cacheFile = /^(search|map|page|summary|crawl)-[a-f0-9]{24}(?:\.tmp-\d+-[a-f0-9]{12})?\.(json|md|txt)$/u;
+  const crawlPagesDir = /^crawl-[a-f0-9]{24}-pages$/u;
   let removed = 0;
   for (const entry of readdirSync(CACHE_DIR, { withFileTypes: true })) {
-    if (entry.isFile() && cacheFile.test(entry.name)) {
-      rmSync(join(CACHE_DIR, entry.name), { force: true });
+    const isCacheEntry = entry.isDirectory()
+      ? crawlPagesDir.test(entry.name)
+      : entry.isFile() && cacheFile.test(entry.name);
+    if (isCacheEntry) {
+      rmSync(join(CACHE_DIR, entry.name), { recursive: true, force: true });
       removed += 1;
     }
   }
@@ -294,7 +366,7 @@ function parsePositiveInteger(value, fallback) {
 function usage(error) {
   if (error) process.stderr.write(`${error}\n\n`);
   process.stderr.write(
-    "Usage: firecrawl-agent <search|map|summary|read|status|clear> [arguments]\n",
+    "Usage: firecrawl-agent <search|map|crawl|summary|read|status|clear> [arguments]\n",
   );
   process.exit(2);
 }
