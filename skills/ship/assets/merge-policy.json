@@ -1,0 +1,31 @@
+{
+  "mode": "shadow",
+  "max_changed_lines": 150,
+  "max_files": 8,
+  "exclude_from_size": [
+    "(^|/)(bun\\.lockb?|package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|uv\\.lock|poetry\\.lock|Cargo\\.lock|go\\.sum|Gemfile\\.lock)$",
+    "\\.snap$",
+    "(^|/)generated/",
+    "\\.gen\\.[jt]s$"
+  ],
+  "deny_paths": [
+    "^\\.github/",
+    "^\\.claude/settings",
+    "(^|/)(AGENTS|CLAUDE)\\.md$",
+    "(^|/)migrations?/",
+    "(^|/)auth/",
+    "(^|/)(package\\.json|pyproject\\.toml|requirements[^/]*\\.txt|Cargo\\.toml|go\\.mod|Gemfile)$",
+    "(^|/)(bun\\.lockb?|package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|uv\\.lock|poetry\\.lock|Cargo\\.lock|go\\.sum|Gemfile\\.lock)$",
+    "(^|/)(docker-)?compose[^/]*\\.ya?ml$",
+    "(^|/)Dockerfile",
+    "(^|/)\\.env",
+    "(^|/)(infra|terraform|k8s|helm)/",
+    "\\.tf$"
+  ],
+  "test_paths": [
+    "\\.(test|spec)\\.[cm]?[jt]sx?$",
+    "(^|/)(tests?|__tests__|e2e|spec)/",
+    "(^|/)test_[^/]*\\.py$",
+    "_test\\.(go|py)$"
+  ]
+}

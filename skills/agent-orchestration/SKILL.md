@@ -198,7 +198,8 @@ perform all repository inspection, planning, edits, review, and checks.
 
 Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
-reviewable and revertable. Never push or open a PR without explicit approval.
+reviewable and revertable. Never push or open a PR without explicit approval;
+an invoked `ship` skill is that approval for its own task.
 
 Keep the orchestrator's context small.
 
@@ -266,7 +267,8 @@ Call a result independent only if another model actually produced it.
 
 For persistent goals, track observable completion criteria; persistence never
 authorizes rebases, branch changes, closing or merging PRs, deployments, or
-other external effects without the user's explicit approval.
+other external effects without the user's explicit approval. Under `ship`,
+merging stays with the repo's merge gate, never the agent.
 
 Watching background runs, collecting artifacts, and diagnosing a stalled
 delegate are `model-dispatch` mechanics.

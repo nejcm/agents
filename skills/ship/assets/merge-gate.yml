@@ -1,0 +1,79 @@
+# merge-gate v1, installed by the ship skill; upgrade from there, not by hand.
+name: Merge gate
+
+# pull_request_target runs the base branch's copy of this workflow and policy, so a PR cannot loosen its own gate.
+# Never check out or run PR code here.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  status:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+
+concurrency:
+  group: merge-gate-${{ github.event.pull_request.number || github.event.sha }}
+
+jobs:
+  gate:
+    if: github.event_name == 'pull_request_target' || github.event.context == 'agent-review'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+
+      - name: Evaluate
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.sha }}
+        run: |
+          pr=${PR:-$(gh api "repos/$GH_REPO/commits/$SHA/pulls" --jq '[.[] | select(.state == "open")][0].number // empty')}
+          [ -n "$pr" ] || exit 0
+          head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+          policy=.github/merge-policy.json
+          mode=$(jq -r .mode $policy)
+          # Required check: proves this exact head was evaluated, so a later push waits for re-evaluation.
+          verdict() { gh api "repos/$GH_REPO/statuses/$head" -f state="$1" -f context=merge-gate -f description="$2" >/dev/null; }
+          has_label() { gh pr view "$pr" --json labels --jq '.labels[].name' | grep -qx ship; }
+          # Disarm only auto-merge the gate armed; a failed disarm fails the job so no success status is posted.
+          disarm() {
+            by=$(gh pr view "$pr" --json autoMergeRequest --jq '.autoMergeRequest.enabledBy.login // empty')
+            if [ "$by" = "github-actions" ]; then gh pr merge "$pr" --disable-auto; fi
+          }
+
+          if ! has_label; then
+            disarm
+            gh pr edit "$pr" --remove-label ship:eligible --remove-label needs-human >/dev/null 2>&1 || true
+            verdict success "not a ship PR: manual merge"
+            exit 0
+          fi
+
+          reasons=$(.github/scripts/merge-gate.sh "$pr" "$head")
+          gh label create ship:eligible --color 0e8a16 --force >/dev/null
+          gh label create needs-human --color d93f0b --force >/dev/null
+
+          if [ -z "$reasons" ]; then
+            gh pr edit "$pr" --add-label ship:eligible --remove-label needs-human
+            echo "### #$pr eligible for auto-merge ($mode)" >>"$GITHUB_STEP_SUMMARY"
+            verdict success "eligible ($mode)"
+            if [ "$mode" = enforce ] && has_label; then
+              gh pr merge "$pr" --auto --squash --match-head-commit "$head"
+            fi
+          else
+            gh pr edit "$pr" --add-label needs-human --remove-label ship:eligible
+            { echo "### #$pr needs a human ($mode)"; sed 's/^/- /' <<<"$reasons"; } >>"$GITHUB_STEP_SUMMARY"
+            disarm
+            state=success
+            [ "$mode" = enforce ] && state=failure
+            verdict "$state" "needs-human, remove ship to merge by hand: $(head -1 <<<"$reasons" | cut -c1-80)"
+          fi
+          exit 0
