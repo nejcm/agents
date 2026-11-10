@@ -4,7 +4,7 @@ Verified 2026-10-01. Update release IDs here; other skills refer to family names
 
 | Family | Current model ID | Preferred provider |
 | ------ | ---------------- | ------------------ |
-| Fable | `claude-fable-5-1` | Claude |
+| Fable | `claude-fable-5-2` | Claude |
 | Opus | `claude-opus-5-5` | Claude |
 | Sonnet | `claude-sonnet-5-5` | Claude |
 | Haiku | `claude-haiku-5-5` | Claude |
