@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Use when the user says /ship or asks to take a task all the way to a merged PR — implement, cross-family review, verify, open the PR, get CI green, and hand off to the repo's merge gate.
+description: Use when the user says /ship or asks to take a task all the way to a merged PR
 category: workflow
 ---
 
