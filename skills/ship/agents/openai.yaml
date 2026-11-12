@@ -1,0 +1,5 @@
+interface:
+  display_name: "Ship"
+  short_description: "Take a task to a merged PR through the merge gate"
+policy:
+  allow_implicit_invocation: false

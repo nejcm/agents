@@ -11,14 +11,16 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
 ```
 /ship <task>
   └─ branch → staged build (orchestration) → cross-family review/fix → verify
-       └─ file-pr → agent-review=success status on HEAD → label `ship`
-            └─ merge-gate.yml (GitHub) runs merge-gate.sh against merge-policy.json from main
-                 ├─ eligible     → `ship:eligible`, merge-gate ✓, [enforce] auto-merge armed on that SHA
-                 └─ not eligible → `needs-human` + reasons, merge-gate ✗ [enforce], you merge or not
-  new push → no agent-review on the new SHA → gate disarms → agent re-reviews → re-attests
+       └─ file-pr (+ verify comment) → agent-review=success status on HEAD
+            └─ babysit-pr: wait for CI + review bots → fix failures and confirmed bot findings → re-attest
+                 └─ clean → label `ship`
+                      └─ merge-gate.yml (GitHub) runs merge-gate.sh against merge-policy.json from main
+                           ├─ eligible     → `ship:eligible`, merge-gate ✓, [enforce] auto-merge armed on that SHA
+                           └─ not eligible → `needs-human` + reasons, merge-gate ✗ [enforce], you merge or not
+  push after opt-in → no agent-review on the new SHA → gate disarms until a re-review re-attests
 ```
 
-The loop stops and reports after 3 review rounds with open findings, 2 failed CI fixes, or a
+The loop stops and reports after 3 review rounds with open findings, any `babysit-pr` stop, or a
 `needs-human` verdict.
 
 ## Files
@@ -26,6 +28,7 @@ The loop stops and reports after 3 review rounds with open findings, 2 failed CI
 | Path | Role |
 | ---- | ---- |
 | `SKILL.md` | The procedure the agent follows: loop, setup, upgrade, stop conditions. |
+| `agents/openai.yaml` | Codex metadata; disables implicit invocation. |
 | `assets/merge-policy.json` | Default rules, copied to `.github/` and tailored per repo. |
 | `assets/merge-gate.sh` | Prints why a PR can't auto-merge (nothing = eligible). Read-only; runs locally too. |
 | `assets/merge-gate.yml` | GitHub workflow that runs the script, sets labels and the `merge-gate` status, arms or disarms auto-merge. |

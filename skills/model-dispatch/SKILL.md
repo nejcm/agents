@@ -9,7 +9,7 @@ How to call another agent CLI correctly. Each CLI is a harness that can drive
 several models; the caller supplies which model and effort to use. This skill
 does not choose them, holds no model preferences, and takes no position on
 whether the work should have been delegated at all. Command examples use
-placeholders; current IDs live in [models.md](references/models.md).
+placeholders; resolve IDs as in [Model IDs](#model-ids).
 
 Nothing here assumes an orchestration pattern — use it for a single delegated
 call as readily as for one step of a larger workflow.
@@ -43,19 +43,21 @@ switching paths mid-run or comparing mechanisms.
 
 ## Model IDs
 
-Read [models.md](references/models.md) for the selected family's current ID.
-Use it unless the user specifies another release. Confirm host availability,
-effort, and tools; discover a replacement only if unavailable or asked to update.
-Pass the ID explicitly when spawning; Codex role inheritance alone does not
-select the requested family. Keep the original model on resume.
+Callers select a family, not a release. At dispatch, resolve it to the newest
+release the host exposes, from that host's model list (see each reference),
+unless the user names a release. Claude families (Fable, Opus, Sonnet, Haiku)
+go through Claude; Sol and Luna through Codex; Grok through Cursor; DeepSeek
+Flash, GLM and Qwen through OpenCode. Pass the ID explicitly when spawning; Codex role
+inheritance alone does not select the requested family. Keep the original model
+on resume.
 
 ## Invocation Contract
 
 These hold for every CLI, whatever the reference adds:
 
 - **Never invent a capability or identifier.** Model ids, effort levels, flags,
-  and sandbox modes come from the shared registry and host documentation,
-  not memory. Confirm host-specific IDs when the registry ID is not accepted.
+  and sandbox modes come from the host's model list and documentation, not
+  memory.
 - **Confirm the mechanism supports the assignment** — model, effort, tools, and
   isolation — before dispatching. If it cannot, pick another path or say so.
 - **Effort is per-CLI.** Some expose it as a flag, some as a config override,

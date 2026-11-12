@@ -1,0 +1,5 @@
+interface:
+  display_name: "Babysit PR"
+  short_description: "Get a PR's CI green and resolve review-bot findings"
+policy:
+  allow_implicit_invocation: false

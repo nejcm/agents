@@ -2,6 +2,7 @@
 name: ship
 description: Use when the user says /ship or asks to take a task all the way to a merged PR
 category: workflow
+disable-model-invocation: true
 ---
 
 # Ship
@@ -37,8 +38,11 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 1. **Branch** off the up-to-date default branch (`git-workflow`). Never ship from a dirty tree
    holding unrelated work.
 2. **Build** with the staged pattern in `orchestration`: plan if none is accepted,
-   build, cross-family review/fix, live verify. Run the repo's lint, types and tests.
-3. **Open the PR** with `file-pr`. Not a draft.
+   build, cross-family review/fix, live verify. Before the first push, read
+   `.github/workflows/*` and run the same lint, type, test and build commands CI runs.
+3. **Open the PR** with `file-pr`. Not a draft. If a live verify ran, post one PR comment with
+   what it exercised, the result, and what it could not run. Text only; edit that comment in
+   place when a later verify reruns.
 4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:
 
    ```bash
@@ -47,11 +51,12 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
    ```
 
    Every later commit needs its diff reviewed and the status posted again on the new SHA.
-5. **Opt in**: `gh pr edit <n> --add-label ship`. If the repo has no merge gate, offer Setup as a
-   follow-up and report that this PR needs a manual merge.
-6. **CI**: use the host's PR monitor when there is one (the Claude app's Auto-fix); otherwise
-   `gh pr checks <n> --watch --fail-fast` as a background command. Fix only failures this branch
-   caused, then repeat step 4.
+5. **CI and review bots**: follow
+   [`../babysit-pr/SKILL.md`](../babysit-pr/SKILL.md) on the PR (manual-only, so read the file).
+   After each fix commit it pushes, repeat step 4 on the new SHA.
+6. **Opt in** only after babysitting finishes clean, since the gate does not wait for bots:
+   `gh pr edit <n> --add-label ship`. If the repo has no merge gate, offer Setup as a follow-up
+   and report that this PR needs a manual merge.
 7. **Read the verdict**: the PR's `ship:eligible` or `needs-human` label and the gate run's
    summary. Locally, `.github/scripts/merge-gate.sh <n>` prints the same reasons.
 
@@ -60,8 +65,9 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 Stop, leave the PR open, and report the reason when any of these happen:
 
 - Review still has confirmed findings after 3 fix rounds.
-- CI is still red after 2 fix attempts, or the failure is flaky/infra (rerun once, never "fix" it).
+- `babysit-pr` stops. Report its reason.
 - The gate says `needs-human`. Quote its reasons; do not reshape the change to slip under them.
 
 Never edit or delete existing tests, CI config, or the merge policy to get a pass. Never enable
-auto-merge or merge by hand. End with: PR link, gate verdict, checks state, reviewer model.
+auto-merge or merge by hand. End with: PR link, gate verdict, checks state, reviewer model, bot
+findings fixed/rejected.

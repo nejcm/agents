@@ -15,9 +15,9 @@ Before the first dispatch in a session:
 2. Confirm auth and health: `claude doctor`. If unauthenticated, stop and tell
    the user to run `claude auth` (or `claude setup-token` for a long-lived
    token).
-3. `--model` accepts a tier alias or full ID. Use [models.md](models.md)
-   for family defaults; preserve explicit user model choices. Confirm accepted
-   values with `claude --help` rather than memory.
+3. `--model` accepts a family alias (`fable`, `opus`, `sonnet`), which resolves
+   to the latest release, or a full ID. Prefer the alias unless the user picked
+   a release. Confirm accepted values with `claude --help`.
 4. Skim `claude --help` if flags may have changed.
 
 Claude usage is invisible to another host's token budget; track it separately

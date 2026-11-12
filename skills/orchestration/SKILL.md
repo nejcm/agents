@@ -33,9 +33,9 @@ policies and user instructions may restrict delegation.
 ## Model defaults
 
 Use these workload preferences. They are routing policy, not benchmark claims.
-Use family names here and current IDs from
-`model-dispatch/references/models.md`. Explicit user model choices override
-the registry. `model-dispatch` handles host compatibility and invocation.
+Use family names here; `model-dispatch` resolves each to its latest release
+and handles host compatibility and invocation. Explicit user model choices
+override that.
 
 How to apply:
 
@@ -200,6 +200,9 @@ Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
 reviewable and revertable. Never push or open a PR without explicit approval;
 an invoked `ship` skill is that approval for its own task.
+
+After the PR is open, CI failures and review-bot findings re-enter step 3's loop
+as findings, bounded by `babysit-pr`'s stop conditions.
 
 Keep the orchestrator's context small.
 

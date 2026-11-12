@@ -3,9 +3,9 @@
 Calling a model through the Codex CLI. Do not use this path from inside Codex
 itself — dispatch natively there.
 
-Use the selected family's ID from [models.md](models.md). Confirm it is
-available through native host metadata or app-server `model/list`; do not
-assume versionless Sol/Luna aliases. CLI help documents flags, not model IDs.
+Resolve the selected family to its newest ID from native host metadata or
+app-server `model/list`; do not assume versionless Sol/Luna aliases. CLI help
+documents flags, not model IDs.
 
 `codex exec` runs a prompt; `codex exec review` runs a review. Both take the
 model as `-m <model>` and the effort as a config override,

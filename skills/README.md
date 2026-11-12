@@ -6,9 +6,10 @@ skill lives in its own subdirectory with a `SKILL.md` and optional `config/`,
 
 Skills contain procedures and output contracts. `orchestration` owns
 shared model selection and review routing; `model-dispatch` owns invocation
-mechanics and the current ID registry in `references/models.md`. Keep role capabilities and tool permissions in `agents/`. Platform
-model pins are host defaults; orchestration must select a supported mechanism
-that satisfies the workload tier and reviewer family.
+mechanics and resolving each family to its latest model ID. Keep role
+capabilities and tool permissions in `agents/`. Platform model pins are host
+defaults; orchestration must select a supported mechanism that satisfies the
+workload tier and reviewer family.
 
 ## Structure
 
