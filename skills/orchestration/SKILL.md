@@ -1,9 +1,9 @@
 ---
-name: agent-orchestration
+name: orchestration
 description: Decide whether to delegate work to another model and how to structure it — model defaults, capability roles, effort selection, delegation patterns, staged plan/build/review/fix phases, delegation packets, and independent review. Use whenever work may be handed to another model or split across several agents.
 ---
 
-# Agent Orchestration
+# Orchestration
 
 This skill decides **which** model, role, and effort a piece of work gets, and
 how work is structured across agents. The `model-dispatch` skill explains

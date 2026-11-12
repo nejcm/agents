@@ -10,7 +10,7 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
 
 ```
 /ship <task>
-  └─ branch → staged build (agent-orchestration) → cross-family review/fix → verify
+  └─ branch → staged build (orchestration) → cross-family review/fix → verify
        └─ file-pr → agent-review=success status on HEAD → label `ship`
             └─ merge-gate.yml (GitHub) runs merge-gate.sh against merge-policy.json from main
                  ├─ eligible     → `ship:eligible`, merge-gate ✓, [enforce] auto-merge armed on that SHA

@@ -36,7 +36,7 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 
 1. **Branch** off the up-to-date default branch (`git-workflow`). Never ship from a dirty tree
    holding unrelated work.
-2. **Build** with the staged pattern in `agent-orchestration`: plan if none is accepted,
+2. **Build** with the staged pattern in `orchestration`: plan if none is accepted,
    build, cross-family review/fix, live verify. Run the repo's lint, types and tests.
 3. **Open the PR** with `file-pr`. Not a draft.
 4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:

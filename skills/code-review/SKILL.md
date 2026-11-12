@@ -125,7 +125,7 @@ Each smell reads _what it is_ → _how to fix_; match it against the diff:
 ## 4. Assign review scope
 
 Review directly when already assigned. Otherwise select the reviewer through
-`agent-orchestration` using the author's actual model family, then use
+`orchestration` using the author's actual model family, then use
 `model-dispatch` to confirm a supported native or cross-provider mechanism.
 Review both axes together, splitting only for distinct scopes. Include "Do not
 delegate further."

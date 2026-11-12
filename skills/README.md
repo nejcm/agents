@@ -4,7 +4,7 @@ Reusable, invocable capabilities that agents can call during a session. Each
 skill lives in its own subdirectory with a `SKILL.md` and optional `config/`,
 `references/`, `scripts/`, or `assets/` directories.
 
-Skills contain procedures and output contracts. `agent-orchestration` owns
+Skills contain procedures and output contracts. `orchestration` owns
 shared model selection and review routing; `model-dispatch` owns invocation
 mechanics and the current ID registry in `references/models.md`. Keep role capabilities and tool permissions in `agents/`. Platform
 model pins are host defaults; orchestration must select a supported mechanism

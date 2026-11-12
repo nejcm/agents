@@ -51,7 +51,7 @@ decision, or requested checkpoint.
 Delegate only when allowed and useful for independent, bounded work. Keep
 blocking or tightly coupled work local. For multi-phase or risky work where
 independent review materially reduces risk, or when the user names models,
-hand execution to `agent-orchestration`, which owns model routing and
+hand execution to `orchestration`, which owns model routing and
 cross-family review. Update only supplied checklist files or established
 repository trackers; external issue updates require authorization.
 

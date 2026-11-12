@@ -144,7 +144,7 @@ sources disagree, when a single-model report came back with low confidence, or
 when the user asks for it. It costs several delegated sessions; say so before
 starting and skip it for routine lookups.
 
-Model, effort, and reviewer selection come from `agent-orchestration`:
+Model, effort, and reviewer selection come from `orchestration`:
 research and review are Planner and Reviewer/Judge work at `high`. Invocation
 mechanics come from `model-dispatch`: host-native subagents for the host's own
 family, a thin wrapper around another family's CLI otherwise. Read both before
@@ -160,7 +160,7 @@ Phases are sequential; the two sides of each phase run in parallel.
    each other's output, so their agreement means something.
 2. **Cross review.** Swap the reports. A fresh GPT-family reviewer reviews the
    Claude report; a fresh Claude-family reviewer reviews the GPT report, per
-   the review routing in `agent-orchestration`. The reviewer checks each
+   the review routing in `orchestration`. The reviewer checks each
    material claim against the cited source, hunts for missing candidates,
    stale versions, misread docs, and unsupported inference, and returns
    findings with evidence and a confirmed / rejected / unverifiable
@@ -182,7 +182,7 @@ Phases are sequential; the two sides of each phase run in parallel.
    what would settle them.
 
 Delegation packet for each phase, built from the template in
-`agent-orchestration`:
+`orchestration`:
 
 - Objective, decision, and constraints exactly as framed in step 1 of the
   workflow, so both researchers answer the same question.
