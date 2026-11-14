@@ -42,7 +42,7 @@ The loop stops and reports after 3 review rounds with open findings, any `babysi
 | `max_files` | Files touched allowed. |
 | `exclude_from_size` | Regexes not counted toward lines: lockfiles, snapshots, generated code. |
 | `deny_paths` | Regexes that always need a human: CI, agent instructions, migrations, auth, manifests, lockfiles, Docker, `.env`, infra. Old and new names of renames both checked. |
-| `test_paths` | Regexes for test files. Editing one that loses lines, or renaming/deleting it, blocks auto-merge; adding tests is fine. |
+| `test_paths` | Regexes for test files. Editing one that loses lines, deleting it, or renaming it from or into a test path blocks auto-merge; adding tests is fine. |
 
 ### `merge-gate.sh`
 
@@ -50,8 +50,8 @@ The loop stops and reports after 3 review rounds with open findings, any `babysi
 GH_REPO=owner/repo .github/scripts/merge-gate.sh <pr> [head-sha]
 ```
 
-Blocks on: draft, no `ship` label, over size, protected path, rewritten test, or no
-`agent-review` = `success` status on the head SHA.
+Blocks on: draft, changes requested in review, no `ship` label, over size, protected path,
+rewritten test, or no `agent-review` = `success` status on the head SHA.
 
 ### `merge-gate.yml`
 
@@ -90,7 +90,10 @@ When a repo's header is older, copy the workflow and script over (never its poli
 - `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened.
 - Merges armed with `GITHUB_TOKEN` don't trigger `push` workflows on the default branch. Use a
   GitHub App token in the workflow if post-merge CI must run.
-- Open in enforce mode: a label removal racing an `agent-review` status, and a force-push back to
-  an earlier SHA that already has `merge-gate` = success. Both need write access.
+- The gate guards against mistakes, not a hostile or prompt-injected agent: with the same token it can
+  drop `ship` and merge, or post `agent-review` itself. The real boundary is a required human approval.
+- Reviews fire no gate event: a changes-requested review after the gate passed doesn't disarm armed
+  auto-merge, and an approval or dismissal doesn't clear `needs-human`, until the next push, label or
+  status. No safe trigger exists (`pull_request_review` runs the PR's own workflow with a write token).
 - Each repo vendors its own copy. If drift hurts, move the gate to a reusable workflow in this
   (public) repo and call it from a thin per-repo workflow.

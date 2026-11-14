@@ -1,4 +1,4 @@
-# merge-gate v1, installed by the ship skill; upgrade from there, not by hand.
+# merge-gate v2, installed by the ship skill; upgrade from there, not by hand.
 name: Merge gate
 
 # pull_request_target runs the base branch's copy of this workflow and policy, so a PR cannot loosen its own gate.
