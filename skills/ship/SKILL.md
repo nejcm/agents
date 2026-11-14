@@ -40,6 +40,7 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 2. **Build** with the staged pattern in `orchestration`: plan if none is accepted,
    build, cross-family review/fix, live verify. Before the first push, read
    `.github/workflows/*` and run the same lint, type, test and build commands CI runs.
+   Don't fix or leave TODOs for problems outside the task; list them in the final report.
 3. **Open the PR** with `file-pr`. Not a draft. If a live verify ran, post one PR comment with
    what it exercised, the result, and what it could not run. Text only; edit that comment in
    place when a later verify reruns.
@@ -70,4 +71,4 @@ Stop, leave the PR open, and report the reason when any of these happen:
 
 Never edit or delete existing tests, CI config, or the merge policy to get a pass. Never enable
 auto-merge or merge by hand. End with: PR link, gate verdict, checks state, reviewer model, bot
-findings fixed/rejected.
+findings fixed/rejected, out-of-scope findings.
