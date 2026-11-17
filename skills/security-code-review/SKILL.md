@@ -2,6 +2,7 @@
 name: security-code-review
 description: Use when reviewing a diff, PR, file, or component for exploitable vulnerabilities and a ship verdict, or when a change touches auth, sessions, permissions, user input, uploads, URL fetching, webhooks, payments, secrets, crypto, dependencies, CI/CD, infrastructure config, or LLM/agent tool use. Read-only. For a full codebase audit or pen test use security-audit.
 category: security
+disable-model-invocation: true
 ---
 
 # Security Code Review

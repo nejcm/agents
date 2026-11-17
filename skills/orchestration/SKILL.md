@@ -62,7 +62,7 @@ How to apply:
 | Builder | Luna or Sonnet for simple work; Sol for medium work; Opus or Sol for complex work; Fable extremely complex architecture work |
 | Reviewer/Judge | Select from the author's family using the review routing below |
 | Verifier | Opus or Sol when computer-use tools are needed (browser, GUI); Luna or Sonnet for CLI or API checks. Read-only; reports evidence, never fixes |
-| Security reviewer | Read-only reviewer that loads `security-code-review`; pick the model via review routing at `high` |
+| Security reviewer | Only when the user asks: read-only reviewer that loads `security-code-review`; pick the model via review routing at `high`. Otherwise the Reviewer/Judge's general security pass covers it |
 | Cheap worker | Sonnet or Luna for search, inventory, log summaries, mechanical checks and for a CLI wrapper when needed |
 
 When Fable is not available default to Opus.
@@ -182,7 +182,9 @@ perform all repository inspection, planning, edits, review, and checks.
    existing review report.
 4. **Live verify:** only after the loop is clean, and when the phase changes
    behavior that can be run or seen, assign a Verifier to exercise the change by
-   running the app, CLI, TUI, server, or browser flow through the `run` skill.
+   running the app, CLI, TUI, server, or browser flow. When the repo has its
+   own verification skill (`verify-*` under `.claude/skills/`, `.agents/skills/`
+   or `.cursor/skills/`), the Verifier follows it; otherwise it uses the `run` skill.
    It checks the phase's success criteria, not just that the app starts, and for
    UI work captures screenshots and reads console and network errors. It does
    not edit code. Use an already running instance unless the user authorized
@@ -227,14 +229,31 @@ Style: <code-style rules, quoted, for any file this agent writes>
 Workspace: <read-only or isolated writable worktree; for a worktree, paths relative to its root, never the main checkout's absolute path>
 Do not: <explicit exclusions>
 Delegation: <terminal worker by default; explicit child scope if needed>
+Worker rules: <the Worker rules below, pasted verbatim>
 Verify with: <exact allowed checks, required writable paths and network access>
-Skills: <skills the delegate must load, e.g. debugging, performance, security-code-review>
+Skills: <skills the delegate must load, e.g. debugging, performance, code-review>
 Return: <outcome, evidence, changed files, checks, confidence, blockers, full report path>
 ```
 
 Delegates write the full report to a temporary or gitignored artifact directory
 and return at most ~10 lines plus that path. The orchestrator reads the file only
 when it needs the evidence, so a long report never enters the parent context.
+
+### Worker rules
+
+Paste verbatim into every packet:
+
+```text
+- The packet's success criteria and checks are the whole bar. Add no check,
+  gate, sign-off or review round above them.
+- Blocking means a failing check at this head, a bug a user would hit, or a
+  missing requirement. Report everything else once, as non-blocking.
+- A problem the base already has gets one line in Return, not a fix.
+- Stay in scope. List out-of-scope problems in Return; don't fix them.
+- Never edit or delete existing tests, CI config or policy files to get a pass.
+- Don't ask the user. Make reversible choices and say what you chose and why.
+  Return instead of pushing, merging, deleting data or messaging anyone.
+```
 
 ### Instruction inheritance
 

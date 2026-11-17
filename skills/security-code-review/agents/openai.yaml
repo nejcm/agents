@@ -1,0 +1,5 @@
+interface:
+  display_name: "Security Code Review"
+  short_description: "Review a diff or component for exploitable vulnerabilities"
+policy:
+  allow_implicit_invocation: false

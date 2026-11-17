@@ -27,8 +27,10 @@ own task: ask first, then:
 4. Open the setup PR. It touches `.github/`, so a human merges it.
 5. After it merges, ask before changing repo settings:
    `gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`, then add the repo's CI check(s)
-   and `merge-gate` as required status checks on the default-branch ruleset. Requiring
-   `merge-gate` before the workflow is on the default branch blocks every PR.
+   and `merge-gate` as required status checks on the default-branch ruleset, with "Require
+   branches to be up to date before merging" on, so auto-merge only lands a head CI tested
+   against the current base. Requiring `merge-gate` before the workflow is on the default
+   branch blocks every PR.
 6. Switch `"mode"` to `"enforce"` only when the user says the shadow verdicts look right.
 
 **Upgrade**: when a repo's `# merge-gate vN` header is older than `assets/`, copy the workflow and
@@ -39,8 +41,10 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 1. **Branch** off the up-to-date default branch (`git-workflow`). Never ship from a dirty tree
    holding unrelated work.
 2. **Build** with the staged pattern in `orchestration`: plan if none is accepted,
-   build, cross-family review/fix, live verify. Before the first push, read
-   `.github/workflows/*` and run the same lint, type, test and build commands CI runs.
+   build, cross-family review/fix, live verify. The reviewer loads `code-review`. Every packet's
+   Constraints carry the policy's `max_changed_lines`, `max_files` and `deny_paths`. Before the
+   first push, read `.github/workflows/*` and run the same lint, type, test and build commands
+   CI runs.
    Don't fix or leave TODOs for problems outside the task; list them in the final report.
 3. **Open the PR** with `file-pr`. Not a draft. If a live verify ran, post one PR comment with
    what it exercised, the result, and what it could not run. When the change can be seen, add
@@ -49,19 +53,25 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:
 
    ```bash
+   git fetch -q origin <base>
+   patch=$(git diff "$(git merge-base FETCH_HEAD HEAD)" HEAD | git patch-id --stable | cut -c1-12)
    gh api "repos/{owner}/{repo}/statuses/$(git rev-parse HEAD)" \
-     -f state=success -f context=agent-review -f description="<reviewer model> approved"
+     -f state=success -f context=agent-review -f description="<reviewer model> approved patch $patch"
    ```
 
-   Every later commit needs its diff reviewed and the status posted again on the new SHA.
+   A new SHA whose patch id matches the last approved one (a base merge that didn't touch the
+   patch) is re-attested without review. Any other new commit needs its diff reviewed first.
 5. **CI and review bots**: follow
    [`../babysit-pr/SKILL.md`](../babysit-pr/SKILL.md) on the PR (manual-only, so read the file).
-   After each fix commit it pushes, repeat step 4 on the new SHA.
+   After each fix commit it pushes, repeat step 4 on the new SHA. When it stops only because the
+   PR is `BEHIND`, update the branch as in step 7 and resume it.
 6. **Opt in** only after babysitting finishes clean, since the gate does not wait for bots:
    `gh pr edit <n> --add-label ship`. If the repo has no merge gate, offer Setup as a follow-up
    and report that this PR needs a manual merge.
 7. **Read the verdict**: the PR's `ship:eligible` or `needs-human` label and the gate run's
-   summary. Locally, `.github/scripts/merge-gate.sh <n>` prints the same reasons.
+   summary. Locally, `.github/scripts/merge-gate.sh <n>` prints the same reasons. If the PR falls
+   `BEHIND` before auto-merge fires, run `gh pr update-branch <n>` (a merge, never a rebase), wait
+   for CI, then re-attest per step 4. A conflict stops the loop.
 
 ## Stop and report
 

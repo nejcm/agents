@@ -50,7 +50,7 @@ The loop stops and reports after 3 review rounds with open findings, any `babysi
 GH_REPO=owner/repo .github/scripts/merge-gate.sh <pr> [head-sha]
 ```
 
-Blocks on: draft, changes requested in review, no `ship` label, over size, protected path,
+Blocks on: draft, a base other than the default branch (stacked PR), changes requested in review, no `ship` label, over size, protected path,
 rewritten test, or no `agent-review` = `success` status on the head SHA.
 
 ### `merge-gate.yml`
@@ -74,7 +74,8 @@ rewritten test, or no `agent-review` = `success` status on the head SHA.
 3. Dry-run the script on recent merged PRs and check the verdicts make sense.
 4. Merge the setup PR by hand (it touches `.github/`, so it can't auto-merge).
 5. Then, in this order: enable auto-merge (`gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`),
-   and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset.
+   and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset,
+   with "Require branches to be up to date before merging" on.
    Requiring `merge-gate` before the workflow is on the default branch blocks every PR.
 6. Watch `shadow` verdicts for a week or two; switch `mode` to `enforce` when you agree with them.
 
@@ -87,7 +88,11 @@ When a repo's header is older, copy the workflow and script over (never its poli
 
 ## Limits
 
-- `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened.
+- `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened. Its
+  description carries the approved `git patch-id`, so a base merge that leaves the patch unchanged
+  is re-attested without a new review.
+- With up-to-date branches required, a PR that falls behind after the loop ends waits until someone
+  runs `gh pr update-branch` and re-attests, or merges by hand.
 - Merges armed with `GITHUB_TOKEN` don't trigger `push` workflows on the default branch. Use a
   GitHub App token in the workflow if post-merge CI must run.
 - The gate guards against mistakes, not a hostile or prompt-injected agent: with the same token it can
