@@ -8,7 +8,8 @@ disable-model-invocation: true
 # Ship
 
 Invoking this skill is the user's approval, for this task only, to branch, commit, push,
-open a PR, post the `agent-review` commit status, and add the `ship` label. It never
+open a PR, push verify media to the `verify-media` branch, post the `agent-review` commit
+status, and add the `ship` label. It never
 approves running `gh pr merge` yourself: the repo's merge gate (`.github/workflows/merge-gate.yml`)
 decides whether to auto-merge, from the policy on the base branch.
 
@@ -42,7 +43,8 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
    `.github/workflows/*` and run the same lint, type, test and build commands CI runs.
    Don't fix or leave TODOs for problems outside the task; list them in the final report.
 3. **Open the PR** with `file-pr`. Not a draft. If a live verify ran, post one PR comment with
-   what it exercised, the result, and what it could not run. Text only; edit that comment in
+   what it exercised, the result, and what it could not run. When the change can be seen, add
+   its screenshots per [`references/pr-media.md`](references/pr-media.md). Edit that comment in
    place when a later verify reruns.
 4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:
 
