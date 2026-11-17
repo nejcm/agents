@@ -29,6 +29,7 @@ git config remote.pushDefault origin   # required if repo has >1 remote
 3. To fix a lower layer: `gh stack checkout <branch>` → commit → `gh stack rebase --upstack` → `gh stack top` → `gh stack push`
 4. Periodically: `gh stack sync --prune`
 5. Land: `gh stack merge <target> --yes`
+6. After the last layer merges: `gh stack sync --prune`, then `gh stack unstack <stack#> --local` so the merged stack stops claiming the trunk (otherwise later `gh stack` commands fail with exit `6`).
 
 ## Gotchas
 
