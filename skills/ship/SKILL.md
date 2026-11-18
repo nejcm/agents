@@ -27,14 +27,17 @@ own task: ask first, then:
 4. Open the setup PR. It touches `.github/`, so a human merges it.
 5. After it merges, ask before changing repo settings:
    `gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`, then add the repo's CI check(s)
-   and `merge-gate` as required status checks on the default-branch ruleset, with "Require
+   and `merge-gate` as required status checks on the default-branch ruleset, with `merge-gate`'s
+   source pinned to GitHub Actions (`{"context":"merge-gate","integration_id":15368}`), with "Require
    branches to be up to date before merging" on, so auto-merge only lands a head CI tested
    against the current base. Requiring `merge-gate` before the workflow is on the default
    branch blocks every PR.
 6. Switch `"mode"` to `"enforce"` only when the user says the shadow verdicts look right.
 
 **Upgrade**: when a repo's `# merge-gate vN` header is older than `assets/`, copy the workflow and
-script over (never the policy) and open a PR. Bump the header in `assets/` with every gate change.
+script over (never the policy) and open a PR. For v4, also add the new `deny_paths` and
+`test_paths` entries from `assets/merge-policy.json` to the repo's policy, and ask before pinning
+`merge-gate` to `integration_id` 15368 in the ruleset. Bump the header in `assets/` with every gate change.
 
 ## Loop
 
@@ -53,9 +56,9 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:
 
    ```bash
-   git fetch -q origin <base>
-   patch=$(git diff "$(git merge-base FETCH_HEAD HEAD)" HEAD | git patch-id --stable | cut -c1-12)
-   gh api "repos/{owner}/{repo}/statuses/$(git rev-parse HEAD)" \
+   head=$(gh pr view <n> --json headRefOid -q .headRefOid)
+   patch=$(gh pr diff <n> --color never | git patch-id --verbatim | cut -c1-12)
+   gh api "repos/{owner}/{repo}/statuses/$head" \
      -f state=success -f context=agent-review -f description="<reviewer model> approved patch $patch"
    ```
 
