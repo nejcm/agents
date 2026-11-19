@@ -27,7 +27,7 @@ comments") does steps 2–4 for bot findings only; `check` ("is it green?") is o
    the SHA ~10 min after the checks finish is reported as missing, never assumed clean.
 2. **Collect** everything before fixing anything, in this order:
    - **Conflicts**: `gh pr view <n> --json mergeable,mergeStateStatus`. `CONFLICTING` or `BEHIND`
-     needs a rebase: stop and report it rather than chase CI on a stale base.
+     needs a base update: stop and report it rather than chase CI on a stale base.
    - **Failed checks**: read `gh run view <run-id> --log-failed`, not the check name. Only a
      failure in code this diff touches gets a fix. A failure elsewhere is pre-existing (red on the
      base's merge-base too) or a stale base: report either. Flaky or infra failures get one
