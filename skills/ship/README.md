@@ -9,9 +9,12 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
 ## Flow
 
 ```
-/ship <task>
-  └─ branch → staged build (orchestration) → cross-family review/fix → verify
-       └─ file-pr (+ verify comment) → agent-review=success status on HEAD
+/ship <task>  → lane: fix | bug | feature
+  ├─ fix:     branch → build → cross-family review/fix → verify if runnable → file-pr
+  ├─ bug:     branch → debugging: failing test first → as fix
+  └─ feature: plan → questions + one approval → branch → per phase: fresh builder → review/fix → verify → commit
+              (draft PR after phase 1, CI only) → final whole-branch review → ready
+       └─ agent-review=success status on HEAD (+ door call: one-way → no `ship` label, human merges)
             └─ babysit-pr: wait for CI + review bots → fix failures and confirmed bot findings → re-attest
                  └─ clean → label `ship`
                       └─ merge-gate.yml (GitHub) runs merge-gate.sh against merge-policy.json from main
@@ -21,8 +24,10 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
   base merge after opt-in → same patch id → gate re-attests and re-arms
 ```
 
-The loop stops and reports after 3 review rounds with open findings, any `babysit-pr` stop, or a
-`needs-human` verdict.
+After plan approval the loop runs to completion. It stops only for a human reviewer's comment, a
+`needs-human` verdict, an irreversible or product decision it can't infer, or a fix loop at its
+bound. Conflicts, a branch behind its base, a missing bot review and pre-existing or flaky CI are
+handled or reported, not stops.
 
 ## Files
 
@@ -39,8 +44,8 @@ The loop stops and reports after 3 review rounds with open findings, any `babysi
 | Key | Meaning |
 | --- | ------- |
 | `mode` | `shadow` only labels and summarises; `enforce` also arms/disarms GitHub auto-merge. |
-| `max_changed_lines` | Additions + deletions allowed, excluding `exclude_from_size` files. |
-| `max_files` | Files touched allowed. |
+| `max_changed_lines` | Additions + deletions allowed, excluding `exclude_from_size` files. A ceiling against a runaway agent (default 1000); below it the agent's review decides. |
+| `max_files` | Files touched allowed (default 40). |
 | `exclude_from_size` | Regexes not counted toward lines: lockfiles, snapshots, generated code. |
 | `deny_paths` | Regexes that always need a human: CI, agent instructions, migrations, auth, manifests, lockfiles, Docker, `.env`, infra. Old and new names of renames both checked. |
 | `test_paths` | Regexes for test files. Editing one that loses lines, deleting it, or renaming it from or into a test path blocks auto-merge; adding tests is fine. |
@@ -90,6 +95,8 @@ To take a PR over by hand at any point, remove the `ship` label.
 
 Both gate files carry a `# merge-gate vN` header. Bump it in `assets/` with every gate change.
 When a repo's header is older, copy the workflow and script over (never its policy) in a PR.
+Policy default changes (such as the size ceiling) reach only new installs; edit an existing
+repo's `merge-policy.json` by hand.
 
 ## Limits
 

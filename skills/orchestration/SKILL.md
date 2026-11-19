@@ -163,13 +163,19 @@ reports. It does not inspect or edit implementation files, author or adjudicate
 phase work, perform review, apply fixes, or run verification. Phase agents
 perform all repository inspection, planning, edits, review, and checks.
 
-1. **Plan:** forward an already accepted executable plan, otherwise assign a
-   Planner to produce scope, success criteria, risks, and checks. Split it into
-   ordered phases, each a separately reviewable and revertable unit with its own
-   success criteria and checks; keep the plan's own phases when it has them.
+1. **Plan:** assign a Planner. Without a plan, it produces scope, success
+   criteria, risks, checks, the testing seams, and ordered phases, each a
+   separately reviewable unit with its own success criteria and checks. With a
+   user-supplied plan, it checks rather than rewrites: every phase has success
+   criteria and checks, the seams are named, the order works; the plan's own
+   phases stay. Either way it returns open questions instead of guessing at
+   them. Ask the user those questions in one grilling round in this session,
+   then get the plan approved once. Save it outside the repo and pass it to
+   delegates by path. After approval, run every phase without further
+   checkpoints; only the stops the caller defines interrupt.
    Run steps 2–5 per phase, sequentially. Phase N+1 starts only after phase N
    is reviewed, live-verified (unless step 4 is skipped), fixed, and
-   committed.
+   committed. Step 6 runs once, after the last phase.
 2. **Build:** assign a fresh Builder to the phase scope, passing pointers (the
    plan, earlier phase commits, report paths) rather than a prior Builder's
    session; require changed files and executed checks. Steps 3–5 resume this
@@ -200,6 +206,17 @@ perform all repository inspection, planning, edits, review, and checks.
    Reviewer/Judge inspects the fix diff, then the Verifier reruns the failed and
    affected flows. Repeat until they pass or a blocker is reported. Run a full
    review again only when the fix changed scope or affected boundaries.
+6. **Final review:** with more than one phase, assign a fresh Reviewer/Judge
+   (review routing) to the whole branch diff against the plan's success
+   criteria, looking for what per-phase reviews could not see: integration
+   between phases, leftovers, and scope drift. Findings go to a fresh Builder
+   through step 3's loop. Its approval of the final head is the run's review
+   approval. With one phase, the last Reviewer/Judge approval of the head (step 3
+   or 5) is that approval. Either way the reviewer returns the SHA it approved.
+
+   Every approving review also returns a merge-danger call: **one-way door**
+   (an irreversible data change, a removed public API or protocol, anything a
+   revert cannot undo) or **two-way door**, with one line of reasoning.
 
 Commit after each phase that changed the repository, once its checks pass, in
 the orchestrator and scoped to that phase, so phases stay separately
@@ -212,8 +229,10 @@ as findings, bounded by `babysit-pr`'s stop conditions.
 Keep the orchestrator's context small.
 
 Do not have a Builder decide objections to its own review. The Reviewer/Judge
-adjudicates disputed findings. Ask the user when a product or safety decision
-cannot be inferred. Direct coordination the user explicitly authorizes (such as
+adjudicates disputed findings. Ask the user only when a product or safety decision
+cannot be inferred: an irreversible or product choice. Anything else a delegate
+researches (code, `find-docs`, `software-research`), decides reversibly, and
+lists under Decisions in its Return. Direct coordination the user explicitly authorizes (such as
 committing or pushing) may run in the orchestrator.
 
 ## Delegation Packet
@@ -254,7 +273,9 @@ Paste verbatim into every packet:
 - A problem the base already has gets one line in Return, not a fix.
 - Stay in scope. List out-of-scope problems in Return; don't fix them.
 - Never edit or delete existing tests, CI config or policy files to get a pass.
-- Don't ask the user. Make reversible choices and say what you chose and why.
+- Don't ask the user. Research facts first (code, docs), then make reversible
+  choices and say what you chose and why. An irreversible or product choice
+  is a blocker: return it.
   Return instead of pushing, merging, deleting data or messaging anyone.
 ```
 

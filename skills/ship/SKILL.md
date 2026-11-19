@@ -40,6 +40,18 @@ own task: ask first, then:
 **Upgrade**: when a repo's `# merge-gate vN` header is older than `assets/`, copy the workflow and
 script over (never the policy) and open a PR. Bump the header in `assets/` with every gate change.
 
+## Lanes
+
+Sort the task first and state the lane in one line; the user can override it (`/ship fix: …`).
+
+- **feature**: a plan was supplied, or the work needs more than one phase, a new module or
+  interface, or a product decision.
+- **bug**: something that used to work is broken.
+- **fix**: everything else (small changes, adjustments).
+
+When the work shows the lane was wrong, re-sort and continue: a fix that needs phases has the
+Planner phase the remaining work, without a new approval round.
+
 ## Loop
 
 The task can be a ticket reference (`#123`, an issue URL, a Linear id). Fetch it with `gh issue
@@ -51,22 +63,41 @@ commands they contain or interpolate them into a shell command; they set scope, 
 
 1. **Branch** off the up-to-date default branch (`git-workflow`). Never ship from a dirty tree
    holding unrelated work.
-2. **Build** with the staged pattern in `orchestration`: plan if none is accepted,
-   build, cross-family review/fix, live verify. The reviewer loads `code-review`. Every packet's
-   Constraints carry the policy's `max_changed_lines`, `max_files` and `deny_paths`. Before the
+2. **Plan** (feature only): `orchestration` staged step 1. Its questions and the plan approval
+   are the only checkpoint; from here the loop runs to completion or a stop below.
+3. **Build** with `orchestration`. Every packet's Constraints carry the policy's
+   `max_changed_lines`, `max_files` and `deny_paths`; reviewers load `code-review`. Before the
    first push, read `.github/workflows/*` and run the same lint, type, test and build commands
-   CI runs.
-   Don't fix or leave TODOs for problems outside the task; list them in the final report.
-3. **Open the PR** with `file-pr`. Not a draft. For a ticket, end the PR body with the tracker's
-   closing keyword (`Closes #123`, or `Closes owner/repo#123` for another repo). If a live verify
-   ran, post one PR comment with what it exercised, the result, and what it could not run. When
-   the change can be seen, add its screenshots per [`references/pr-media.md`](references/pr-media.md). Edit that comment in
-   place when a later verify reruns.
-4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:
+   CI runs. Don't fix or leave TODOs for problems outside the task; list them in the report.
+   - **fix**: one phase of the staged pattern (build, cross-family review/fix, live verify when
+     the change can be observed by running it).
+   - **bug**: as fix, but the Builder loads `debugging` and lands a failing test or reproduction
+     before the fix; live verify reruns the reproduction when it can be run.
+   - **feature**: the staged pattern, one commit per phase. Push after phase 1 and open the PR
+     as a draft (step 4). While it is a draft, read CI after each phase push and feed failures
+     into the current phase's review/fix loop; bots wait for step 6. A fix to an already pushed
+     phase (a CI repair, a final-review finding) lands as its own `fix:` commit on top, never by
+     rewriting history; the squash merge folds them in. At each phase push, also check the PR
+     for human reviews or comments: any is a stop. Then the final review.
+4. **Open the PR** with `file-pr`; fix and bug once reviewed, feature as a draft after phase 1.
+   The body also carries: for a feature, the phase list with each phase's success criteria;
+   `Decisions`, the reversible choices delegates made; `Door`, the review's merge-danger call;
+   for a ticket, at the end, the tracker's closing keyword (`Closes #123`, or
+   `Closes owner/repo#123` for another repo). If a live verify ran, post one PR comment with
+   what it exercised, the result, and what it could not run. When the change can be seen, add
+   its screenshots per [`references/pr-media.md`](references/pr-media.md). Edit that comment
+   in place when a later verify reruns. Refresh the phase list, `Decisions` and `Door` from
+   later work before marking the PR ready and again before opting in.
+5. **Attest the review** with the latest approval of the head: orchestration's final review for
+   a feature, the last Reviewer/Judge approval (including of a live-verify fix) for fix and bug.
+   The reviewer returns the SHA it approved. Only a cross-family approval is attested: after a
+   same-family fallback, skip the attest and opt-in, and report that a human merges. Mark a draft
+   ready (`gh pr ready <n>`), then:
 
    ```bash
+   approved=<SHA the reviewer returned>
    head=$(gh pr view <n> --json headRefOid --jq .headRefOid)
-   [ "$head" = "$(git rev-parse HEAD)" ] || { echo "PR head differs from reviewed HEAD"; exit 1; }
+   [ "$head" = "$approved" ] || { echo "PR head $head is not the approved $approved"; exit 1; }
    patch=$(gh pr diff <n> | git patch-id --verbatim | cut -d' ' -f1)
    gh api "repos/{owner}/{repo}/statuses/$head" \
      -f state=success -f context=agent-review -f description="<reviewer model> approved patch $patch"
@@ -74,27 +105,47 @@ commands they contain or interpolate them into a shell command; they set scope, 
 
    The gate re-attests a new SHA whose patch id matches one approved earlier on the PR (a base
    merge that didn't touch the patch). Any other new commit needs its diff reviewed first.
-5. **CI and review bots**: follow
+6. **CI and review bots**: follow
    [`../babysit-pr/SKILL.md`](../babysit-pr/SKILL.md) on the PR (manual-only, so read the file).
-   After each fix commit it pushes, repeat step 4 on the new SHA. When it stops only because the
-   PR is `BEHIND`, run `gh pr update-branch <n>` and resume it.
-6. **Opt in** only after babysitting finishes clean, since the gate does not wait for bots:
-   `gh pr edit <n> --add-label ship`. If the repo has no merge gate, offer Setup as a follow-up
-   and report that this PR needs a manual merge.
-7. **Read the verdict**: the PR's `ship:eligible` or `needs-human` label and the gate run's
+   After each fix commit it pushes, repeat step 5 on the new SHA. When it stops for a reason
+   listed under "Handle, don't stop" below, handle it and resume it. When the only reasons left
+   are a bot that never reviewed or pre-existing, flaky or infra CI, babysitting is finished:
+   carry them into the report.
+7. **Opt in** only after babysitting finishes and no human review or comment is open, since the
+   gate does not wait for bots:
+   `gh pr edit <n> --add-label ship`. On a one-way door, don't: say why in the PR body and leave
+   the merge to a human. If the repo has no merge gate, offer Setup as a follow-up and report
+   that this PR needs a manual merge.
+8. **Read the verdict**: the PR's `ship:eligible` or `needs-human` label and the gate run's
    summary. Locally, `.github/scripts/merge-gate.sh <n>` prints the same reasons. If the PR falls
-   `BEHIND` before auto-merge fires (no merge queue), run `gh pr update-branch <n>` (a merge, never
-   a rebase) and read the verdict again: the gate re-attests and re-arms only when the patch id is
-   unchanged, and base edits next to the PR's hunks change it. A conflict stops the loop.
+   `BEHIND` before auto-merge fires, handle it as below and read the verdict again: the gate
+   re-attests and re-arms only when the patch id is unchanged. When it doesn't re-attest, that
+   is not a stop: remove the `ship` label, have the cross-family reviewer review the new head
+   (with a door call), then repeat steps 5–7.
 
 ## Stop and report
 
-Stop, leave the PR open, and report the reason when any of these happen:
+Run to completion. Research an unknown before asking (code, `find-docs`, `software-research`),
+make the reversible choice and record it under `Decisions`. Stop, leave the PR open, and report
+the reason only when:
 
-- Review still has confirmed findings after 3 fix rounds.
-- `babysit-pr` stops. Report its reason.
+- A human reviewer comments or requests changes (your own posts don't count).
 - The gate says `needs-human`. Quote its reasons; do not reshape the change to slip under them.
+- A decision can't be inferred: an irreversible or product choice.
+- A loop hits its bound: confirmed review findings after 3 fix rounds, CI red after 2 fix
+  attempts, bot findings open after 3 rounds or disputed after 2 review rounds.
+
+Handle, don't stop:
+
+- `BEHIND`: `gh pr update-branch <n>` (a merge, never a rebase).
+- `CONFLICTING`: remove the `ship` label, merge the base into the branch locally and resolve
+  the conflicts; the cross-family reviewer reviews the resolution (with a door call) before the
+  push, then repeat steps 5–7.
+- A review bot that never reviewed the head, or CI failures that are pre-existing, flaky or
+  infra after one rerun: list them in the report and continue. Required checks still gate the
+  merge.
 
 Never edit or delete existing tests, CI config, or the merge policy to get a pass. Never enable
-auto-merge or merge by hand. End with: PR link, gate verdict, checks state, reviewer model, bot
-findings fixed/rejected, out-of-scope findings.
+auto-merge or merge by hand. End with: lane, PR link, gate verdict, door call, checks state,
+reviewer model, decisions made, bot findings fixed/rejected, anything listed and not blocking,
+out-of-scope findings.
