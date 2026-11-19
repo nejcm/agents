@@ -145,9 +145,10 @@ A single delegated call needs no pattern at all — dispatch it and stop.
 
 Parallelize only independent work. Keep dependent phases sequential. Use no
 more than three distinct automatic delegates and at most one per role unless
-scopes differ. Avoid duplicate assignments and resume the Builder for fixes
-rather than creating a fourth worker. Resume an interrupted delegate by id/name
-to preserve context.
+scopes differ. Avoid duplicate assignments. Within a phase, resume that phase's
+Builder for fixes rather than creating another worker; each new phase gets a
+fresh Builder that replaces the last, so it counts as the same role. Resume an
+interrupted delegate by id/name to preserve context.
 
 Give genuinely wrong output one corrected retry, then stop and re-plan.
 Launch and quota failures use the separate bounded retry policy in
@@ -169,8 +170,10 @@ perform all repository inspection, planning, edits, review, and checks.
    Run steps 2–5 per phase, sequentially. Phase N+1 starts only after phase N
    is reviewed, live-verified (unless step 4 is skipped), fixed, and
    committed.
-2. **Build:** assign a Builder to the phase scope; require changed files and
-   executed checks.
+2. **Build:** assign a fresh Builder to the phase scope, passing pointers (the
+   plan, earlier phase commits, report paths) rather than a prior Builder's
+   session; require changed files and executed checks. Steps 3–5 resume this
+   same Builder.
 3. **Review & fix loop:** assign an independent Reviewer/Judge with the plan,
    phase, and diff to review requirements, repository rules, and correctness.
    Resume the Builder with actionable findings. The Builder validates each
