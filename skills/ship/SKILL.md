@@ -27,10 +27,14 @@ own task: ask first, then:
 4. Open the setup PR. It touches `.github/`, so a human merges it.
 5. After it merges, ask before changing repo settings:
    `gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`, then add the repo's CI check(s)
-   and `merge-gate` as required status checks on the default-branch ruleset, with "Require
-   branches to be up to date before merging" on, so auto-merge only lands a head CI tested
-   against the current base. Requiring `merge-gate` before the workflow is on the default
-   branch blocks every PR.
+   and `merge-gate` as required status checks on the default-branch ruleset, so auto-merge only
+   lands code CI tested against the current base:
+   - **Org-owned public repo, or private on Enterprise Cloud**: turn on the merge queue and add
+     `merge_group:` to every CI workflow behind a required check. PRs never need updating.
+   - **Otherwise** (personal repos have no merge queue): turn on "Require branches to be up to
+     date before merging".
+
+   Requiring `merge-gate` before the workflow is on the default branch blocks every PR.
 6. Switch `"mode"` to `"enforce"` only when the user says the shadow verdicts look right.
 
 **Upgrade**: when a repo's `# merge-gate vN` header is older than `assets/`, copy the workflow and
@@ -53,25 +57,27 @@ script over (never the policy) and open a PR. Bump the header in `assets/` with 
 4. **Attest the review** only after the cross-family reviewer approves the exact head SHA:
 
    ```bash
-   git fetch -q origin <base>
-   patch=$(git diff "$(git merge-base FETCH_HEAD HEAD)" HEAD | git patch-id --stable | cut -c1-12)
-   gh api "repos/{owner}/{repo}/statuses/$(git rev-parse HEAD)" \
+   head=$(gh pr view <n> --json headRefOid --jq .headRefOid)
+   [ "$head" = "$(git rev-parse HEAD)" ] || { echo "PR head differs from reviewed HEAD"; exit 1; }
+   patch=$(gh pr diff <n> | git patch-id --verbatim | cut -d' ' -f1)
+   gh api "repos/{owner}/{repo}/statuses/$head" \
      -f state=success -f context=agent-review -f description="<reviewer model> approved patch $patch"
    ```
 
-   A new SHA whose patch id matches the last approved one (a base merge that didn't touch the
-   patch) is re-attested without review. Any other new commit needs its diff reviewed first.
+   The gate re-attests a new SHA whose patch id matches one approved earlier on the PR (a base
+   merge that didn't touch the patch). Any other new commit needs its diff reviewed first.
 5. **CI and review bots**: follow
    [`../babysit-pr/SKILL.md`](../babysit-pr/SKILL.md) on the PR (manual-only, so read the file).
    After each fix commit it pushes, repeat step 4 on the new SHA. When it stops only because the
-   PR is `BEHIND`, update the branch as in step 7 and resume it.
+   PR is `BEHIND`, run `gh pr update-branch <n>` and resume it.
 6. **Opt in** only after babysitting finishes clean, since the gate does not wait for bots:
    `gh pr edit <n> --add-label ship`. If the repo has no merge gate, offer Setup as a follow-up
    and report that this PR needs a manual merge.
 7. **Read the verdict**: the PR's `ship:eligible` or `needs-human` label and the gate run's
    summary. Locally, `.github/scripts/merge-gate.sh <n>` prints the same reasons. If the PR falls
-   `BEHIND` before auto-merge fires, run `gh pr update-branch <n>` (a merge, never a rebase), wait
-   for CI, then re-attest per step 4. A conflict stops the loop.
+   `BEHIND` before auto-merge fires (no merge queue), run `gh pr update-branch <n>` (a merge, never
+   a rebase) and read the verdict again: the gate re-attests and re-arms only when the patch id is
+   unchanged, and base edits next to the PR's hunks change it. A conflict stops the loop.
 
 ## Stop and report
 

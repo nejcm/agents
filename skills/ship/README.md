@@ -18,6 +18,7 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
                            ├─ eligible     → `ship:eligible`, merge-gate ✓, [enforce] auto-merge armed on that SHA
                            └─ not eligible → `needs-human` + reasons, merge-gate ✗ [enforce], you merge or not
   push after opt-in → no agent-review on the new SHA → gate disarms until a re-review re-attests
+  base merge after opt-in → same patch id → gate re-attests and re-arms
 ```
 
 The loop stops and reports after 3 review rounds with open findings, any `babysit-pr` stop, or a
@@ -55,8 +56,11 @@ rewritten test, or no `agent-review` = `success` status on the head SHA.
 
 ### `merge-gate.yml`
 
-- Triggers on `pull_request_target` (opened, push, reopened, labelled, unlabelled, ready) and on
-  `agent-review` commit statuses.
+- Triggers on `pull_request_target` (opened, push, reopened, labelled, unlabelled, ready), on
+  `agent-review` commit statuses, and on `merge_group`, where it only reports `merge-gate` on the
+  queue's SHA.
+- Re-attests `agent-review` on a head whose `gh pr diff` patch id matches one an earlier commit of
+  the PR was approved with, so base merges don't need a new review.
 - `pull_request_target` runs the default branch's workflow, script and policy, and the job only
   checks out `.github/` from there. PR code is never run, which is why it can hold write tokens.
 - Posts `merge-gate` on every evaluated head: success for non-`ship` PRs and eligible PRs, failure
@@ -74,8 +78,9 @@ rewritten test, or no `agent-review` = `success` status on the head SHA.
 3. Dry-run the script on recent merged PRs and check the verdicts make sense.
 4. Merge the setup PR by hand (it touches `.github/`, so it can't auto-merge).
 5. Then, in this order: enable auto-merge (`gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`),
-   and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset,
-   with "Require branches to be up to date before merging" on.
+   and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset.
+   Then either the merge queue (org-owned public repos, or private on Enterprise Cloud; add
+   `merge_group:` to each required CI workflow) or "Require branches to be up to date before merging".
    Requiring `merge-gate` before the workflow is on the default branch blocks every PR.
 6. Watch `shadow` verdicts for a week or two; switch `mode` to `enforce` when you agree with them.
 
@@ -89,10 +94,13 @@ When a repo's header is older, copy the workflow and script over (never its poli
 ## Limits
 
 - `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened. Its
-  description carries the approved `git patch-id`, so a base merge that leaves the patch unchanged
-  is re-attested without a new review.
-- With up-to-date branches required, a PR that falls behind after the loop ends waits until someone
-  runs `gh pr update-branch` and re-attests, or merges by hand.
+  description carries the approved `git patch-id`, which the gate re-attests across base merges.
+  Patch-id equality doesn't catch a semantic clash with the new base; required CI on the merged
+  head does.
+- Once a PR is in the merge queue the gate can't pull it: `--disable-auto` is a no-op there and the
+  queue run reports `merge-gate` success. To stop a queued PR, remove it from the queue by hand.
+- Without a merge queue, a PR that falls behind after the loop ends waits until someone runs
+  `gh pr update-branch`; the gate then re-attests and re-arms it.
 - Merges armed with `GITHUB_TOKEN` don't trigger `push` workflows on the default branch. Use a
   GitHub App token in the workflow if post-merge CI must run.
 - The gate guards against mistakes, not a hostile or prompt-injected agent: with the same token it can
