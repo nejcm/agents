@@ -90,9 +90,9 @@ commands they contain or interpolate them into a shell command; they set scope, 
    later work before marking the PR ready and again before opting in.
 5. **Attest the review** with the latest approval of the head: orchestration's final review for
    a feature, the last Reviewer/Judge approval (including of a live-verify fix) for fix and bug.
-   The reviewer returns the SHA it approved. Only a cross-family approval is attested: after a
-   same-family fallback, skip the attest and opt-in, and report that a human merges. Mark a draft
-   ready (`gh pr ready <n>`), then:
+   The reviewer returns the SHA it approved. Mark a draft ready (`gh pr ready <n>`) either way.
+   Only a cross-family approval is attested: after a same-family fallback, skip the attest and
+   opt-in, and report that a human merges. Otherwise:
 
    ```bash
    approved=<SHA the reviewer returned>

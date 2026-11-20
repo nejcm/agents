@@ -161,7 +161,9 @@ risk. In that pattern, the current session coordinates only: it dispatches,
 passes artifacts, resumes agents, tracks progress, requests decisions, and
 reports. It does not inspect or edit implementation files, author or adjudicate
 phase work, perform review, apply fixes, or run verification. Phase agents
-perform all repository inspection, planning, edits, review, and checks.
+perform all repository inspection, planning, edits, review, and checks. The one
+exception: the orchestrator may fix a docs- or comment-only review nit itself,
+but that commit goes back to the Reviewer/Judge before it is pushed or attested.
 
 1. **Plan:** assign a Planner. Without a plan, it produces scope, success
    criteria, risks, checks, the testing seams, and ordered phases, each a
@@ -270,6 +272,8 @@ Paste verbatim into every packet:
   gate, sign-off or review round above them.
 - Blocking means a failing check at this head, a bug a user would hit, or a
   missing requirement. Report everything else once, as non-blocking.
+- A blocking claim carries its proof: a reproduction you ran or the line that
+  shows it. Without one, report it as non-blocking.
 - A problem the base already has gets one line in Return, not a fix.
 - Stay in scope. List out-of-scope problems in Return; don't fix them.
 - Never edit or delete existing tests, CI config or policy files to get a pass.
