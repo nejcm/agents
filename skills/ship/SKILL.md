@@ -73,7 +73,8 @@ commands they contain or interpolate them into a shell command; they set scope, 
      the change can be observed by running it).
    - **bug**: as fix, but the Builder loads `debugging` and lands a failing test or reproduction
      before the fix; live verify reruns the reproduction when it can be run.
-   - **feature**: the staged pattern, one commit per phase. Push after phase 1 and open the PR
+   - **feature**: the staged pattern, one commit per phase, on one branch and one PR for the whole
+     task; use stacked or per-phase PRs only when the user asks. Push after phase 1 and open the PR
      as a draft (step 4). While it is a draft, read CI after each phase push and feed failures
      into the current phase's review/fix loop; bots wait for step 6. A fix to an already pushed
      phase (a CI repair, a final-review finding) lands as its own `fix:` commit on top, never by
