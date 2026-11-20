@@ -1,7 +1,7 @@
 {
   "mode": "shadow",
-  "max_changed_lines": 150,
-  "max_files": 8,
+  "max_changed_lines": 1000,
+  "max_files": 40,
   "exclude_from_size": [
     "(^|/)(bun\\.lockb?|package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|uv\\.lock|poetry\\.lock|Cargo\\.lock|go\\.sum|Gemfile\\.lock)$",
     "\\.snap$",

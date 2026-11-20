@@ -1,4 +1,4 @@
-# merge-gate v4, installed by the ship skill; upgrade from there, not by hand.
+# merge-gate v5, installed by the ship skill; upgrade from there, not by hand.
 name: Merge gate
 
 # pull_request_target runs the base branch's copy of this workflow and policy, so a PR cannot loosen its own gate.
@@ -7,6 +7,7 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   status:
+  merge_group:
 
 permissions:
   contents: write
@@ -15,23 +16,32 @@ permissions:
   statuses: write
 
 concurrency:
-  group: merge-gate-${{ github.event.pull_request.number || github.event.sha }}
+  group: merge-gate-${{ github.event.pull_request.number || github.event.sha || github.event.merge_group.head_sha }}
 
 jobs:
   gate:
-    if: github.event_name == 'pull_request_target' || github.event.context == 'agent-review'
+    if: github.event_name != 'status' || github.event.context == 'agent-review'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
+      # A queued PR already passed merge-gate on its head; report the required check on the queue's SHA.
+      - name: Merge queue
+        if: github.event_name == 'merge_group'
+        env:
+          SHA: ${{ github.event.merge_group.head_sha }}
+        run: gh api "repos/$GH_REPO/statuses/$SHA" -f state=success -f context=merge-gate -f description="queued" >/dev/null
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'merge_group'
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           sparse-checkout: .github
 
       - name: Evaluate
+        if: github.event_name != 'merge_group'
         env:
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.sha }}
@@ -56,6 +66,31 @@ jobs:
             verdict success "not a ship PR: manual merge"
             exit 0
           fi
+
+          # A head whose patch matches one approved on an earlier commit of this PR (a base merge) keeps the approval.
+          reattest() {
+            latest() {
+              local pages
+              pages=$(gh api --paginate "repos/$GH_REPO/commits/$1/statuses") || return 1
+              jq -sc '[add[] | select(.context == "agent-review")][0] // empty' <<<"$pages"
+            }
+            # Same whole-description suffix test as merge-gate.sh, so only an approval the gate accepts is copied.
+            approves() { latest "$1" | jq -e --arg p "$patch" 'select(.state == "success") | .description | endswith("approved patch " + $p)' >/dev/null; }
+            # Any agent-review on the head, even failure or pending, is the agent's call, not ours; an unreadable head is too.
+            current=$(latest "$head") || return 0
+            [ -z "$current" ] || return 0
+            # --verbatim: --stable ignores whitespace, so `rm -rf /tmp/x` and `rm -rf / tmp/x` match.
+            patch=$(gh pr diff "$pr" --color never | git patch-id --verbatim | cut -c1-12)
+            [ -n "$patch" ] || return 0
+            for sha in $(gh api --paginate "repos/$GH_REPO/pulls/$pr/commits" --jq '.[].sha'); do
+              if approves "$sha"; then
+                gh api "repos/$GH_REPO/statuses/$head" -f state=success -f context=agent-review \
+                  -f description="re-attested from ${sha:0:7}: approved patch $patch" >/dev/null
+                return 0
+              fi
+            done
+          }
+          reattest
 
           reasons=$(.github/scripts/merge-gate.sh "$pr" "$head")
           gh label create ship:eligible --color 0e8a16 --force >/dev/null

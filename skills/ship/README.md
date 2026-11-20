@@ -9,19 +9,25 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
 ## Flow
 
 ```
-/ship <task>
-  └─ branch → staged build (orchestration) → cross-family review/fix → verify
-       └─ file-pr (+ verify comment) → agent-review=success status on HEAD
+/ship <task>  → lane: fix | bug | feature
+  ├─ fix:     branch → build → cross-family review/fix → verify if runnable → file-pr
+  ├─ bug:     branch → debugging: failing test first → as fix
+  └─ feature: plan → questions + one approval → branch → per phase: fresh builder → review/fix → verify → commit
+              (draft PR after phase 1, CI only) → final whole-branch review → ready
+       └─ agent-review=success status on HEAD (+ door call: one-way → no `ship` label, human merges)
             └─ babysit-pr: wait for CI + review bots → fix failures and confirmed bot findings → re-attest
                  └─ clean → label `ship`
                       └─ merge-gate.yml (GitHub) runs merge-gate.sh against merge-policy.json from main
                            ├─ eligible     → `ship:eligible`, merge-gate ✓, [enforce] auto-merge armed on that SHA
                            └─ not eligible → `needs-human` + reasons, merge-gate ✗ [enforce], you merge or not
   push after opt-in → no agent-review on the new SHA → gate disarms until a re-review re-attests
+  base merge after opt-in → same patch id → gate re-attests and re-arms
 ```
 
-The loop stops and reports after 3 review rounds with open findings, any `babysit-pr` stop, or a
-`needs-human` verdict.
+After plan approval the loop runs to completion. It stops only for a human reviewer's comment, a
+`needs-human` verdict, an irreversible or product decision it can't infer, or a fix loop at its
+bound. Conflicts, a branch behind its base, a missing bot review and pre-existing or flaky CI are
+handled or reported, not stops.
 
 ## Files
 
@@ -38,8 +44,8 @@ The loop stops and reports after 3 review rounds with open findings, any `babysi
 | Key | Meaning |
 | --- | ------- |
 | `mode` | `shadow` only labels and summarises; `enforce` also arms/disarms GitHub auto-merge. |
-| `max_changed_lines` | Additions + deletions allowed, excluding `exclude_from_size` files. |
-| `max_files` | Files touched allowed. |
+| `max_changed_lines` | Additions + deletions allowed, excluding `exclude_from_size` files. A ceiling against a runaway agent (default 1000); below it the agent's review decides. |
+| `max_files` | Files touched allowed (default 40). |
 | `exclude_from_size` | Regexes not counted toward lines: lockfiles, snapshots, generated code. |
 | `deny_paths` | Regexes that always need a human: CI, agent instructions, migrations, auth, manifests, lockfiles, Docker, `.env`, infra, test-runner configs. Old and new names of renames both checked. |
 | `test_paths` | Regexes for test files and snapshots. Editing one that loses lines, deleting it, renaming it from or into a test path, or adding a skip/focus marker (`.only(`, `.skip(`, `xit(`, `@pytest.mark.skip`, `t.Skip(`, `#[ignore]`) blocks auto-merge; adding tests is fine. |
@@ -56,8 +62,11 @@ description names the PR diff's `git patch-id --verbatim`.
 
 ### `merge-gate.yml`
 
-- Triggers on `pull_request_target` (opened, push, reopened, labelled, unlabelled, ready) and on
-  `agent-review` commit statuses.
+- Triggers on `pull_request_target` (opened, push, reopened, labelled, unlabelled, ready), on
+  `agent-review` commit statuses, and on `merge_group`, where it only reports `merge-gate` on the
+  queue's SHA.
+- Re-attests `agent-review` on a head whose `gh pr diff` patch id matches one an earlier commit of
+  the PR was approved with, so base merges don't need a new review.
 - `pull_request_target` runs the default branch's workflow, script and policy, and the job only
   checks out `.github/` from there. PR code is never run, which is why it can hold write tokens.
 - Posts `merge-gate` on every evaluated head: success for non-`ship` PRs and eligible PRs, failure
@@ -76,8 +85,9 @@ description names the PR diff's `git patch-id --verbatim`.
 4. Merge the setup PR by hand (it touches `.github/`, so it can't auto-merge).
 5. Then, in this order: enable auto-merge (`gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`),
    and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset,
-   pinning `merge-gate` to the GitHub Actions app (`integration_id` 15368) so a token posting the status by hand can't pass it,
-   with "Require branches to be up to date before merging" on.
+   pinning `merge-gate` to the GitHub Actions app (`integration_id` 15368) so a token posting the status by hand can't pass it.
+   Then either the merge queue (org-owned public repos, or private on Enterprise Cloud; add
+   `merge_group:` to each required CI workflow) or "Require branches to be up to date before merging".
    Requiring `merge-gate` before the workflow is on the default branch blocks every PR.
 6. Watch `shadow` verdicts for a week or two; switch `mode` to `enforce` when you agree with them.
 
@@ -87,17 +97,22 @@ To take a PR over by hand at any point, remove the `ship` label.
 
 Both gate files carry a `# merge-gate vN` header. Bump it in `assets/` with every gate change.
 When a repo's header is older, copy the workflow and script over (never its policy) in a PR.
-v4 adds `deny_paths`/`test_paths` entries and the ruleset source pin; merge those into the repo by hand.
+Policy default changes (the size ceiling, new `deny_paths`/`test_paths` entries) reach only new
+installs, and the ruleset source pin is a repo setting: apply both to an existing repo by hand.
 
 ## Limits
 
 - `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened. Its
   description carries the approved `git patch-id --verbatim`, which the gate recomputes from the PR
-  diff, so a base merge that leaves the patch unchanged is re-attested without a new review. That
-  catches stale attestations, not forged ones. Diffs too large for GitHub's diff API always block.
-  Patch ids ignore line numbers, so the same edit moved to an identical context keeps its id.
-- With up-to-date branches required, a PR that falls behind after the loop ends waits until someone
-  runs `gh pr update-branch` and re-attests, or merges by hand.
+  diff and re-attests across base merges, so a base merge that leaves the patch unchanged needs no
+  new review. That catches stale attestations, not forged ones. Diffs too large for GitHub's diff
+  API always block. Patch ids ignore line numbers, so the same edit moved to an identical context
+  keeps its id, and patch-id equality doesn't catch a semantic clash with the new base; required
+  CI on the merged head does.
+- Once a PR is in the merge queue the gate can't pull it: `--disable-auto` is a no-op there and the
+  queue run reports `merge-gate` success. To stop a queued PR, remove it from the queue by hand.
+- Without a merge queue, a PR that falls behind after the loop ends waits until someone runs
+  `gh pr update-branch`; the gate then re-attests and re-arms it.
 - Merges armed with `GITHUB_TOKEN` don't trigger `push` workflows on the default branch. Use a
   GitHub App token in the workflow if post-merge CI must run.
 - The gate guards against mistakes, not a hostile or prompt-injected agent: with the same token it can

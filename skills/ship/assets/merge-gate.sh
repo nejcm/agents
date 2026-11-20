@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# merge-gate v4, installed by the ship skill; upgrade from there, not by hand.
+# merge-gate v5, installed by the ship skill; upgrade from there, not by hand.
 # Usage: merge-gate.sh <pr-number> [head-sha]. Prints blocking reasons, one per line; none means auto-merge eligible.
 set -euo pipefail
 
