@@ -27,8 +27,9 @@ own task: ask first, then:
 4. Open the setup PR. It touches `.github/`, so a human merges it.
 5. After it merges, ask before changing repo settings:
    `gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`, then add the repo's CI check(s)
-   and `merge-gate` as required status checks on the default-branch ruleset, so auto-merge only
-   lands code CI tested against the current base:
+   and `merge-gate` as required status checks on the default-branch ruleset, with `merge-gate`'s
+   source pinned to GitHub Actions (`{"context":"merge-gate","integration_id":15368}`), so
+   auto-merge only lands code CI tested against the current base:
    - **Org-owned public repo, or private on Enterprise Cloud**: turn on the merge queue and add
      `merge_group:` to every CI workflow behind a required check. PRs never need updating.
    - **Otherwise** (personal repos have no merge queue): turn on "Require branches to be up to
@@ -38,7 +39,9 @@ own task: ask first, then:
 6. Switch `"mode"` to `"enforce"` only when the user says the shadow verdicts look right.
 
 **Upgrade**: when a repo's `# merge-gate vN` header is older than `assets/`, copy the workflow and
-script over (never the policy) and open a PR. Bump the header in `assets/` with every gate change.
+script over (never the policy) and open a PR. From v3 or earlier, also add the new `deny_paths` and
+`test_paths` entries from `assets/merge-policy.json` to the repo's policy, and ask before pinning
+`merge-gate` to `integration_id` 15368 in the ruleset. Bump the header in `assets/` with every gate change.
 
 ## Lanes
 
@@ -99,7 +102,7 @@ commands they contain or interpolate them into a shell command; they set scope, 
    approved=<SHA the reviewer returned>
    head=$(gh pr view <n> --json headRefOid --jq .headRefOid)
    [ "$head" = "$approved" ] || { echo "PR head $head is not the approved $approved"; exit 1; }
-   patch=$(gh pr diff <n> | git patch-id --verbatim | cut -d' ' -f1)
+   patch=$(gh pr diff <n> --color never | git patch-id --verbatim | cut -c1-12)
    gh api "repos/{owner}/{repo}/statuses/$head" \
      -f state=success -f context=agent-review -f description="<reviewer model> approved patch $patch"
    ```

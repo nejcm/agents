@@ -47,8 +47,8 @@ handled or reported, not stops.
 | `max_changed_lines` | Additions + deletions allowed, excluding `exclude_from_size` files. A ceiling against a runaway agent (default 1000); below it the agent's review decides. |
 | `max_files` | Files touched allowed (default 40). |
 | `exclude_from_size` | Regexes not counted toward lines: lockfiles, snapshots, generated code. |
-| `deny_paths` | Regexes that always need a human: CI, agent instructions, migrations, auth, manifests, lockfiles, Docker, `.env`, infra. Old and new names of renames both checked. |
-| `test_paths` | Regexes for test files. Editing one that loses lines, deleting it, or renaming it from or into a test path blocks auto-merge; adding tests is fine. |
+| `deny_paths` | Regexes that always need a human: CI, agent instructions, migrations, auth, manifests, lockfiles, Docker, `.env`, infra, test-runner configs. Old and new names of renames both checked. |
+| `test_paths` | Regexes for test files and snapshots. Editing one that loses lines, deleting it, renaming it from or into a test path, or adding a skip/focus marker (`.only(`, `.skip(`, `xit(`, `@pytest.mark.skip`, `t.Skip(`, `#[ignore]`) blocks auto-merge; adding tests is fine. |
 
 ### `merge-gate.sh`
 
@@ -57,7 +57,8 @@ GH_REPO=owner/repo .github/scripts/merge-gate.sh <pr> [head-sha]
 ```
 
 Blocks on: draft, a base other than the default branch (stacked PR), changes requested in review, no `ship` label, over size, protected path,
-rewritten test, or no `agent-review` = `success` status on the head SHA.
+rewritten test, added skip/focus marker, or no `agent-review` = `success` status on the head SHA whose
+description names the PR diff's `git patch-id --verbatim`.
 
 ### `merge-gate.yml`
 
@@ -83,7 +84,8 @@ rewritten test, or no `agent-review` = `success` status on the head SHA.
 3. Dry-run the script on recent merged PRs and check the verdicts make sense.
 4. Merge the setup PR by hand (it touches `.github/`, so it can't auto-merge).
 5. Then, in this order: enable auto-merge (`gh api -X PATCH repos/<owner/repo> -F allow_auto_merge=true`),
-   and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset.
+   and add the CI check(s) plus `merge-gate` as required status checks on the default-branch ruleset,
+   pinning `merge-gate` to the GitHub Actions app (`integration_id` 15368) so a token posting the status by hand can't pass it.
    Then either the merge queue (org-owned public repos, or private on Enterprise Cloud; add
    `merge_group:` to each required CI workflow) or "Require branches to be up to date before merging".
    Requiring `merge-gate` before the workflow is on the default branch blocks every PR.
@@ -95,15 +97,18 @@ To take a PR over by hand at any point, remove the `ship` label.
 
 Both gate files carry a `# merge-gate vN` header. Bump it in `assets/` with every gate change.
 When a repo's header is older, copy the workflow and script over (never its policy) in a PR.
-Policy default changes (such as the size ceiling) reach only new installs; edit an existing
-repo's `merge-policy.json` by hand.
+Policy default changes (the size ceiling, new `deny_paths`/`test_paths` entries) reach only new
+installs, and the ruleset source pin is a repo setting: apply both to an existing repo by hand.
 
 ## Limits
 
 - `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened. Its
-  description carries the approved `git patch-id`, which the gate re-attests across base merges.
-  Patch-id equality doesn't catch a semantic clash with the new base; required CI on the merged
-  head does.
+  description carries the approved `git patch-id --verbatim`, which the gate recomputes from the PR
+  diff and re-attests across base merges, so a base merge that leaves the patch unchanged needs no
+  new review. That catches stale attestations, not forged ones. Diffs too large for GitHub's diff
+  API always block. Patch ids ignore line numbers, so the same edit moved to an identical context
+  keeps its id, and patch-id equality doesn't catch a semantic clash with the new base; required
+  CI on the merged head does.
 - Once a PR is in the merge queue the gate can't pull it: `--disable-auto` is a no-op there and the
   queue run reports `merge-gate` success. To stop a queued PR, remove it from the queue by hand.
 - Without a merge queue, a PR that falls behind after the loop ends waits until someone runs

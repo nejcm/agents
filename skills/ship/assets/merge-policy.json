@@ -20,12 +20,15 @@
     "(^|/)Dockerfile",
     "(^|/)\\.env",
     "(^|/)(infra|terraform|k8s|helm)/",
-    "\\.tf$"
+    "\\.tf$",
+    "(^|/)(jest|vitest|playwright|karma)\\.conf(ig)?\\.([cm]?[jt]s|json)$",
+    "(^|/)(conftest\\.py|pytest\\.(ini|toml)|tox\\.ini|setup\\.cfg|\\.mocharc[^/]*)$"
   ],
   "test_paths": [
     "\\.(test|spec)\\.[cm]?[jt]sx?$",
     "(^|/)(tests?|__tests__|e2e|spec)/",
     "(^|/)test_[^/]*\\.py$",
-    "_test\\.(go|py)$"
+    "_test\\.(go|py)$",
+    "\\.snap$"
   ]
 }

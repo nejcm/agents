@@ -1,4 +1,4 @@
-# merge-gate v4, installed by the ship skill; upgrade from there, not by hand.
+# merge-gate v5, installed by the ship skill; upgrade from there, not by hand.
 name: Merge gate
 
 # pull_request_target runs the base branch's copy of this workflow and policy, so a PR cannot loosen its own gate.
@@ -74,12 +74,12 @@ jobs:
             # Any agent-review on the head, even failure or pending, is the agent's call, not ours.
             [ -z "$(latest "$head")" ] || return 0
             # --verbatim: --stable ignores whitespace, so `rm -rf /tmp/x` and `rm -rf / tmp/x` match.
-            patch=$(gh pr diff "$pr" | git patch-id --verbatim | cut -d' ' -f1)
+            patch=$(gh pr diff "$pr" --color never | git patch-id --verbatim | cut -c1-12)
             [ -n "$patch" ] || return 0
             for sha in $(gh api --paginate "repos/$GH_REPO/pulls/$pr/commits" --jq '.[].sha'); do
               if review "$sha" | grep -q "patch $patch"; then
                 gh api "repos/$GH_REPO/statuses/$head" -f state=success -f context=agent-review \
-                  -f description="re-attested patch $patch from ${sha:0:7}" >/dev/null
+                  -f description="re-attested from ${sha:0:7}: approved patch $patch" >/dev/null
                 return 0
               fi
             done
