@@ -39,9 +39,10 @@ own task: ask first, then:
 6. Switch `"mode"` to `"enforce"` only when the user says the shadow verdicts look right.
 
 **Upgrade**: when a repo's `# merge-gate vN` header is older than `assets/`, copy the workflow and
-script over (never the policy) and open a PR. From v3 or earlier, also add the new `deny_paths` and
+script over (never the policy) and open a PR. From v3 or v4, also add the new `deny_paths` and
 `test_paths` entries from `assets/merge-policy.json` to the repo's policy, and ask before pinning
-`merge-gate` to `integration_id` 15368 in the ruleset. Bump the header in `assets/` with every gate change.
+`merge-gate` to `integration_id` 15368 in the ruleset. v5 reads 12-character patch ids, so re-attest
+open PRs approved under v4 with a full-length id. Bump the header in `assets/` with every gate change.
 
 ## Lanes
 

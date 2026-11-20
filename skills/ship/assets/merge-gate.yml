@@ -69,7 +69,7 @@ jobs:
 
           # A head whose patch matches one approved on an earlier commit of this PR (a base merge) keeps the approval.
           reattest() {
-            latest() { gh api "repos/$GH_REPO/commits/$1/statuses" --jq '[.[] | select(.context == "agent-review")][0]'; }
+            latest() { gh api --paginate "repos/$GH_REPO/commits/$1/statuses" | jq -sc '[add[] | select(.context == "agent-review")][0] // empty'; }
             review() { latest "$1" | jq -r 'select(.state == "success") | .description'; }
             # Any agent-review on the head, even failure or pending, is the agent's call, not ours.
             [ -z "$(latest "$head")" ] || return 0
@@ -77,7 +77,7 @@ jobs:
             patch=$(gh pr diff "$pr" --color never | git patch-id --verbatim | cut -c1-12)
             [ -n "$patch" ] || return 0
             for sha in $(gh api --paginate "repos/$GH_REPO/pulls/$pr/commits" --jq '.[].sha'); do
-              if review "$sha" | grep -q "patch $patch"; then
+              if review "$sha" | grep -qE "approved patch $patch\$"; then
                 gh api "repos/$GH_REPO/statuses/$head" -f state=success -f context=agent-review \
                   -f description="re-attested from ${sha:0:7}: approved patch $patch" >/dev/null
                 return 0
