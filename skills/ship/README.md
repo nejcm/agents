@@ -1,10 +1,16 @@
 # ship
 
 Takes a task to a merged PR: implement, cross-family review, verify, open the PR, get CI green,
-then let a per-repo **merge gate** decide whether it auto-merges or waits for a human.
+then let a **merge gate** decide whether it merges or waits for a human. Works with no setup.
 
-The agent never merges. It only records that a review passed and opts the PR in; the gate, running
-on GitHub from the default branch, decides from a policy the PR cannot edit.
+- **Local mode** (default, no setup): the agent runs `assets/merge-gate.sh` with the default policy
+  (or the default branch's `.github/merge-policy.json`, its `mode` ignored), requires every check
+  green with at least one passing GitHub Actions run and a branch not behind the default branch,
+  and merges itself when the gate and the final reviewer's `Merge:` verdict both pass. A repo
+  with no GitHub Actions CI always ends in `needs-human`.
+- **GitHub mode** (repo has `.github/workflows/merge-gate.yml`): the agent never merges. It records
+  that a review passed and opts the PR in; the gate, running on GitHub from the default branch,
+  decides from a policy the PR cannot edit.
 
 ## Flow
 
@@ -14,9 +20,10 @@ on GitHub from the default branch, decides from a policy the PR cannot edit.
   ├─ bug:     branch → debugging: failing test first → as fix
   └─ feature: plan → questions + one approval → branch → per phase: fresh builder → review/fix → verify → commit
               (draft PR after phase 1, CI only) → final whole-branch review → ready
-       └─ agent-review=success status on HEAD (+ door call: one-way → no `ship` label, human merges)
+       └─ final reviewer: `Merge: eligible` → agent-review=success on HEAD; `needs-human` → no attest, human merges
             └─ babysit-pr: wait for CI + review bots → fix failures and confirmed bot findings → re-attest
-                 └─ clean → label `ship`
+                 ├─ local mode: merge-gate.sh (+ green CI, not behind) → `ship:eligible` + REST merge, or `needs-human`
+                 └─ GitHub mode: label `ship`
                       └─ merge-gate.yml (GitHub) runs merge-gate.sh against merge-policy.json from main
                            ├─ eligible     → `ship:eligible`, merge-gate ✓, [enforce] auto-merge armed on that SHA
                            └─ not eligible → `needs-human` + reasons, merge-gate ✗ [enforce], you merge or not
@@ -33,10 +40,12 @@ handled or reported, not stops.
 
 | Path | Role |
 | ---- | ---- |
-| `SKILL.md` | The procedure the agent follows: loop, setup, upgrade, stop conditions. |
+| `SKILL.md` | The procedure the agent follows: gate mode, lanes, loop, stop conditions. |
+| `references/setup.md` | Installing or upgrading the GitHub gate; read only when doing that. |
+| `references/merge-rules.md` | Judgment rules the final reviewer applies, and its `Merge:` verdict line. |
 | `agents/openai.yaml` | Codex metadata; disables implicit invocation. |
-| `assets/merge-policy.json` | Default rules, copied to `.github/` and tailored per repo. |
-| `assets/merge-gate.sh` | Prints why a PR can't auto-merge (nothing = eligible). Read-only; runs locally too. |
+| `assets/merge-policy.json` | Default rules. Local mode uses it unless the repo has `.github/merge-policy.json`; Setup copies it there. |
+| `assets/merge-gate.sh` | Prints why a PR can't auto-merge (exit 0 with no output = eligible). Read-only; runs locally too. |
 | `assets/merge-gate.yml` | GitHub workflow that runs the script, sets labels and the `merge-gate` status, arms or disarms auto-merge. |
 
 ### `merge-policy.json`
@@ -54,11 +63,16 @@ handled or reported, not stops.
 
 ```bash
 GH_REPO=owner/repo .github/scripts/merge-gate.sh <pr> [head-sha]
+MERGE_GATE_LOCAL=1 MERGE_POLICY=<policy.json> assets/merge-gate.sh <pr> [head-sha]   # local mode
 ```
 
 Blocks on: draft, a base other than the default branch (stacked PR), changes requested in review, no `ship` label, over size, protected path,
 rewritten test, added skip/focus marker, or no `agent-review` = `success` status on the head SHA whose
-description names the PR diff's `git patch-id --verbatim`.
+description names the PR diff's `git patch-id --verbatim`. With `MERGE_GATE_LOCAL=1` it skips the
+`ship` label and instead blocks on a head with no passing GitHub Actions run, any check or status
+still running or not success (neutral and skipped count) on the head or GitHub's test merge commit,
+or a head behind the default branch. It exits non-zero
+when it can't evaluate; that is a block, never a pass. `MERGE_POLICY` overrides the policy path.
 
 ### `merge-gate.yml`
 
@@ -74,9 +88,10 @@ description names the PR diff's `git patch-id --verbatim`.
   every push.
 - Arms auto-merge with `--match-head-commit`; disarms only auto-merge it armed itself.
 
-## Install in a repo
+## Install in a repo (optional)
 
-`ship` offers this when a repo has no gate. By hand:
+Local mode needs none of this. Install the gate to move enforcement onto GitHub, where the agent
+can't skip it and required checks back it. By hand:
 
 1. Copy `assets/merge-gate.yml` → `.github/workflows/`, `assets/merge-gate.sh` →
    `.github/scripts/` (executable), `assets/merge-policy.json` → `.github/`.
@@ -101,6 +116,13 @@ Policy default changes (the size ceiling, new `deny_paths`/`test_paths` entries)
 installs, and the ruleset source pin is a repo setting: apply both to an existing repo by hand.
 
 ## Limits
+
+- Local mode has no enforcement outside the agent: only the skill's instructions make it run the
+  gate before merging. A ruleset requiring human review still stops the merge. The base can move
+  between the gate run and the merge; the merge call's `sha` pins only the head.
+- The `Merge:` verdict comes from the final reviewer, which saw the review/fix rounds, so it is
+  cross-family but not a fresh context. Split it into its own agent if it approves what the rules
+  should block.
 
 - `agent-review` is self-attested by the loop; GitHub doesn't verify a review happened. Its
   description carries the approved `git patch-id --verbatim`, which the gate recomputes from the PR
