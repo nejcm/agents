@@ -33,6 +33,7 @@ The tree mirrors a global `~/.ulis/` source directory:
 | [`raw/`](./raw/) | Platform-native fragments copied verbatim into generated output |
 | [`hooks/`](./hooks/) | Lifecycle event hooks |
 | [`tools/`](./tools/) | Build-time helper scripts |
+| [`tender/`](./tender/) | [tender](https://github.com/nejcm/agent-workflow) profile: task types and their instructions; not part of ULIS |
 
 ## Quick start
 
