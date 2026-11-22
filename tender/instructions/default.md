@@ -28,9 +28,8 @@ Steps:
    available, say so and set `reviewed` to `false` in the merge file.
 5. Verify on the real surface (CLI, API, UI). If the repo has a verification skill
    (`.agents/skills/verify-*/`, or `.claude/skills/verify-*/`), follow it; you may start the app on the
-   `TENDER_PORT_*` ports, present only when the repo's type declares `needs`. Proof goes under
-   `.tender/proof/` and is never committed. For the PR body, note what you ran and what you saw: the
-   command and its output, not "it works". If you could not verify beyond the tests, say so. A failure
+   `TENDER_PORT_*` ports, present only when the repo's type declares `needs`. For the PR body, note
+   what you ran and what you saw: the command and its output, not "it works". If you could not verify beyond the tests, say so. A failure
    goes back to step 3, then 4 for the fix.
 6. Commit with a message that references {{id}}, in the style `git log` already uses, and only the files
-   the change needs: no build output, temp files, `.tender/run/` or `.tender/proof/`.
+   the change needs: no build output, temp files or `.tender/run/`.
