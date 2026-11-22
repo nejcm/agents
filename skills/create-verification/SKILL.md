@@ -6,7 +6,7 @@ category: workflow
 
 # Create verification
 
-Adapted from pstack's [`create-verification-skill`](https://github.com/cursor/plugins/tree/main/pstack/skills/create-verification-skill) (MIT).
+Adapted from pstack's [`create-verification-skill`](https://github.com/cursor/plugins/tree/main/pstack/skills/create-verification-skill), MIT, Copyright (c) 2026 Lauren Tan; license in [`LICENSE`](LICENSE).
 
 You produce two things, both committed to the repo:
 
@@ -59,11 +59,11 @@ checks:
     proof: [".tender/proof/*.svg"]
 ```
 
-The sandbox is offline except for the check's own ports, with a private `TMPDIR` and no Docker: dependencies must already be in the clone or install offline from the read-only `~/.bun`, `~/.npm` and mise caches. A browser that starts locally may not start there (Chromium binds a Unix socket in `TMPDIR`, and socket paths are capped at 108 bytes), so unless a browser is proven under tender's verifier, the check's proof is an SVG built from the state it observed and screenshots stay in the skill. Anchor proof globs under `.tender/proof/` so the collector never walks `node_modules`. Validate with `bun <tender>/tender.ts check .` (`<tender>` is the tender clone; ask for it if unknown) and fix until it passes.
+The sandbox is offline except for the check's own ports, with a private `TMPDIR` and no Docker: dependencies must already be in the clone or install offline from the read-only `~/.bun`, `~/.npm` and mise caches. A browser that starts locally may not start there: the sandbox cannot read `~/.cache/ms-playwright`, and Chromium binds a Unix socket in `TMPDIR`, where paths are capped at 108 bytes. So unless a browser is proven under tender's verifier, the check's proof is an SVG built from the state it observed and screenshots stay in the skill. Anchor proof globs under `.tender/proof/` so the collector never walks `node_modules`. Validate with `bun <tender>/tender.ts check .` (`<tender>` is the tender clone; ask for it if unknown) and fix until it passes.
 
 ## 5. Prove it once
 
-Run the generated skill end to end once: launch, doctor, drive ONE mapped feature, capture evidence, clean up, then confirm the evidence still exists where the skill says. Then run every contract check the way tender does: in a fresh clone of the commit, with `TENDER_PORT_0` set to a free port, needing nothing from the network. Run cleanup after every failed attempt, so broken runs strand no processes or ports. A skill or contract never executed is a draft. If you proved it in a stand-in (a container for a VM, a local stack for a remote one), list every step the stand-in did that the target will not.
+Run the generated skill end to end once: launch, doctor, drive ONE mapped feature, capture evidence, clean up, then confirm the evidence still exists where the skill says. Then run every contract check the way tender does: in a fresh clone of the commit, with `TENDER_PORT_0` set to a free port, needing nothing from the network; for a check with `compose`, start its services locally first (`docker compose ... up -d --wait` on those ports) and take them down after. Run cleanup after every failed attempt, so broken runs strand no processes or ports. A skill or contract never executed is a draft. If you proved it in a stand-in (a container for a VM, a local stack for a remote one), list every step the stand-in did that the target will not.
 
 ## 6. Hand off
 

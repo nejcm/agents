@@ -6,7 +6,7 @@ category: workflow
 
 # Maintain verification
 
-Adapted from pstack's [`maintain-verification-skill`](https://github.com/cursor/plugins/tree/main/pstack/skills/maintain-verification-skill) (MIT).
+Adapted from pstack's [`maintain-verification-skill`](https://github.com/cursor/plugins/tree/main/pstack/skills/maintain-verification-skill), MIT, Copyright (c) 2026 Lauren Tan; license in [`LICENSE`](LICENSE).
 
 A feature map rots the moment the app changes. This is the upkeep loop for a skill made by `create-verification`, or any repo-local verification skill with a feature map. The unit of rigor is the feature: every feature file covered from source and exercised live, not every sentence.
 
