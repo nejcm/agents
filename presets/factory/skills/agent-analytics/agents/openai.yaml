@@ -1,0 +1,5 @@
+interface:
+  display_name: "Agent Analytics"
+  short_description: "Count a repo's agent sessions, tokens, cost and failures from local transcripts"
+policy:
+  allow_implicit_invocation: false

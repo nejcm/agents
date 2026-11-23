@@ -1,0 +1,237 @@
+import contextlib
+import io
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import unittest
+import unittest.mock
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
+import agent_analytics as aa  # noqa: E402
+
+HOME = os.path.join(HERE, "fixtures", "home")
+REPO = "/work/demo"
+MERGED = [
+    {"url": "https://github.com/o/demo/pull/7", "headRefName": "x", "isCrossRepository": False},
+    {"url": "https://github.com/o/demo/pull/8", "headRefName": "feat/c", "isCrossRepository": False},
+    {"url": "https://github.com/o/demo/pull/9", "headRefName": "zzz", "isCrossRepository": False},
+]
+
+
+def run(*args, home=HOME, repo=REPO):
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        aa.main(["--home", home, "--repo", repo, *args])
+    return out.getvalue()
+
+
+def write(home, rel, recs, raw=""):
+    path = os.path.join(home, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(raw + "".join(json.dumps(r) + "\n" for r in recs))
+    return path
+
+
+def claude_msg(mid, tokens, cwd=REPO, sid="s", content=()):
+    msg = {"id": mid, "usage": {"input_tokens": tokens}, "content": list(content)}
+    return {"type": "assistant", "cwd": cwd, "sessionId": sid, "message": msg}
+
+
+def row(report, label):
+    return next(line for line in report.splitlines() if line.startswith(f"| {label} |"))
+
+
+class ClaudeTest(unittest.TestCase):
+    def test_counts_repo_and_worktree_sessions_only(self):
+        s = aa.claude(HOME, REPO, None)
+        self.assertEqual((s["sessions"], s["subagents"]), (2, 1))
+        self.assertEqual((s["input"], s["cache_write"], s["cache_read"], s["output"]), (13, 100, 1000, 10))
+        self.assertEqual((s["cost"], s["cost_sessions"]), (1.25, 1))
+        self.assertEqual((s["tool_calls"], s["failed"], s["retries"], s["escalations"]), (3, 1, 1, 1))
+
+
+class CodexTest(unittest.TestCase):
+    def test_filters_by_cwd_and_uses_last_cumulative_usage(self):
+        s = aa.codex(HOME, REPO, None)
+        self.assertEqual((s["sessions"], s["subagents"]), (1, 1))
+        self.assertEqual((s["input"], s["cache_read"], s["output"]), (100, 60, 51))
+        self.assertEqual((s["tool_calls"], s["escalations"]), (2, 1))
+
+
+class CursorTest(unittest.TestCase):
+    def test_counts_sessions_and_tool_calls(self):
+        s = aa.cursor(HOME, REPO, None)
+        self.assertEqual((s["sessions"], s["subagents"], s["tool_calls"]), (1, 1, 3))
+
+
+class ReportTest(unittest.TestCase):
+    def test_reports_totals_coverage_and_no_text(self):
+        report = run()
+        self.assertNotIn("SECRET", report)
+        self.assertNotIn(HOME, report)
+        self.assertIn("| Sessions | 2 | 1 | 1 | 4 |", report)
+        self.assertIn("| Cost, USD (harness estimate) | 1.25 | unavailable | unavailable | 1.25 |", report)
+        self.assertIn("Codex: 1 sessions, 1 subagent transcripts. Unavailable: cost, failed, retries.", report)
+        self.assertIn("Sessions per merged PR: unavailable", report)
+
+    def test_links_sessions_to_merged_prs_by_url_or_branch(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(MERGED, f)
+        try:
+            report = run("--merged", f.name)
+        finally:
+            os.unlink(f.name)
+        self.assertIn("Merged PRs in list: 3; with an explicitly linked session: 2.", report)
+        self.assertIn("Sessions linked to a merged PR (PR URL, else a unique same-repo head branch): 2.", report)
+        self.assertIn("Sessions per merged PR: 1.0.", report)
+
+    def test_since_after_all_transcripts_finds_nothing(self):
+        report = run("--since", "2999-01-01")
+        self.assertIn("| Sessions | not found | not found | not found | unavailable |", report)
+
+    def test_missing_harness_is_reported(self):
+        with tempfile.TemporaryDirectory() as empty:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                aa.main(["--home", empty, "--repo", REPO])
+        self.assertIn("Cursor: no transcripts found for this repo.", out.getvalue())
+
+
+class RobustnessTest(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home)
+
+    def test_unreadable_transcript_is_skipped_without_path(self):
+        os.makedirs(os.path.join(self.home, ".claude/projects/-work-demo/dir.jsonl"))
+        locked = write(self.home, ".claude/projects/-work-demo/locked.jsonl", [claude_msg("m", 1)])
+        os.chmod(locked, 0)
+        self.addCleanup(os.chmod, locked, 0o600)
+        report = run(home=self.home)
+        self.assertNotIn(self.home, report)
+        if not os.access(locked, os.R_OK):
+            self.assertIn("1 unreadable transcript files skipped", report)
+
+    def test_scope_normalizes_cwd_and_checks_children(self):
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl",
+              [{"type": "session_meta", "payload": {"id": "c", "cwd": REPO + "/../demo-other"}}])
+        write(self.home, ".claude/projects/-work-demo/p.jsonl", [claude_msg("m1", 1)])
+        write(self.home, ".claude/projects/-work-demo/p/subagents/a.jsonl", [claude_msg("m2", 42, cwd="/elsewhere")])
+        report = run(home=self.home)
+        self.assertIn("| Sessions | 1 | not found |", report)
+        self.assertIn("| Input tokens (uncached) | 1 |", report)
+
+    def test_symlinked_repo_alias_is_in_scope(self):
+        real = os.path.join(self.home, "real")
+        alias = os.path.join(self.home, "alias")
+        os.makedirs(real)
+        os.symlink(real, alias)
+        for i, path in enumerate((alias, real)):
+            enc = re.sub(r"[^A-Za-z0-9]", "-", path)
+            write(self.home, f".claude/projects/{enc}/s.jsonl", [claude_msg("m", 1, cwd=path, sid=str(i))])
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl", [{"type": "session_meta", "payload": {"id": "c", "cwd": real}}])
+        self.assertIn("| Sessions | 2 | 1 |", run(home=self.home, repo=alias))
+
+    def test_empty_invalid_and_mistyped_records(self):
+        write(self.home, ".claude/projects/-work-demo/empty.jsonl", [])
+        write(self.home, ".claude/projects/-work-demo/bad.jsonl", [], raw="{bad\n")
+        write(self.home, ".cursor/projects/work-demo/agent-transcripts/e/e.jsonl", [], raw="{bad\n")
+        self.assertIn("| Sessions | not found | not found | not found |", run(home=self.home))
+        write(self.home, ".claude/projects/-work-demo/t.jsonl",
+              [claude_msg("m", 1, content=[{"type": "tool_use", "id": "t", "name": {"x": 1}}])])
+        self.assertIn("| Tool calls | 1 |", run(home=self.home))
+
+    def test_session_split_across_files_counts_once(self):
+        for name, cost in (("a", 2.0), ("b", 3.0)):
+            write(self.home, f".claude/projects/-work-demo/{name}.jsonl",
+                  [claude_msg("m", 1, sid="S"), {"type": "cost-state", "sessionId": "S", "totalCostUSD": cost}])
+            write(self.home, f".codex/sessions/{name}/rollout-1.jsonl",
+                  [{"type": "session_meta", "payload": {"id": "C", "cwd": REPO}}])
+        report = run(home=self.home)
+        self.assertIn("| Sessions | 1 | 1 |", report)
+        self.assertIn("| Cost, USD (harness estimate) | 3.00 |", report)
+
+    def test_missing_counters_are_unavailable_not_zero(self):
+        write(self.home, ".claude/projects/-work-demo/s.jsonl", [{"type": "user", "cwd": REPO, "sessionId": "s"}])
+        report = run(home=self.home)
+        self.assertIn("| Input tokens (uncached) | unavailable |", report)
+        self.assertIn("| Cost, USD (harness estimate) | unavailable |", report)
+        self.assertIn("Unavailable: cost, tokens.", report)
+
+    def test_url_link_wins_and_ambiguous_or_fork_branch_does_not_link(self):
+        write(self.home, ".claude/projects/-work-demo/a.jsonl",
+              [{"type": "user", "cwd": REPO, "sessionId": "a", "gitBranch": "solo"}, {"type": "pr-link", "prUrl": "u/1"}])
+        write(self.home, ".claude/projects/-work-demo/b.jsonl",
+              [{"type": "user", "cwd": REPO, "sessionId": "b", "gitBranch": "dup"}])
+        write(self.home, ".claude/projects/-work-demo/c.jsonl",
+              [{"type": "user", "cwd": REPO, "sessionId": "c", "gitBranch": "fork"}])
+        merged = [{"url": "u/1", "headRefName": "x", "isCrossRepository": False},
+                  {"url": "u/2", "headRefName": "dup", "isCrossRepository": False},
+                  {"url": "u/3", "headRefName": "dup", "isCrossRepository": False},
+                  {"url": "u/4", "headRefName": "fork", "isCrossRepository": True},
+                  {"url": "u/5", "headRefName": "solo", "isCrossRepository": False}]
+        path = write(self.home, "merged.json", [], raw=json.dumps(merged))
+        report = run("--merged", path, home=self.home)
+        self.assertIn("with an explicitly linked session: 1.", report)
+        self.assertIn("(PR URL, else a unique same-repo head branch): 1.", report)
+
+    def test_vanishing_file_during_period_scan_does_not_leak_path(self):
+        write(self.home, ".claude/projects/-work-demo/s.jsonl", [claude_msg("m", 1)])
+
+        def gone(path):
+            raise FileNotFoundError(2, "No such file", path)
+
+        with unittest.mock.patch.object(aa.os.path, "getmtime", gone):
+            report = run("--since", "2000-01-01", home=self.home)
+        self.assertNotIn(self.home, report)
+        self.assertIn("1 unreadable transcript files skipped", report)
+
+    def test_symlink_inside_repo_to_outside_is_out_of_scope(self):
+        repo, outside = os.path.join(self.home, "repo"), os.path.join(self.home, "outside")
+        os.makedirs(repo)
+        os.makedirs(outside)
+        os.symlink(outside, os.path.join(repo, "link"))
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl",
+              [{"type": "session_meta", "payload": {"id": "c", "cwd": os.path.join(repo, "link")}}])
+        self.assertIn("| Sessions | not found | not found |", run(home=self.home, repo=repo))
+
+    def test_default_repo_uses_logical_pwd_of_symlinked_checkout(self):
+        real, alias = os.path.join(self.home, "real"), os.path.join(self.home, "alias")
+        os.makedirs(real)
+        os.symlink(real, alias)
+        enc = re.sub(r"[^A-Za-z0-9]", "-", alias)
+        write(self.home, f".claude/projects/{enc}/s.jsonl", [claude_msg("m", 1, cwd=alias)])
+        old = os.getcwd()
+        os.chdir(alias)
+        self.addCleanup(os.chdir, old)
+        with unittest.mock.patch.dict(os.environ, {"PWD": alias}):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                aa.main(["--home", self.home])
+        self.assertIn("| Sessions | 1 |", out.getvalue())
+
+    def test_malformed_codex_meta_and_nul_cwd_do_not_abort(self):
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl",
+              [{"type": "session_meta", "payload": {"id": "c", "cwd": REPO, "thread_source": {}}}])
+        write(self.home, ".codex/sessions/b/rollout-1.jsonl",
+              [{"type": "session_meta", "payload": {"id": "d", "cwd": REPO + "/\u0000x"}}])
+        self.assertIn("| Sessions | not found | 1 |", run(home=self.home))
+
+    def test_empty_or_missing_usage_is_unavailable(self):
+        msg = claude_msg("m", 1)
+        msg["message"]["usage"] = {}
+        write(self.home, ".claude/projects/-work-demo/s.jsonl", [msg])
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl",
+              [{"type": "session_meta", "payload": {"id": "c", "cwd": REPO}},
+               {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {}}}}])
+        write(self.home, ".codex/sessions/b/rollout-1.jsonl", [{"type": "session_meta", "payload": {"id": "d", "cwd": REPO}}])
+        self.assertIn("| Input tokens (uncached) | unavailable | unavailable |", run(home=self.home))
+
+
+if __name__ == "__main__":
+    unittest.main()

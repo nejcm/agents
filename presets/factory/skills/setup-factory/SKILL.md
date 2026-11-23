@@ -1,6 +1,6 @@
 ---
 name: setup-factory
-description: Use when the user asks to set up a repo for unattended agent work, build or refresh its factory profile (.factory/profile.md), or rerun one setup phase (explore, interview, run, verification, handoff)
+description: Use when the user asks to set up a repo for unattended agent work, build or refresh its factory profile (.factory/profile.md), or rerun one setup phase (explore, interview, run, verification, analytics, baselines, handoff)
 category: workflow
 disable-model-invocation: true
 ---
@@ -13,11 +13,11 @@ Run from the target repo's root.
 
 ## Invocation
 
-- `setup-factory`: every available phase in order; pending phases are skipped.
+- `setup-factory`: every phase in order.
 - `setup-factory <phase>`: that phase alone (`explore`, `interview`, `run`, `verification`,
-  `handoff`). It reads the profile and updates only its own section.
-  A phase whose inputs are missing from the profile (run without explore, verification without
-  run) says which phase to run first and stops.
+  `analytics`, `baselines`, `handoff`). It reads the profile and updates only its own section.
+  A phase whose inputs are missing from the profile (run or baselines without explore,
+  verification without run) says which phase to run first and stops.
 
 ## Re-runs
 
@@ -35,8 +35,10 @@ your reply.
    readiness, tear down.
 4. **Verification**: [`references/verification.md`](references/verification.md). Generate the
    verify skill with pstack `create-verification-skill`.
-5. **Agent analytics** (pending): the `agent-analytics` skill's baseline; skipped until it exists.
-6. **Repo baselines** (pending): a baselines reference in this skill; skipped until it exists.
+5. **Agent analytics**: [`references/analytics.md`](references/analytics.md). Baseline from the
+   `agent-analytics` skill, counts only.
+6. **Repo baselines**: [`references/baselines.md`](references/baselines.md). CI durations, named
+   steps and bundle size measured once; missing ones recorded as unavailable.
 7. **Hand-off**: summarize the profile in five lines or fewer, list what stayed unavailable or
    unverified, and suggest running `automate-factory` next.
 

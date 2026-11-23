@@ -1,0 +1,10 @@
+{"type": "user", "cwd": "/work/demo", "gitBranch": "feat/a", "message": {"role": "user", "content": "SECRET-PROMPT-TEXT"}}
+{"type": "assistant", "cwd": "/work/demo", "gitBranch": "feat/a", "message": {"id": "m1", "role": "assistant", "usage": {"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 5}, "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "SECRET-PROMPT-TEXT"}}]}}
+{"type": "assistant", "cwd": "/work/demo", "gitBranch": "feat/a", "message": {"id": "m1", "role": "assistant", "usage": {"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 5}, "content": [{"type": "tool_use", "id": "t2", "name": "AskUserQuestion", "input": {"command": "SECRET-PROMPT-TEXT"}}]}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": true, "content": "SECRET-PROMPT-TEXT"}]}}
+{"type": "system", "subtype": "api_error", "retryAttempt": 1, "error": "SECRET-PROMPT-TEXT"}
+{"type": "cost-state", "totalCostUSD": 0.5}
+{"type": "cost-state", "totalCostUSD": 1.25}
+{"type": "pr-link", "prNumber": 7, "prUrl": "https://github.com/o/demo/pull/7"}
+"not a dict"
+{broken json

@@ -61,10 +61,20 @@ Updated: <YYYY-MM-DD> (verification)
 ## Agent analytics
 Updated: <YYYY-MM-DD> (analytics)
 
-<baseline summary from agent-analytics>
+- Period: <all local history / since date>; report `.factory/reports/<date>-agents.md`
+- Sessions: Claude Code <n>, Codex <n>, Cursor <n or not found>
+- Tokens: uncached input <n>, cache write <n>, cache read <n>, output <n>
+- Cost: <USD, harness estimate, from n of m sessions / unavailable>
+- Failed tool calls: <harness> <n> of its <n> tool calls; retries <n>; escalations <n>
+- Sessions per merged PR: <n / unavailable: reason>
+- Unavailable: <harness>: <metrics>
 
 ## Baselines
 Updated: <YYYY-MM-DD> (baselines) at <short SHA>
 
-<measured numbers with source; unavailable ones with reason>
+- CI <workflow> <push to default / pull_request>: median <s>, max <s> over <n> runs, <SHA range>
+  (`gh run list`)
+- Steps: <job> / <step>: <s> (run <id>, `gh run view --json jobs`)
+- Bundle size: <bytes> from artifact `<name>`, run <id> at <SHA> / unavailable: <reason>
+- Local build / test: <s> (<warm or cold>) / unavailable: <reason>
 ```

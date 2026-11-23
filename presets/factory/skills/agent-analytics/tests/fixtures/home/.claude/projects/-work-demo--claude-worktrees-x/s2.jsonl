@@ -1,0 +1,2 @@
+{"type": "user", "cwd": "/work/demo/.claude/worktrees/x", "gitBranch": "feat/b", "message": {"role": "user", "content": "SECRET-PROMPT-TEXT"}}
+{"type": "assistant", "cwd": "/work/demo", "gitBranch": "feat/a", "message": {"id": "m3", "role": "assistant", "usage": {"input_tokens": 2, "output_tokens": 3}, "content": []}}
