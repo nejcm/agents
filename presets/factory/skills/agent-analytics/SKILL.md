@@ -27,16 +27,20 @@ context. Run from the repo root.
    merged=()
    gh pr list --state merged --limit 200 --json url,headRefName,isCrossRepository \
      >| "$prs" && merged=(--merged "$prs")
-   python3 <skill-dir>/scripts/agent_analytics.py "${merged[@]}" [--since <date>] \
-     >| "$report" && mv "$report" .factory/reports/<YYYY-MM-DD>-agents.md
+   rc=0
+   python3 <skill-dir>/scripts/agent_analytics.py "${merged[@]}" [--since <date>] >| "$report" || rc=$?
+   if [ "$rc" = 0 ] || [ "$rc" = 3 ]; then mv "$report" .factory/reports/<YYYY-MM-DD>-agents.md; fi
    rm -f "$prs" "$report"
+   echo "agent_analytics exit $rc"
    ```
 
    Without `gh` or a GitHub remote the report marks sessions per merged PR unavailable.
    `<skill-dir>` is this skill's resolved directory. Needs `python3` (3.8+), standard library only.
 3. **Ignore rule**: if `git check-ignore -q .factory/reports/x` fails, propose adding
    `.factory/reports/` to `.gitignore` and apply it only after the user confirms.
-4. **Reply** with the report path, the totals table, and the coverage lines. Never open
+4. **Drift**: exit 3 means the report was written but has a "Format drift" section; follow
+   [Repair on drift](#repair-on-drift) before replying.
+5. **Reply** with the report path, the totals table, and the coverage lines. Never open
    transcripts to explain a number; this skill reports counts only. For why sessions went wrong,
    point to the `retro` skill.
 
@@ -62,6 +66,9 @@ Scope is this repo: transcripts whose recorded cwd is the repo root or a path un
   session split across files counts once (by session id), and a subagent transcript with a cwd
   outside the repo is dropped. Unreadable files are skipped and counted, never named.
 - A metric with no reading (no usage record, no cost snapshot) is unavailable, not zero.
+- **Format drift**: a harness with 5+ sessions in which an expected record shape (usage records,
+  tool calls, `is_error` flags, `token_count`) was recognised zero times gets a drift warning, its
+  dependent metrics show "unverified" instead of 0, and the script exits 3.
 - Every report lists coverage per harness and the metrics it could not count.
 
 ## Rules
@@ -69,7 +76,21 @@ Scope is this repo: transcripts whose recorded cwd is the repo root or a path un
 - Never print, quote or summarize transcript text, prompts, tool inputs or outputs, and never
   write paths outside the repo into a report. If a number needs explaining, say it needs a
   `retro`, not a transcript read.
-- Field names changed upstream (a harness shows 0 tokens for sessions that clearly used tokens):
-  report the harness as unreliable for that metric, do not patch numbers by hand. Fix the parser
-  and its fixtures in [`tests/`](tests/) together.
+- Never patch numbers by hand; a wrong count is fixed in the parser.
 - Tests: `python3 -B -m unittest discover -s <skill-dir>/tests`.
+
+## Repair on drift
+
+1. Pick ONE recent in-repo transcript of the drifted harness and print its structure only:
+   `python3 <skill-dir>/scripts/agent_analytics.py --shape <file>`. It opens only the containers
+   the parser reads (top level, `message`, its `content` blocks, `usage`, `payload`, `info`,
+   `total_token_usage`, `git`) and prints their keys and value types; every other object or list
+   prints as its type, unknown `type` values and ID-like keys as `?`. Never read the file any
+   other way.
+2. Find the new name or nesting for the missing shape. Extend the parser to accept it and keep the
+   old shape supported.
+3. Add a synthetic fixture for the new shape (made-up values) and a test in [`tests/`](tests/);
+   run the tests.
+4. Rerun the report, show the user the diff, and do not commit unasked.
+5. If the new shape cannot be identified confidently, change nothing: leave the metric
+   "unverified" and say so.

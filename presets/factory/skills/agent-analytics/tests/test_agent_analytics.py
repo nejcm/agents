@@ -233,5 +233,57 @@ class RobustnessTest(unittest.TestCase):
         self.assertIn("| Input tokens (uncached) | unavailable | unavailable |", run(home=self.home))
 
 
+class DriftTest(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home)
+
+    def main(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = aa.main(["--home", self.home, "--repo", REPO])
+        return code, out.getvalue()
+
+    def sessions(self, result):
+        for i in range(aa.DRIFT_MIN_SESSIONS):
+            use = {"type": "tool_use", "id": f"t{i}", "name": "Bash"}
+            user = {"type": "user", "cwd": REPO, "sessionId": str(i), "message": {"content": [result(f"t{i}")]}}
+            write(self.home, f".claude/projects/-work-demo/{i}.jsonl", [claude_msg(f"m{i}", 1, sid=str(i), content=[use]), user])
+
+    def test_renamed_field_is_drift_and_unverified(self):
+        self.sessions(lambda tid: {"type": "tool_result", "tool_use_id": tid, "isError": True})
+        code, report = self.main()
+        self.assertEqual(code, aa.DRIFT_EXIT)
+        self.assertIn("## Format drift", report)
+        self.assertIn("- Claude Code: no tool_result.is_error flags in 5 sessions; format may have changed. Unverified: failed.", report)
+        self.assertIn("| Failed tool calls | unverified |", report)
+        self.assertIn("| Tool calls | 5 |", report)
+
+    def test_expected_shapes_are_not_drift(self):
+        self.sessions(lambda tid: {"type": "tool_result", "tool_use_id": tid, "is_error": False})
+        code, report = self.main()
+        self.assertEqual(code, 0)
+        self.assertNotIn("Format drift", report)
+        self.assertIn("| Failed tool calls | 0 |", report)
+        self.home = HOME
+        self.assertEqual(self.main()[0], 0)
+
+    def test_shape_prints_structure_without_values(self):
+        path = write(self.home, "t.jsonl", [
+            {"type": "privateword", "SECRET key": 1, "message": {"content": [
+                {"type": "tool_use", "input": {"secretkey": "SECRET"}},
+                {"type": "tool_result", "content": "SECRET", "is_error": False}]}},
+            {"type": "assistant", "toolUseResult": {"secretkey": 1}, "x": {"/SECRET/path": 2}},
+            {"type": "event_msg", "payload": {"item": {"result": {"structuredContent": {"SECRETFILE": 1}}}}}])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(aa.main(["--shape", path]), 0)
+        self.assertNotIn("SECRET", out.getvalue())
+        self.assertNotIn("privateword", out.getvalue())
+        self.assertNotIn("secretkey", out.getvalue())
+        self.assertIn('"is_error": "bool"', out.getvalue())
+        self.assertIn('"type": "?"', out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

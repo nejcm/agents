@@ -22,6 +22,22 @@ ESCALATION_TOOLS = {
 }
 CODEX_CHILD_THREADS = {"subagent", "guardian_review"}
 TOKEN_KEYS = ("input", "cache_write", "cache_read", "output")
+# (shape, stats key that counts it, metrics it feeds); zero across this many sessions means drift.
+EXPECTED = {
+    "Claude Code": (("assistant usage records", "tokens_seen", {"tokens"}),
+                    ("tool_use blocks", "tool_calls", {"tool_calls", "failed", "escalations"}),
+                    ("tool_result.is_error flags", "error_flags", {"failed"})),
+    "Codex": (("token_count records", "tokens_seen", {"tokens"}),
+              ("tool call records", "tool_calls", {"tool_calls", "escalations"})),
+    "Cursor": (("tool_use blocks", "tool_calls", {"tool_calls"}),),
+}
+DRIFT_MIN_SESSIONS = 5
+DRIFT_EXIT = 3
+KNOWN_TYPES = {"assistant", "user", "system", "cost-state", "pr-link", "tool_use", "tool_result", "text",
+               "session_meta", "event_msg", "response_item", "token_count", "function_call",
+               "custom_tool_call", "local_shell_call"}
+# --shape descends only into containers the parsers read; message.content holds the Claude blocks.
+SHAPE_CONTAINERS = {"message", "usage", "payload", "info", "total_token_usage", "git"}
 
 
 def new_stats():
@@ -29,7 +45,7 @@ def new_stats():
         "found": False, "sessions": 0, "subagents": 0, "unreadable": 0, "tokens_seen": False,
         "input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost": 0.0,
         "cost_sessions": 0, "tool_calls": 0, "failed": 0, "retries": 0, "escalations": 0,
-        "links": [],
+        "error_flags": 0, "links": [],
     }
 
 
@@ -97,7 +113,7 @@ def blocks(rec):
 
 def new_session():
     return {"usage": {}, "tools": {}, "failed": set(), "retries": set(), "cost": None,
-            "urls": set(), "branches": set(), "child": False, "total": None}
+            "urls": set(), "branches": set(), "child": False, "total": None, "error_flags": 0}
 
 
 def claude_records(recs, path, acc):
@@ -118,7 +134,10 @@ def claude_records(recs, path, acc):
                     acc["tools"][b["id"]] = text(b.get("name"))
         elif kind == "user":
             for b in blocks(rec):
-                if b.get("type") == "tool_result" and b.get("is_error") is True and text(b.get("tool_use_id")):
+                if b.get("type") != "tool_result":
+                    continue
+                acc["error_flags"] += isinstance(b.get("is_error"), bool)
+                if b.get("is_error") is True and text(b.get("tool_use_id")):
                     acc["failed"].add(b["tool_use_id"])
         elif kind == "system" and rec.get("subtype") == "api_error":
             acc["retries"].add(text(rec.get("uuid")) or (path, i))
@@ -163,6 +182,7 @@ def claude(home, repo, since):
         s["tool_calls"] += len(acc["tools"])
         s["failed"] += len(acc["failed"] & acc["tools"].keys())
         s["retries"] += len(acc["retries"])
+        s["error_flags"] += acc["error_flags"]
         s["escalations"] += sum(n in ESCALATION_TOOLS["Claude Code"] for n in acc["tools"].values())
         if acc["cost"] is not None:
             s["cost"] += acc["cost"]
@@ -233,6 +253,29 @@ def cursor(home, repo, since):
     return s
 
 
+def shape(value, key=None, parent=None):
+    if key == "type" and isinstance(value, str):
+        return value if value in KNOWN_TYPES else "?"
+    opened = key is None or key in SHAPE_CONTAINERS or (key, parent) == ("content", "message")
+    if isinstance(value, (dict, list)) and not opened:
+        return type(value).__name__
+    if isinstance(value, dict):
+        return {(k if len(k) <= 40 and re.fullmatch(r"[A-Za-z_]+([0-9][A-Za-z_]*)?", k) else "?"): shape(v, k, key)
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [shape(v) for v in value[:3]]
+    return type(value).__name__
+
+
+def print_shapes(path, limit=40):
+    seen = []
+    for rec in load(path, new_stats()) or []:
+        line = json.dumps(shape(rec), sort_keys=True)
+        if line not in seen and len(seen) < limit:
+            seen.append(line)
+            print(line)
+
+
 def unavailable(name, s):
     missing = set(UNAVAILABLE[name])
     if not s["tokens_seen"]:
@@ -240,6 +283,12 @@ def unavailable(name, s):
     if not s["cost_sessions"]:
         missing.add("cost")
     return missing
+
+
+def drift(name, s):
+    if s["sessions"] < DRIFT_MIN_SESSIONS:
+        return {}
+    return {shape: metrics for shape, key, metrics in EXPECTED[name] if not s[key]}
 
 
 def merged_links(stats, merged):
@@ -269,12 +318,14 @@ def render(repo, since_label, stats, merged):
         ("Cache read tokens", "tokens", "cache_read"),
         ("Output tokens", "tokens", "output"),
         ("Cost, USD (harness estimate)", "cost", "cost"),
-        ("Tool calls", None, "tool_calls"),
+        ("Tool calls", "tool_calls", "tool_calls"),
         ("Failed tool calls", "failed", "failed"),
         ("API retries", "retries", "retries"),
         ("Escalations (questions to the user)", "escalations", "escalations"),
     ]
-    missing = {name: unavailable(name, stats[name]) for name in HARNESSES}
+    drifted = {name: drift(name, stats[name]) for name in HARNESSES}
+    unverified = {name: set().union(*drifted[name].values()) for name in HARNESSES}
+    missing = {name: unavailable(name, stats[name]) - unverified[name] for name in HARNESSES}
     out = [
         f"# Agent analytics: {os.path.basename(repo.rstrip('/'))}",
         "",
@@ -290,6 +341,8 @@ def render(repo, since_label, stats, merged):
         for name in HARNESSES:
             if not stats[name]["found"]:
                 cells.append("not found")
+            elif metric in unverified[name]:
+                cells.append("unverified")
             elif metric in missing[name]:
                 cells.append("unavailable")
             else:
@@ -297,6 +350,13 @@ def render(repo, since_label, stats, merged):
                 cells.append(fmt(values[-1]))
         total = fmt(sum(values)) if values else "unavailable"
         out.append(f"| {label} | " + " | ".join(cells) + f" | {total} |")
+
+    if any(drifted.values()):
+        out += ["", "## Format drift", ""]
+        for name in HARNESSES:
+            for shape in sorted(drifted[name]):
+                out.append(f"- {name}: no {shape} in {stats[name]['sessions']} sessions; format may have changed. "
+                           f"Unverified: {', '.join(sorted(drifted[name][shape]))}.")
 
     out += ["", "## Coverage", ""]
     for name in HARNESSES:
@@ -348,8 +408,12 @@ def main(argv=None):
     ap.add_argument("--repo", default=default_repo(), help="repo root (default: cwd)")
     ap.add_argument("--since", help="YYYY-MM-DD; only transcripts modified on or after it")
     ap.add_argument("--merged", help="file or - with JSON from `gh pr list --state merged --json url,headRefName,isCrossRepository`")
+    ap.add_argument("--shape", metavar="FILE", help="print one transcript's record structure (keys, known types, value types) and exit")
     ap.add_argument("--home", default=os.path.expanduser("~"), help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.shape:
+        print_shapes(args.shape)
+        return 0
     since = None
     if args.since:
         since = datetime.datetime.strptime(args.since, "%Y-%m-%d").timestamp()
@@ -361,7 +425,11 @@ def main(argv=None):
     }
     since_label = f"transcripts modified since {args.since}" if args.since else "all local transcripts"
     sys.stdout.write(render(os.path.realpath(args.repo), since_label, stats, merged))
+    if any(drift(name, stats[name]) for name in HARNESSES):
+        sys.stderr.write("agent_analytics: format drift detected; see the report's Format drift section\n")
+        return DRIFT_EXIT
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
