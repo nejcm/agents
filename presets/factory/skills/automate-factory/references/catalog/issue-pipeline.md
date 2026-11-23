@@ -11,7 +11,7 @@
   one fixed GitHub issue, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). No
   branches or PRs: a fix needs the user's repro spec and a separate verify stage (`fix-issues`).
 - **Write levels**: report, comment.
-- **Steps**: `skills=("<skill-path:fix-issues>")`; set `repo="<owner/repo>"` below `ref`. Fetch is
+- **Steps**: `skills=("<skill-path:fix-issues>")`; fill `repo`. Fetch is
   `fetch_new` then `fetch_context` from
   [`fix-issues` triage.md](../../../fix-issues/references/triage.md#fetch), copied into the run
   script with `fetch_items` and `since_last`, which `fetch_new` calls. For a tracker other than

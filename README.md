@@ -104,8 +104,8 @@ ulis install --global --source . --preset react-web --yes
   verify skill, and writes `.factory/profile.md` in that repo
 - `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from local Claude Code,
   Codex and Cursor transcripts
-- `automate-factory` — schedules report-only recurring runs (retros, PR babysitting, triage,
-  digests) from a catalog
+- `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
+  catalog; report-only by default, comments and gated PRs when opted in
 - `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a jailed pipeline
 
 Its skills only run when invoked explicitly.

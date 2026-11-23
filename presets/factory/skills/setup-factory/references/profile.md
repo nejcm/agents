@@ -39,7 +39,7 @@ Updated: <YYYY-MM-DD> (interview)
 - Results and escalations: <destination>
 - Deploy targets: <environments; agent access>
 - Budgets: <auth: subscription | api-key; per run: <minutes> min, <turns> turns[, $<usd>]; per week; allowed models>
-- Agent PR review: <who; PRs allowed or not>
+- Agent PR review: <who; PRs allowed or not; drafts only or ready ones too>
 - Resolved gaps and contradictions: <gap>: <decision>
 
 ## Run

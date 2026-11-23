@@ -10,8 +10,9 @@ Inward-facing: how agents worked this week and which skills or prompts to fix.
 - **Writes**: report to `.factory/reports/weekly-retro/<date>.md`; at `draft-pr`, the report's
   skill and prompt fixes as one draft PR.
 - **Write levels**: report, draft-pr. `allow`: agent instructions only (`AGENTS.md`, `CLAUDE.md`,
-  `*/AGENTS.md`, `*/CLAUDE.md`, `.claude/*`, `.agents/*`, `.cursor/rules/*`, the project's skill
-  dirs); checks, hooks and lint rules the report proposes stay attended.
+  `*/AGENTS.md`, `*/CLAUDE.md`, `.claude/rules/*`, `.claude/agents/*`, `.claude/commands/*`,
+  `.cursor/rules/*`, the project's skill dirs); checks, hooks, harness settings and lint rules the
+  report proposes stay attended, and `deny` blocks them.
 - **Steps**: `skills=("<skill-path:retro>")`. Fetch copies only this repo's sessions from the
   period into the view; analyze sees nothing else:
 

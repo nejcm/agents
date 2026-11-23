@@ -57,8 +57,9 @@ token in its environment.
   `bwrap` only; elsewhere the jail fails closed.
 - **Gates**, model-free, all must pass or nothing is published: a non-empty diff of at most
   `max_lines` changed lines, no binary files; every path in the entry's `allow` globs and none in
-  `deny` (CI, hooks, `.factory/`, `CODEOWNERS`, `.gitattributes`, the verify skill); existing test
-  files take additions only (no changed, removed or renamed line), new test files are allowed, and
+  `deny` (CI, hooks, agent harness and editor settings, `.factory/`, `CODEOWNERS`,
+  `.gitattributes`, the verify skill); existing test files take additions only (no changed,
+  removed or renamed line), new test files are allowed, and
   added lines carry no skip or focus marker; no credential-shaped text (`sk-ant-`) in the diff or
   summary; the fixed test command passes in the jail with no secret. The test command, allowlist
   and cap are fixed at setup; `allow` must exclude the files that define the test command

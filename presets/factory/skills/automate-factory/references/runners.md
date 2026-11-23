@@ -24,7 +24,8 @@ in the profile's runner line.
 
 Copy [`../assets/run.sh`](../assets/run.sh) to `.factory/automations/<entry>.sh`, fill `<base>`
 with the default branch, `<auth>` with `subscription` or `api-key`, `<level>` with the chosen write
-level, `<turns>` and `<minutes>` (script and unit) with the profile's per-run caps (see
+level, `<owner/repo>` with `gh repo view --json nameWithOwner`, `<turns>`, `<minutes>` (script
+and unit) and, on API-key auth, `<usd>` with the profile's per-run caps (see
 [Budgets](../SKILL.md#rules)), `skills` with the skill dirs the prompt loads (a project skill as
 its repo-relative path, so it is read from the tracked snapshot; an installed one as its absolute
 resolved dir) and the step functions from the entry, `chmod +x`. `repo/` and fetch's `git` reads
@@ -75,8 +76,8 @@ and unprivileged user namespaces, `fix-issues` installed (the script sources its
 [`jail.sh`](../../fix-issues/assets/jail.sh)), the profile's `Agent PR review` allowing agent
 PRs (`pr` also allowing non-draft ones), and a test script in the profile. Fill in the run script:
 
-- `repo` (`gh repo view --json nameWithOwner`), `remote` (the remote whose push URL is that repo),
-  `branch` left as `factory/$entry` except for `pr-babysitting`.
+- `remote` (the remote whose push URL is `repo`), `branch` left as `factory/$entry` except for
+  `pr-babysitting`.
 - `test_cmd`: the profile's test script, self-contained (installs its own dependencies), run in
   the jail with no secret; `allow`: the entry's path globs, confirmed by the user; `max_lines`.
 - `jail_tools`: `jail_resolve claude <the Run recipe's tools>` lines the user confirms, as in

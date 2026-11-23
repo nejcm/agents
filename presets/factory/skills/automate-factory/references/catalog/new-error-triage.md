@@ -10,7 +10,7 @@
   messages, stack traces, payloads.
 - **Writes**: report of new groups with a verdict each. No tracker writes from this entry.
 - **Write levels**: report.
-- **Steps**: `skills=("<skill-path:fix-issues>")`; set `repo="<owner/repo>"` below `ref`. Fetch takes
+- **Steps**: `skills=("<skill-path:fix-issues>")`; fill `repo`. Fetch takes
   `since_last`, `fetch_context` and the
   [agent fetch](../../../fix-issues/references/triage.md#agent-fetch) functions from `fix-issues`
   triage.md, with `err-<source>.fetch.md` (and `.mcp.json` for an MCP tracker) beside the script,

@@ -10,13 +10,15 @@ mkdir -p "$out" .factory/tmp
 view=$(mktemp -d "$PWD/.factory/tmp/$entry.XXXXXX")
 trap 'rm -rf "$view"; git worktree prune' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"
-ref="<base>"
-auth="<auth>" max_turns="<turns>" minutes="<minutes>"
+ref="<base>" repo="<owner/repo>"
+auth="<auth>" max_turns="<turns>" minutes="<minutes>" max_usd="<usd>"
 level="<level>"
 # Higher-precedence credentials would bill the run instead of the chosen auth.
 unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_PROFILE \
   CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
 [ "$auth" = api-key ] || unset ANTHROPIC_API_KEY
+caps=(--max-turns "$max_turns")
+[ "$auth" != api-key ] || caps+=(--max-budget-usd "$max_usd")
 git archive "$ref" | tar -x -C "$view/repo"
 
 # Project skills are repo-relative, read from the tracked snapshot and must resolve inside it;
@@ -43,7 +45,7 @@ analyze() {
 Date: $day
 Snapshot: $ref at $(git rev-parse --short "$ref")"
   (cd "$view" && claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk --max-turns "$max_turns" --output-format text \
+    --no-session-persistence --permission-mode dontAsk "${caps[@]}" --output-format text \
     "$prompt" < /dev/null) \
     > "$view/report.md"
   test -s "$view/report.md"
@@ -55,12 +57,17 @@ post_check() { :; }
 post() { :; }
 
 # draft-pr and pr only. Destination, gates and test command are fixed here at setup.
-repo="<owner/repo>" remote="<remote>" branch="factory/$entry"
+remote="<remote>" branch="factory/$entry"
 title="chore: $entry automation $day"
 test_cmd="<test command>" max_lines=400 summary_cap=65536
+# Patterns stay literal; expanded against the checkout they would miss new files.
+set -f
 allow=("<path glob>")
 deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .husky/* .githooks/*
-  .pre-commit-config.yaml .gitattributes CODEOWNERS */CODEOWNERS .cursor/skills/verify-*)
+  .pre-commit-config.yaml .gitattributes CODEOWNERS */CODEOWNERS .cursor/skills/verify-*
+  *.claude/settings* *.claude/hooks/* .cursor/*.json .cursor/hooks/* .codex/* .gemini/* .mcp.json
+  .vscode/* .devcontainer/*)
+set +f
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
 jail_tools="<confirmed jail_resolve lines>"
 pr="" start="" commit=""
@@ -92,7 +99,7 @@ edit() {
   . "<skill-path:fix-issues>/assets/jail.sh"
   jail_probe "$work" "$PWD/.factory/profile.md"
   jail "$work" timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
-    --no-session-persistence --tools "$tools" --allowedTools "$tools" --max-turns "$max_turns" \
+    --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
     --permission-mode dontAsk "$(cat ".factory/automations/$entry.edit.md")
 Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
