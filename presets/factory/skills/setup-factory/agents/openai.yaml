@@ -1,0 +1,5 @@
+interface:
+  display_name: "Setup Factory"
+  short_description: "Profile a repo and prepare it for unattended agent work"
+policy:
+  allow_implicit_invocation: false

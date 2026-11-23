@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=https://unpkg.com/@nejcm/ulis/schemas/skills.schema.json
+
+"*":
+  skills:
+    - name: https://github.com/cursor/plugins/tree/main/pstack/skills/create-verification-skill
+    - name: https://github.com/cursor/plugins/tree/main/pstack/skills/maintain-verification-skill

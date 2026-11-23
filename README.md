@@ -29,7 +29,7 @@ The tree mirrors a global `~/.ulis/` source directory:
 | [`skills/`](./skills/) | Reusable skill definitions (`SKILL.md`) |
 | [`commands/`](./commands/) | OpenCode slash commands |
 | [`rules/`](./rules/) | Shared coding rules |
-| [`presets/`](./presets/) | Stack-specific skill presets (`react-web`, `react-native`, `web-growth-audit`) |
+| [`presets/`](./presets/) | Skill presets (`react-web`, `react-native`, `web-growth-audit`, `factory`) |
 | [`raw/`](./raw/) | Platform-native fragments copied verbatim into generated output |
 | [`hooks/`](./hooks/) | Lifecycle event hooks |
 | [`tools/`](./tools/) | Build-time helper scripts |
@@ -88,13 +88,32 @@ Each directory has its own `README.md` with format details.
 - `react-web` — React, Next.js, shadcn/ui, frontend design
 - `react-native` — React Native, Expo, best practices
 - `web-growth-audit` — SEO, quality audit, optimization
-- `verification` — generate and maintain a project-local app verification skill
+- `factory` — prepare a repo for unattended agent work (see [Factory preset](#factory-preset))
 
 Apply a preset at install time:
 
 ```bash
 ulis install --global --source . --preset react-web --yes
 ```
+
+## Factory preset
+
+[`presets/factory/`](./presets/factory/) bundles `setup-factory` and pstack's verification skills.
+`setup-factory` explores a repo, interviews only for gaps, runs the app for real, generates a
+verify skill, and writes `.factory/profile.md` in that repo. Its skills only run when invoked
+explicitly.
+
+ULIS resolves preset names only from `~/.ulis/presets/` and its bundled presets, so link this one
+once, then install:
+
+```bash
+mkdir -p ~/.ulis/presets
+ln -s /path/to/this/repo/presets/factory ~/.ulis/presets/factory
+ulis install --global --source . --preset factory
+```
+
+The verification skills used to live in the root [`skills.yaml`](./skills.yaml). ULIS does not
+track external installs, so copies from an earlier install stay until you remove them.
 
 ## Important notes
 
