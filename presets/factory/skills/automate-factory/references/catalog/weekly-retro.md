@@ -1,5 +1,7 @@
 # Weekly retro
 
+Inward-facing: how agents worked this week and which skills or prompts to fix.
+
 - **Trigger**: weekly, Monday 07:00.
 - **Requires**: this repo's Claude Code or Codex transcripts on the runner's machine; `retro`
   installed.

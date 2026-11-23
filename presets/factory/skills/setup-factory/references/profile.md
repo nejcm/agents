@@ -35,7 +35,7 @@ Updated: <YYYY-MM-DD> (interview)
 - Issue sources: <answer>
 - Results and escalations: <destination>
 - Deploy targets: <environments; agent access>
-- Budgets: <per run, per week; allowed models>
+- Budgets: <auth: subscription | api-key; per run: <minutes> min, <turns> turns[, $<usd>]; per week; allowed models>
 - Agent PR review: <who; PRs allowed or not>
 - Resolved gaps and contradictions: <gap>: <decision>
 

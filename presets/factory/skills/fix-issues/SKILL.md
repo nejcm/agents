@@ -97,16 +97,18 @@ mkdir -p "$check" "$evidence"
 git archive "<baseline sha>" .cursor/skills/verify-<app> | tar -x -C "$check"
 cp <stage inputs> "$check/"
 jail_probe "$dir" "$item/spec.md" || { echo "jail boundary failed"; exit 1; }
-jail "$dir" claude -p --model <model> --effort <effort> --safe-mode --strict-mcp-config \
-  --no-session-persistence --tools "<stage tools>" --allowedTools "<stage tools>" \
-  --permission-mode dontAsk --max-budget-usd <budget> "$(cat <reference file> "$item/bans.md")" < /dev/null
+jail "$dir" timeout <stage minutes>m claude -p --model <model> --effort <effort> \
+  --safe-mode --setting-sources '' --strict-mcp-config --no-session-persistence \
+  --tools "<stage tools>" --allowedTools "<stage tools>" --max-turns <stage turns> \
+  --permission-mode dontAsk "$(cat <reference file> "$item/bans.md")" < /dev/null
 ```
 
 - **Boundary**: [`assets/jail.sh`](assets/jail.sh) runs the stage under `bwrap` with an empty
   `HOME`, no inherited environment besides `LANG`, `TERM` and the model's own auth variable,
   `/run/user`, the repo and the Docker socket hidden, `$check` read-only, and only `$dir` and
-  `$evidence` writable; a `.git` inside `$dir` is read-only. `PATH` is the system entries plus
-  `/tmp/bin`, linking the confirmed tools. `$check` and `$evidence` are set inside the jail. The
+  `$evidence` writable; a `.git` inside `$dir` is read-only. `--setting-sources ''` skips user,
+  project and local settings, so a tracked `apiKeyHelper` cannot switch auth; stages need none
+  of them. `PATH` is the system entries plus `/tmp/bin`, linking the confirmed tools. `$check` and `$evidence` are set inside the jail. The
   probe must pass before every stage: the spec file outside the binds is invisible, `HOME` has no
   config, `$check` and `.git` are read-only, `$evidence` is writable, and `claude` and every
   confirmed tool start. A failed probe stops the run.
@@ -117,11 +119,16 @@ jail "$dir" claude -p --model <model> --effort <effort> --safe-mode --strict-mcp
   read-only; `jail` refuses `HOME`, its direct children, `~/.local/share`-level parents and
   config, SSH, GnuPG or keyring paths.
 - **Prerequisites**: Linux with `bwrap` and unprivileged user namespaces (without them `jail`
-  fails closed; macOS is later); model auth through `ANTHROPIC_API_KEY` or
-  `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`, run by the user), never a file from `HOME`;
+  fails closed; macOS is later); model auth through `CLAUDE_CODE_OAUTH_TOKEN` (`claude
+  setup-token`, run by the user; subscription) or, when the profile chose API key,
+  `ANTHROPIC_API_KEY` with `jail_auth=ANTHROPIC_API_KEY`; the jail passes only that one variable,
+  never a file from `HOME`;
   no managed hooks, confirmed as in automate-factory
   [`runners.md`](../automate-factory/references/runners.md#analyze-command). Missing any: stop
   after triage.
+- **Budget**: per stage from the profile's per-run caps (default 30 minutes, 50 turns):
+  `timeout` and `--max-turns`. On API-key auth also pass `--max-budget-usd <usd>` (estimated
+  spend, can overshoot); on subscription auth the dollar budget is unenforced.
 - **Limits**: the network stays shared for package installs and local ports; Docker-based run
   recipes and GUI surfaces that need the user session are `blocked` in v1.
 - **Model tools**: reproduce and verify get `Bash,Read,Grep,Glob`; fix adds `Edit,Write`.

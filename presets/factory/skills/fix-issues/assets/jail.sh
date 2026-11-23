@@ -16,7 +16,7 @@ jail_resolve() {
 }
 
 jail() {
-  local dir=$1 root=$PWD mask=() binds=() path=/tmp/bin name exe top p
+  local dir=$1 root=$PWD mask=() binds=() path=/tmp/bin name exe top p auth=${jail_auth:-CLAUDE_CODE_OAUTH_TOKEN}
   shift
   command -v bwrap > /dev/null || { echo "jail: needs Linux with bwrap; other platforms are later" >&2; return 1; }
   [ -S /run/docker.sock ] && mask=(--ro-bind /dev/null /run/docker.sock)
@@ -35,7 +35,7 @@ jail() {
   done
   (
     for v in $(compgen -e); do
-      case $v in HOME | PATH | LANG | TERM | ANTHROPIC_API_KEY | CLAUDE_CODE_OAUTH_TOKEN) ;; *) unset "$v" 2> /dev/null ;; esac
+      case $v in HOME | PATH | LANG | TERM | "$auth") ;; *) unset "$v" 2> /dev/null ;; esac
     done
     exec bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --tmpfs /run/user --tmpfs "$HOME" \
       --tmpfs "$root" --dir /tmp/bin ${mask[@]+"${mask[@]}"} ${binds[@]+"${binds[@]}"} \

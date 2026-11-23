@@ -1,5 +1,7 @@
 # Weekly digest
 
+Outward-facing: what shipped this week, for people outside the agent loop.
+
 - **Trigger**: weekly, Friday 16:00.
 - **Requires**: `gh` logged in (local) or `pull-requests: read`, `issues: read` (hosted).
 - **Runners**: local, GitHub Actions.
@@ -16,8 +18,10 @@
   gh issue list --state all --search "updated:>=$since" --limit 500 \
     --json number,title,state,createdAt,closedAt > "$view/input/issues.json"
   git log "$ref" --since="$since" --format='%h %an %s' > "$view/input/commits.txt"
-  # local only; hosted marks reports unavailable. fix-issues and security-review are never copied.
-  tar -C .factory --exclude=reports/fix-issues --exclude=reports/security-review -cf - reports | tar -x -C "$view/input"
+  # local only; hosted marks reports unavailable. Never copied: fix-issues, security-review,
+  # weekly-retro.
+  tar -C .factory --exclude=reports/fix-issues --exclude=reports/security-review \
+    --exclude=reports/weekly-retro -cf - reports | tar -x -C "$view/input"
   ```
 
   Post, when chosen, e.g. `gh issue comment <n> --repo <owner/repo> --body-file "$out/$day.md"`,

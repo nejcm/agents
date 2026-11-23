@@ -4,6 +4,10 @@ Where an entry runs and what gets written for it. The prompt always lives in
 `.factory/automations/<entry>.md`, copied from the entry's `Prompt` with placeholders filled.
 Paths in prompts are relative to the run's view: `repo/`, `input/`, `skills/<name>/`.
 
+Model auth is subscription first: local runners use the runner identity's existing `claude`
+login; hosted runs use `CLAUDE_CODE_OAUTH_TOKEN`. Tell the user to check their plan's terms for
+unattended use; these runs draw on the plan's usage limits.
+
 ## Analyze command
 
 Every runner uses the isolated command in [`safety.md`](safety.md#steps). Before offering a
@@ -17,9 +21,11 @@ in the profile's runner line.
 ## Local: systemd user timer or cron
 
 Copy [`../assets/run.sh`](../assets/run.sh) to `.factory/automations/<entry>.sh`, fill `<base>`
-with the default branch, `skills` with the skill dirs the prompt loads (a project skill as its
-repo-relative path, so it is read from the tracked snapshot; an installed one as its absolute
-resolved dir) and the step functions from the entry, `chmod +x`. `repo/` and fetch's `git` reads use the local `<base>`
+with the default branch, `<auth>` with `subscription` or `api-key`, `<turns>` and the unit's
+`<minutes>` with the profile's per-run caps (see [Budgets](../SKILL.md#rules)), `skills` with the
+skill dirs the prompt loads (a project skill as its repo-relative path, so it is read from the
+tracked snapshot; an installed one as its absolute resolved dir) and the step functions from the
+entry, `chmod +x`. `repo/` and fetch's `git` reads use the local `<base>`
 branch, as fresh as the user's last pull; the prompt states its SHA.
 Then propose one of these, with absolute paths:
 
@@ -32,7 +38,7 @@ Description=factory <entry> for <repo>
 Type=oneshot
 WorkingDirectory=<repo-root>
 ExecStart=<repo-root>/.factory/automations/<entry>.sh
-TimeoutStartSec=45min
+TimeoutStartSec=<minutes>min
 ```
 
 ```ini
@@ -62,8 +68,9 @@ confirms, with `crontab -e` or by editing the output of `crontab -l` and piping 
 ## GitHub Actions (report-only)
 
 Copy [`../assets/report.yml`](../assets/report.yml) to `.github/workflows/factory-<entry>.yml`
-as a proposed diff: replace `ENTRY` with the entry name and `VERSION` with the installed
-`claude --version`, pin each `uses:` to its tag's commit SHA
+as a proposed diff: replace `ENTRY` with the entry name, `VERSION` with the installed
+`claude --version`, `MINUTES` and `TURNS` with the profile's per-run caps, pin each `uses:` to
+its tag's commit SHA
 (`gh api repos/<owner>/<action>/commits/<tag> --jq .sha`, tag kept as a trailing comment), and
 fill the view's skills (committed copies only, from `repo/`) and the fetch step from the entry;
 the fetch step's `ref=HEAD` is the default-branch checkout. Event values reach the fetch step only
@@ -71,8 +78,10 @@ through `env:` (`TARGET`, `github.event.*`), never as `${{ }}` inside `run:`. Ke
 `permissions:` to `contents: read` plus only what the fetch step reads (`actions: read` for CI
 logs, `pull-requests: read` and `checks: read` for PR state, `issues: read`). Never grant a write
 scope in v1. The prompt file and every skill it loads must be committed: a hosted runner sees only
-the checkout. Print the secret setup step (`gh secret set ANTHROPIC_API_KEY`, run by the user)
-without touching the value.
+the checkout. Print the secret setup steps, run by the user, without touching the value:
+`claude setup-token` (subscription), then `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. An API key
+is the alternative: `gh secret set ANTHROPIC_API_KEY`, that name in the analyze step's `env:`
+instead of the OAuth one, and `--max-budget-usd`.
 
 The template triggers on `workflow_dispatch` only. Its automatic trigger (`schedule`, `push`,
 `workflow_run`) is a second proposed diff, applied after the smoke run passes.

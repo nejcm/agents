@@ -17,7 +17,7 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: MINUTES
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,13 +43,13 @@ jobs:
 
       - name: Analyze (read-only)
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           prompt="$(cat .factory/automations/ENTRY.md)
           Date: $(date +%F)"
           cd "$RUNNER_TEMP/view"
           claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
-            --no-session-persistence --permission-mode dontAsk --output-format text \
+            --no-session-persistence --permission-mode dontAsk --max-turns TURNS --output-format text \
             "$prompt" < /dev/null > "$RUNNER_TEMP/report.md"
           test -s "$RUNNER_TEMP/report.md"
 

@@ -63,10 +63,12 @@ only to entries the user names or whose smoke run failed.
 - **Writes**: freely only to `.factory/`. Runner config (workflow files, systemd units, crontab
   lines, scheduler settings) is shown as a proposed diff and applied only after the user confirms.
 - **Secrets**: never ask for, read, store or write one. Name a secret by its variable or setting
-  name only ("repo secret `ANTHROPIC_API_KEY`") and print the steps for the user to set it.
-- **Budgets**: apply the profile's per-run budget with the harness's own cap where it has one
-  (Claude Code `--max-budget-usd`; check `--help` for others); otherwise record the budget as
-  unenforced.
+  name only ("repo secret `CLAUDE_CODE_OAUTH_TOKEN`") and print the steps for the user to set it.
+- **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 50 turns when
+  unset: `--max-turns` (print mode; absent from `--help` but accepted and validated), and the
+  minutes as `timeout-minutes` (Actions) or `TimeoutStartSec` (systemd); cron has no time cap,
+  so record it unenforced there. `--max-budget-usd` caps estimated API spend and can overshoot:
+  pass it only on API-key auth; on subscription auth record the dollar budget as unenforced.
 - **Loading skills**: the run script copies the skills a prompt needs into the run's view, and
   the prompt reads `skills/<name>/SKILL.md` by path, never by invocation;
   `disable-model-invocation` blocks that.
