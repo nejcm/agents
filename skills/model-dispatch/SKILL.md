@@ -22,7 +22,7 @@ Before the first dispatch in a session, establish two things:
    or ForgeCode.
    Never shell out to your own host's CLI — that recurses. Use the host's
    native subagent/workflow mechanism for same-host work.
-2. **Which CLIs exist.** `command -v codex claude agent cursor-agent opencode antigravity`.
+2. **Which CLIs exist.** `command -v codex claude agent cursor-agent opencode antigravity agy`.
    Absence of a binary rules that path out; say so rather than
    pretending the dispatch happened. A CLI being installed does not mean it is
    authenticated — each reference opens with its own precondition check.

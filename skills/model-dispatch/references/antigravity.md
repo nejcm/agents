@@ -33,12 +33,13 @@ The listing exposes most models as `<family>-<effort>` variants, such as
 
 Never combine a variant id with a different `--effort` — the CLI rejects it
 (`--model ...-low conflicts with --effort=high`). A requested level with no
-listed variant has no equivalent; say so instead of taking the default.
+listed variant has no equivalent; the CLI rejects it (`has no "xhigh" effort`).
+Say so instead of taking the default.
 
 ## Dispatch
 
-`-p` takes the prompt as its own value, so put every other flag before it. A
-bare `-p` followed by `--model` swallows the flag as the prompt and exits 2.
+Unlike `claude -p`, `-p` takes the prompt as its own value. Pass it last; a
+bare `-p` before `--model` swallows the flag as the prompt and exits 2.
 
 ```bash
 test -s "$PROMPT_FILE" || { printf 'Missing prompt: %s\n' "$PROMPT_FILE" >&2; exit 1; }
@@ -46,6 +47,7 @@ antigravity \
   --model <id-from-antigravity-models> \
   --output-format json \
   --mode plan \
+  --add-dir "$ARTIFACT_DIR" \
   -p "$(cat "$PROMPT_FILE")" < /dev/null \
   > "$ARTIFACT_DIR/run.json" 2> "$ARTIFACT_DIR/run.stderr.log"
 status=$?
@@ -57,26 +59,31 @@ printf '%s\n' "$status" > "$ARTIFACT_DIR/run.exit-status"
 | `-p` / `--print` | Non-interactive; its value is the prompt |
 | `--model` | The requested id, verbatim from `antigravity models` |
 | `--effort` | `low`/`medium`/`high`/`xhigh`/`max`, only with a base id |
-| `--output-format json` | One JSON object: `conversation_id`, `status`, `response`, `usage`, and `denied_actions` when any |
-| `--json-schema` | Enforce structured output, inline or as a schema file path |
-| `--mode` | `plan`, `accept-edits`, or `auto` |
+| `--output-format json` | One JSON object: `conversation_id`, `status`, `response`, `usage`; `denied_actions`, `structured_output`, or `error` when present |
+| `--json-schema` | Enforce structured output, inline or as a file path; read `.structured_output`, not `.response` |
+| `--mode` | `plan`, `accept-edits`, or `auto` (account-gated; falls back to default with only a stderr warning) |
 | `--sandbox` | Terminal restrictions for the delegate |
-| `--add-dir` | Widen the workspace beyond the cwd (repeatable) |
-| `--print-timeout` | Cap the turn; `0` (default) waits until it completes |
+| `--add-dir` | Widen the workspace beyond the cwd (repeatable); reads outside it are auto-denied |
+| `--print-timeout` | Cap the turn as a Go duration (`30s`, `5m`); bare `30` exits 2. `0s` (default) waits |
 
 ## Permissions and isolation
 
 Headless mode cannot prompt: a tool needing approval is auto-denied, the run
 still reports `"status":"SUCCESS"`, and the denial shows only in
 `denied_actions` (often with an empty `response`). Check `denied_actions`
-before trusting a result; any entry means partial work.
+before trusting a result; any entry means partial work. `--add-dir` every
+directory outside the cwd the delegate must read, including `$ARTIFACT_DIR`.
 
-- **Read-only survey or review:** `--mode plan`. A request to write produces a
-  plan instead of edits, and shell commands are planned, not run — write the
-  diff or command output to a file and pass its path.
-- **Writing:** a permission allow-rule in settings (`--settings` takes a
-  session-only JSON object or file), `--mode accept-edits` for file edits, or
-  `--dangerously-skip-permissions` only with explicit authorization. Keep
+- **Read-only survey or review:** `--mode plan`. Edits become a plan artifact
+  instead; shell commands are planned or auto-denied, never run. Write the diff
+  or command output to a file, pass its path, and tell the prompt not to run
+  shell commands.
+- **Default mode is not read-only:** omitting `--mode` lets the delegate edit
+  files in a trusted workspace.
+- **Writing:** `--mode accept-edits` approves file edits only. Shell commands,
+  such as running checks, need allow-rules via `--settings`
+  (`'{"permissions":{"allow":["command(<pattern>)"]}}'`, session-only) or
+  `--dangerously-skip-permissions` with explicit authorization. Keep
   `--sandbox` on.
 
 The CLI has no worktree flag. Create the worktree first and run the delegate
@@ -85,14 +92,23 @@ from inside it; parallel writers each need their own.
 ## Resume for fixes
 
 Save `conversation_id` from the JSON output and pass it back with the same
-model:
+model, mode, and flags; a dropped `--mode` falls back to the writable default.
 
 ```bash
-CONVERSATION_ID="$(jq -r .conversation_id "$ARTIFACT_DIR/run.json")"
-test -n "$CONVERSATION_ID" || { printf 'Missing conversation id\n' >&2; exit 1; }
-antigravity --model <same-model> --output-format json \
+CONVERSATION_ID="$(jq -r '.conversation_id // empty' "$ARTIFACT_DIR/run.json")"
+FIX="$ARTIFACT_DIR/fix-$ROUND"
+test -n "$CONVERSATION_ID" && test -s "$FIX.prompt.md" ||
+  { printf 'Missing conversation id or fix prompt\n' >&2; exit 1; }
+antigravity \
+  --model <same-model> \
+  --output-format json \
+  --mode <same-mode> \
+  --add-dir "$ARTIFACT_DIR" \
   --conversation "$CONVERSATION_ID" \
-  -p "$(cat "$FIX_PROMPT_FILE")" < /dev/null > "$ARTIFACT_DIR/fix.json"
+  -p "$(cat "$FIX.prompt.md")" < /dev/null \
+  > "$FIX.json" 2> "$FIX.stderr.log"
+status=$?
+printf '%s\n' "$status" > "$FIX.exit-status"
 ```
 
 `--continue` / `-c` resumes the most recent conversation; prefer the explicit
