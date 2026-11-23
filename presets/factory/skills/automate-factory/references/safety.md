@@ -17,7 +17,8 @@ write-scoped token in its environment.
 
 | Step | Model | Reads | Capability |
 | ---- | ----- | ----- | ---------- |
-| fetch | none | the source (`gh`, `git`, logs) | read-only calls; writes into the run's view only |
+| fetch | none | the source (`gh`, `git`, logs, a recorded CLI command) | read-only calls; writes into the run's view only |
+| agent fetch | yes | one source, through its recorded read-only MCP tools, or a CLI's output on stdin | no built-in tools; its stdout enters the view only through `check_items.py` |
 | analyze | yes | the run's view: `repo/` (tracked files of the default branch), `input/`, `skills/` | file read and search only; the report is its stdout |
 | post | none | the report file | sends it unchanged to one fixed destination |
 
@@ -27,6 +28,15 @@ write-scoped token in its environment.
   other sessions stay out of reach; `--safe-mode` drops hooks, plugins, skills and `CLAUDE.md`.
   Managed (policy) settings still apply: if they define hooks, analyze is unavailable on that
   runner. A runner that cannot run this command is not offered an entry with untrusted input.
+- **Agent fetch**: for sources without a script fetch, per `fix-issues`
+  [triage.md](../../fix-issues/references/triage.md#agent-fetch). The MCP server holds the
+  credential, out of the model's reach, and the agent can call only the allowlisted read tools of
+  that one server, given the managed-policy precondition in
+  [runners.md](runners.md#analyze-command). Residual risk: injected item text can make it run extra read-only queries on
+  the same source; with no write tools, nothing is written. Prefer a read-only token where the
+  source offers one, and allowlist no tool that takes a URL or reaches another host. CLI and API
+  sources never give the agent a shell: the command runs model-free and the agent only reshapes
+  its output.
 - **No unattended fixes**: no scheduled run edits code, pushes, opens PRs or replies to threads.
   Entries that lead to changes name a follow-up the user starts from the report, attended, in
   their own harness, choosing what to apply.

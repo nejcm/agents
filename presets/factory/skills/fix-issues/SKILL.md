@@ -25,18 +25,16 @@ is their attended follow-up.
 
 ## Sources
 
-v1 reads one tracker, GitHub Issues through `gh`, and only when the profile's `Interview` names it
-as the source of truth and `Integrations` shows `gh` available. Error-tracker groups enter only
-through a `new-error-triage` report, as items without an issue number. Later, not in v1: Linear,
-Slack threads, and error trackers read directly. Each needs a model-free fetch with read-only
-calls and a fixed-destination post before it is added; a profile naming one of them as the
-source of truth gets "unavailable in v1" and a stop.
+Any issue or error source with a `Fetch` line in the profile's `Integrations`: GitHub Issues
+through `gh`, the rest through [agent fetch](references/triage.md#agent-fetch), as
+`<prefix>-<id>` items keyed by the source's own ID. A source without a `Fetch` line: say so and
+stop. Writes go to GitHub only; tickets and comments back to other sources are later.
 
 ## Stages
 
 | Stage | Role (`orchestration`) | Reads | Capability |
 | ----- | ---- | ----- | ---------- |
-| fetch | none | tracker, `git` | read-only calls into the view |
+| fetch | none, or [agent fetch](references/triage.md#agent-fetch) | tracker, `git` | read-only calls into the view |
 | triage | Reviewer/Judge, `medium` | the view | file read and search only; report on stdout |
 | reproduce | Verifier | user's spec, base export | jailed shell; its directory is discarded |
 | fix | Builder | user's spec, repro record, patch checkout | jailed shell and edits; the coordinator commits them |
@@ -58,8 +56,8 @@ results reach it only as projected enum lines, and the user reads the reports an
    - `base=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)`, then
      `git fetch "$remote" "$base"` and `base_sha=$(git rev-parse FETCH_HEAD)`
    - `me=$(gh api user --jq .login)`
-   - the item IDs the user names: issue numbers, or `err-<group id>` from a `new-error-triage`
-     report.
+   - the item IDs the user names: issue numbers, or `<prefix>-<id>` (`err-<source>-<id>` for
+     error groups) as `check_items.py` named their files.
 2. **Triage**: per [`references/triage.md`](references/triage.md), or start from a scheduled
    report's verdict lines. Show the user the projected verdict table and the report path.
 3. **Ticket**, for an `err-` item with verdict `new-bug` the user approves: per
@@ -77,7 +75,7 @@ results reach it only as projected enum lines, and the user reads the reports an
    reproduction, no fix.
 7. **Fix and verify**: [`references/fix.md`](references/fix.md).
 8. **Post** per [Writes](#writes). Move whatever of `$item/spec.md` and `$item/evidence` this run
-   produced into `.factory/reports/fix-issues/items/<id>/`, keyed by issue so any later retry
+   produced into `.factory/reports/fix-issues/items/<id>/`, keyed by item so any later retry
    finds it, and append a dated model-free entry to its `summary.md`: projected outcomes, tested
    SHAs, PR URL. Then release the claim. A stop after the claim does the same.
 
@@ -141,7 +139,7 @@ jail "$dir" timeout <stage minutes>m claude -p --model <model> --effort <effort>
 
 ## Claims
 
-Work is keyed by the issue number, so a retry finds the same work:
+Work is keyed by the item ID, so a retry finds the same work:
 
 - The claim is `mkdir "$item"`, with `item=.factory/reports/fix-issues/tmp/fix-<id>` (made
   absolute for the jail), only after the ignore check in [Rules](#rules) passes. If it exists,
@@ -156,6 +154,8 @@ Work is keyed by the issue number, so a retry finds the same work:
       and .headRepository.nameWithOwner == \"$repo\"
       and any(.closingIssuesReferences[]; .number == <id>)) | \"\(.number) \(.headRefOid)\""
   ```
+
+  For a `<prefix>-<id>` item, drop the `closingIssuesReferences` clause; the branch name matches.
 
   A match is resumed: the fix starts from its head (`git fetch "$remote" "refs/pull/<n>/head"`,
   checked against `headRefOid`) and the PR is updated, never a second one opened. Any other PR on
@@ -173,8 +173,9 @@ Only the coordinator writes, after showing the command and the file it sends and
 Destinations come from step 1; bodies are files sent unchanged with `--body-file`; titles are
 built from projected fields only.
 
-- **Ticket**: first look for one already filed for the group, by the local map and by marker:
-  `grep "^<group id> " .factory/reports/fix-issues/tickets.tsv` and
+- **Ticket**: `<group id>` is the item ID without `err-`, so `<source>-<id>`. First look for one
+  already filed for the group, by the local map and by marker:
+  `awk -v id="<group id>" '$1 == id' .factory/reports/fix-issues/tickets.tsv` and
   `gh issue list --repo "$repo" --state all --search "\"fix-issues-error: <group id>\" in:body" --json number --jq '.[].number'`.
   Found: continue under that number. Else build the body model-free from the triage section
   (`awk` in [`triage.md`](references/triage.md#projection)) plus the line
@@ -186,11 +187,11 @@ built from projected fields only.
   rejected push is a stop. Then at once append `<id> <commit>` to
   `.factory/reports/fix-issues/pushed.tsv`.
 - **Draft PR**: when the profile's `Agent PR review` allows agent PRs. Body model-free:
-  `Fixes #<id>`, the tested `$before` and `$commit` SHAs, then `spec.md` and the stages'
-  `repro.md`, `fix.md` and `verify.md` concatenated. Update the
+  `Fixes #<id>` (or `Source item: <prefix>-<id>`), the tested `$before` and `$commit` SHAs, then
+  `spec.md` and the stages' `repro.md`, `fix.md` and `verify.md` concatenated. Update the
   claimed PR with `gh pr edit <n> --repo "$repo" --body-file <file>`, else
-  `gh pr create --repo "$repo" --draft --base "$base" --head factory/fix-<id> --title "fix: #<id> <feature>" --body-file <file>`.
-- **Comment**: at most one per issue per run, after
+  `gh pr create --repo "$repo" --draft --base "$base" --head factory/fix-<id> --title "fix: <#id or prefix-id> <feature>" --body-file <file>`.
+- **Comment**: GitHub issues only, at most one per issue per run, after
   `gh issue view <id> --repo "$repo" --json state` shows it open:
   `gh issue comment <id> --repo "$repo" --body-file <file>`, the file built from the projected
   outcome, the tested SHAs and the PR or artifact URL only. Triage-only outcomes (duplicate, not

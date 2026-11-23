@@ -16,7 +16,11 @@ the items the user selected. Skip the phase when there are no gaps.
 ## Topics (gaps only)
 
 1. **Issue sources**: GitHub Issues, Linear, Jira, Slack channels, error trackers; which one is
-   the source of truth.
+   the source of truth. For each one an agent should read, its fetch: the tool (MCP server name,
+   CLI or API), the read-only operations (MCP tool names, or the exact CLI or API command), the
+   query and filters (project, labels, states, lookback), the field holding the item's immutable
+   ID, and a short prefix (`err-<source>` for an error tracker). Pre-fill from the server's tool list or
+   the CLI's help; the user confirms.
 2. **Error and analytics tools**: for each detected or named tool, how an agent reaches it
    (MCP server, logged-in CLI, API env var, none).
 3. **Results and escalations**: where reports, questions and failures go (PR comment, issue,
@@ -30,8 +34,8 @@ the items the user selected. Skip the phase when there are no gaps.
 
 ## Output
 
-Fill the profile's `Integrations` (reach method per tool) and `Interview` sections with the
-answers, each marked "user, interview, <date>". Record each resolved gap under `Resolved gaps
-and contradictions` and leave the `Repo` section untouched; on later runs, skip gaps already
+Fill the profile's `Integrations` (reach method per tool, `Fetch` lines) and `Interview` sections
+with the answers, each marked "user, interview, <date>". Record each resolved gap under `Resolved
+gaps and contradictions` and leave the `Repo` section untouched; on later runs, skip gaps already
 resolved there. For an integration that is not reachable yet, print the setup steps (install the
 MCP server, `<cli> login`, export the env var) and record it as unavailable.

@@ -29,6 +29,9 @@ Updated: <YYYY-MM-DD> (interview)
 | ---- | ------- | ----------- | ------ |
 | <GitHub> | <issues, PRs> | <`gh` logged in> | <available / unavailable: reason> |
 
+- Fetch <tool>: prefix `<prefix>`; <`gh` | mcp `<server>` tools `<tool>`, ... | cli `<command>`>;
+  query <project, labels, states, lookback>; id `<field>`; extras <fields>; confirmed <date>
+
 ## Interview
 Updated: <YYYY-MM-DD> (interview)
 

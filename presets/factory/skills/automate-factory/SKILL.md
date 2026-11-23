@@ -35,7 +35,10 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills); on a hosted
    runner only a committed project copy counts. A skill not found makes the entry unavailable on
-   that runner. Also fill `<app>`, `<base>` and the entry's choices.
+   that runner. Also fill `<app>`, `<base>` and the entry's choices. For an agent-fetched source,
+   write `<prefix>.fetch.md` and, for MCP, `<prefix>.mcp.json` per `fix-issues`
+   [agent fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for
+   confirmation, since it names the commands the server runs.
 6. **Smoke run as the runner** (activation gate): its checkout, identity, tools and secrets, in
    dry-run mode, per [`references/runners.md`](references/runners.md#smoke-run). A run on this
    laptop does not prove a hosted runner. On failure, report the exact error, leave the entry

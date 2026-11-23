@@ -10,8 +10,10 @@ Fix only when all hold, checked by the coordinator:
 
 - The repro line is `repro: outcome=reproduced` and the user confirmed the evidence shows the
   broken state.
-- `gh issue view <id> --repo "$repo" --json closedByPullRequestsReferences --jq '.closedByPullRequestsReferences[].number'`
-  lists no PR other than this work's claimed draft. Another one: the user decides whether it is a
+- For a GitHub issue,
+  `gh issue view <id> --repo "$repo" --json closedByPullRequestsReferences --jq '.closedByPullRequestsReferences[].number'`
+  lists no PR other than this work's claimed draft; for a `<prefix>-<id>` item, triage's `ref`
+  and the branch check in [Claims](../SKILL.md#claims) stand in. Another one: the user decides whether it is a
   fix artifact for [verify mode](reproduce.md#verify-an-existing-fix); never author over it.
 - The profile allows agent PRs, or the user accepts a local commit as the outcome.
 
@@ -43,7 +45,7 @@ could edit them:
 
 ```bash
 git -C "$item/patch" add -A
-git -C "$item/patch" -c core.hooksPath=/dev/null commit -q -m "fix: <feature> (#<id>)"
+git -C "$item/patch" -c core.hooksPath=/dev/null commit -q -m "fix: <feature> (<#id or prefix-id>)"
 commit=$(git -C "$item/patch" rev-parse HEAD)
 ```
 

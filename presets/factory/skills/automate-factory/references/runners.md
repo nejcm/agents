@@ -14,8 +14,10 @@ Every runner uses the isolated command in [`safety.md`](safety.md#steps). Before
 runner, check its Claude Code has the flags (`claude --help` lists `--restricted`, `--safe-mode`,
 `--no-session-persistence`). Managed policy (settings files and drop-ins, OS or server policy,
 managed plugins) survives `--safe-mode` and has several sources, so it is a precondition the
-user confirms: no managed hooks or managed plugins apply to the runner's identity. Unconfirmed
-means analyze is unavailable there. A GitHub-hosted runner has no managed policy. Record both
+user confirms: no managed hooks or managed plugins apply to the runner's identity, and, for
+agent fetch, no managed permission allow rules for MCP tools and no managed auth setting
+(`apiKeyHelper`, provider or token env). Unconfirmed means analyze, or agent fetch, is
+unavailable there. A GitHub-hosted runner has no managed policy. Record both
 in the profile's runner line.
 
 ## Local: systemd user timer or cron
