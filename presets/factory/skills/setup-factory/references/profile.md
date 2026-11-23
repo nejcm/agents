@@ -86,6 +86,6 @@ Updated: <YYYY-MM-DD> (automate-factory)
 
 - Runners: systemd user <yes/no>, cron <yes/no>, isolated analyze <Claude Code version / no:
   reason; managed policy confirmed none <yes/no>>, GitHub Actions <yes/no> (<command or source>)
-- <entry>: <runner>, <trigger>; files <paths>; smoke run <YYYY-MM-DD> <pass / fail: error>;
-  status <active / proposed / failed: reason>
+- <entry>: <runner>, <trigger>; level <report / comment / draft-pr / pr>; files <paths>; smoke
+  run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>
 ```

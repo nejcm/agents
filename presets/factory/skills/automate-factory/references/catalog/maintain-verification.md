@@ -7,6 +7,7 @@
 - **Input**: the repo's tracked files and its commit graph since the verify skill last changed.
   Trusted.
 - **Writes**: report to `.factory/reports/maintain-verification/<date>.md` or the job summary.
+- **Write levels**: report.
 - **Steps**: fetch lists what changed since the skill's last commit, hashes and paths only (no
   commit messages):
 

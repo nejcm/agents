@@ -7,8 +7,9 @@ Outward-facing: what shipped this week, for people outside the agent loop.
 - **Runners**: local, GitHub Actions.
 - **Input**: the week's merged PRs, opened and closed issues, default-branch commits, and, locally,
   the week's `.factory/reports/`. Untrusted: PR and issue titles and bodies, commit messages.
-- **Writes**: report to `.factory/reports/weekly-digest/<date>.md` or the job summary. On the
-  local runner, optionally posted by the post step to one fixed destination.
+- **Writes**: report to `.factory/reports/weekly-digest/<date>.md` or the job summary; at
+  `comment`, posted unchanged to one fixed destination.
+- **Write levels**: report, comment.
 - **Steps**: fetch, with `since` the date 7 days back (the `python3` one-liner in
   [`weekly-agent-analytics.md`](weekly-agent-analytics.md)):
 
@@ -24,9 +25,10 @@ Outward-facing: what shipped this week, for people outside the agent loop.
     --exclude=reports/weekly-retro -cf - reports | tar -x -C "$view/input"
   ```
 
-  Post, when chosen, e.g. `gh issue comment <n> --repo <owner/repo> --body-file "$out/$day.md"`,
-  with `post_check() { gh issue view <n> --repo <owner/repo> > /dev/null; }`.
-- **Choices**: day and time; post or not, and where.
+  Comment, locally: `post() { gh issue comment <n> --repo <owner/repo> --body-file "$out/$day.md"; }`
+  with `post_check() { gh issue view <n> --repo <owner/repo> > /dev/null; }`; on Actions, the
+  template's `publish` job.
+- **Choices**: day and time; where to post at `comment`.
 
 ## Prompt
 

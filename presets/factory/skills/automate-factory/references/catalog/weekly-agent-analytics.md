@@ -6,6 +6,7 @@
 - **Runners**: local only. Hosted runners have no transcripts.
 - **Input**: counter fields only; no model runs and no text is read.
 - **Writes**: `.factory/reports/<date>-agents.md` only.
+- **Write levels**: report.
 - **Steps**: `skills=("<skill-path:agent-analytics>")`; fetch none; analyze is the parser. Every
   command's status reaches `set -e`, and the report comes from this run's view:
 

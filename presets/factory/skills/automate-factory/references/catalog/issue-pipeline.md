@@ -7,8 +7,10 @@
 - **Runners**: local. The follow-up reads the report from this checkout.
 - **Input**: open issues created since the newest earlier report, less a day of overlap, that no
   earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted.
-- **Writes**: report only, to `.factory/reports/issue-pipeline/<date>.md`. No tracker writes,
-  branches or PRs from this entry.
+- **Writes**: report to `.factory/reports/issue-pipeline/<date>.md`; at `comment`, the report on
+  one fixed GitHub issue, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). No
+  branches or PRs: a fix needs the user's repro spec and a separate verify stage (`fix-issues`).
+- **Write levels**: report, comment.
 - **Steps**: `skills=("<skill-path:fix-issues>")`; set `repo="<owner/repo>"` below `ref`. Fetch is
   `fetch_new` then `fetch_context` from
   [`fix-issues` triage.md](../../../fix-issues/references/triage.md#fetch), copied into the run

@@ -9,6 +9,7 @@
   no earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted:
   messages, stack traces, payloads.
 - **Writes**: report of new groups with a verdict each. No tracker writes from this entry.
+- **Write levels**: report.
 - **Steps**: `skills=("<skill-path:fix-issues>")`; set `repo="<owner/repo>"` below `ref`. Fetch takes
   `since_last`, `fetch_context` and the
   [agent fetch](../../../fix-issues/references/triage.md#agent-fetch) functions from `fix-issues`

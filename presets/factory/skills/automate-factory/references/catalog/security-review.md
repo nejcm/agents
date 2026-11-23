@@ -7,6 +7,7 @@
 - **Input**: the pushed diff. Diffs from other authors are untrusted.
 - **Writes**: report only, to `.factory/reports/security-review/<date>.md` or the job summary.
   Findings go to the user; nothing is posted in v1.
+- **Write levels**: report.
 - **Steps**: fetch writes the range and the diff; on Actions `BEFORE`/`AFTER` come from
   `github.event.before`/`github.sha` through `env:`, or from `TARGET` (`<before>..<after>`) on a
   dispatch. Locally the range starts at the SHA on the first line of the latest report (first

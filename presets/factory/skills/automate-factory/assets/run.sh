@@ -7,11 +7,12 @@ day=$(date +%F)
 out=.factory/reports/$entry
 mkdir -p "$out" .factory/tmp
 [ -e .factory/tmp/.gitignore ] || echo '*' > .factory/tmp/.gitignore
-view=$(mktemp -d ".factory/tmp/$entry.XXXXXX")
-trap 'rm -rf "$view"' EXIT
+view=$(mktemp -d "$PWD/.factory/tmp/$entry.XXXXXX")
+trap 'rm -rf "$view"; git worktree prune' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>"
-auth="<auth>" max_turns="<turns>"
+auth="<auth>" max_turns="<turns>" minutes="<minutes>"
+level="<level>"
 # Higher-precedence credentials would bill the run instead of the chosen auth.
 unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_PROFILE \
   CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
@@ -53,7 +54,113 @@ post_check() { :; }
 
 post() { :; }
 
+# draft-pr and pr only. Destination, gates and test command are fixed here at setup.
+repo="<owner/repo>" remote="<remote>" branch="factory/$entry"
+title="chore: $entry automation $day"
+test_cmd="<test command>" max_lines=400 summary_cap=65536
+allow=("<path glob>")
+deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .husky/* .githooks/*
+  .pre-commit-config.yaml .gitattributes CODEOWNERS */CODEOWNERS .cursor/skills/verify-*)
+tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
+jail_tools="<confirmed jail_resolve lines>"
+pr="" start="" commit=""
+
+block() { echo "gate: $*" >&2; exit 1; }
+
+edit() {
+  local prs head tools=Bash,Read,Grep,Glob,Edit,Write
+  check=$view/check evidence=$view/evidence work=$view/work jail_auth=CLAUDE_CODE_OAUTH_TOKEN
+  [ "$auth" != api-key ] || jail_auth=ANTHROPIC_API_KEY
+  start=$(git rev-parse "$ref")
+  prs=$(gh pr list --repo "$repo" --head "$branch" --state open --json number,headRefOid,isCrossRepository \
+    --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefOid)"')
+  read -r pr head <<< "$prs"
+  if [ -n "$pr" ]; then
+    git fetch -q "$remote" "refs/heads/$branch"
+    [ "$(git rev-parse FETCH_HEAD)" = "$head" ] || block "$branch moved during the run"
+    start=$head
+  elif [ "$branch" != "factory/$entry" ]; then
+    block "no open PR on $branch"
+  elif git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null; then
+    block "$branch exists without an open PR"
+  fi
+  mkdir "$check" "$evidence"
+  git worktree add -q --detach "$work" "$start"
+  cp "$out/$day.md" "$check/report.md"
+  cp .factory/profile.md "$check/"
+  cp -R "$view/skills" "$check/"
+  . "<skill-path:fix-issues>/assets/jail.sh"
+  jail_probe "$work" "$PWD/.factory/profile.md"
+  jail "$work" timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
+    --no-session-persistence --tools "$tools" --allowedTools "$tools" --max-turns "$max_turns" \
+    --permission-mode dontAsk "$(cat ".factory/automations/$entry.edit.md")
+Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory.
+End your reply with a summary of what changed and why, last line edit: outcome=changed or
+edit: outcome=stopped." < /dev/null | head -c $((summary_cap + 1)) > "$view/summary.md" ||
+    [ "$(wc -c < "$view/summary.md")" -gt "$summary_cap" ]
+  [ "$(wc -c < "$view/summary.md")" -le "$summary_cap" ] || block "summary over $summary_cap bytes"
+  if [ "$(tail -n1 "$view/summary.md")" != "edit: outcome=changed" ]; then
+    echo "edit: no change"
+    exit 0
+  fi
+  git -C "$work" add -A
+  git -C "$work" -c core.hooksPath=/dev/null commit -q -m "$title"
+  commit=$(git -C "$work" rev-parse HEAD)
+}
+
+gates() {
+  local st p g ok a d lines=0 tests=()
+  ! git diff --quiet "$start" "$commit" || block "empty diff"
+  while IFS=$'\t' read -r st p; do
+    for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
+    ok=0
+    for g in "${allow[@]}"; do [[ $p != $g ]] || ok=1; done
+    [ "$ok" = 1 ] || block "$p outside the allowlist"
+    [[ $p =~ $tests_re ]] || continue
+    [ "$st" != D ] || block "test $p deleted or renamed"
+    tests+=("$p")
+  done < <(git diff --name-status --no-renames "$start" "$commit")
+  while read -r a d p; do
+    [ "$a" != - ] || block "binary change $p"
+    lines=$((lines + a + d))
+  done < <(git diff --numstat --no-renames "$start" "$commit")
+  [ "$lines" -le "$max_lines" ] || block "$lines changed lines, cap $max_lines"
+  if [ ${#tests[@]} -gt 0 ]; then
+    git diff -U0 --output-indicator-new='>' --output-indicator-old='<' "$start" "$commit" -- \
+      "${tests[@]}" > "$view/tests.diff"
+    ! grep -qE '^>.*(\.skip\(|\.only\(|\bx(it|describe|test)\(|@pytest\.mark\.(skip|xfail)|@unittest\.skip|\bt\.Skip|#\[ignore\]|@Disabled|@Ignore)' \
+      "$view/tests.diff" || block "test skipped"
+    ! grep -q '^<' "$view/tests.diff" || block "existing test lines changed or removed"
+  fi
+  jail_auth=- jail "$work" timeout "${minutes}m" sh -c "$test_cmd" > "$out/$day-tests.log" 2>&1 ||
+    block "tests failed, exit $?"
+  { git diff "$start" "$commit"; cat "$view/summary.md"; } |
+    { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; } || block "credential-shaped text"
+}
+
+publish() {
+  local draft=()
+  [ "$level" != draft-pr ] || draft=(--draft)
+  { printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed.\n\n' \
+    "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit"
+    cat "$view/summary.md"; } > "$view/body.md"
+  git push -q "$remote" "$commit:refs/heads/$branch"
+  if [ -n "$pr" ]; then
+    gh pr comment "$pr" --repo "$repo" --body-file "$view/body.md"
+  else
+    gh pr create --repo "$repo" ${draft[@]+"${draft[@]}"} --base "$ref" --head "$branch" --title "$title" \
+      --body-file "$view/body.md"
+  fi
+}
+
 fetch
 analyze
 post_check
-[ "${FACTORY_DRY_RUN:-0}" = 1 ] || post
+case "$level" in
+  comment) [ "${FACTORY_DRY_RUN:-0}" = 1 ] || post ;;
+  draft-pr | pr)
+    edit
+    gates
+    [ "${FACTORY_DRY_RUN:-0}" = 1 ] || publish
+    ;;
+esac

@@ -29,7 +29,8 @@ the items the user selected. Skip the phase when there are no gaps.
    and which ones an agent may touch (default: none).
 5. **Budgets**: model auth (subscription, the default, or API key); per run in minutes and turns
    (default 30 and 50), plus money on API key; per week; which models are allowed.
-6. **Review**: who reviews agent PRs, and whether agents may open PRs at all.
+6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or
+   ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.
 7. **Contradictions**: each conflict from phase 1, with both sources named.
 
 ## Output

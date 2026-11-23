@@ -7,7 +7,10 @@
 - **Runners**: local, GitHub Actions.
 - **Input**: the latest default-branch coverage artifact and the paths changed in the last day.
   Trusted: the repo's own CI output and tracked files.
-- **Writes**: report to `.factory/reports/daily-test-coverage/<date>.md` or the job summary.
+- **Writes**: report to `.factory/reports/daily-test-coverage/<date>.md` or the job summary; at
+  `draft-pr` or `pr`, new tests as one PR.
+- **Write levels**: report, draft-pr and pr (local only). `allow`: test paths only (`tests/*`,
+  `*.test.*`, `*_test.go`, the repo's own pattern).
 - **Steps**: fetch, read-only:
 
   ```bash
@@ -30,6 +33,15 @@ changed code in repo/ with no test covering it, riskiest first, with file and li
 one-line test idea that needs no mock of the unit under test. Change nothing.
 ```
 
+## Edit prompt
+
+```text
+Read report.md and profile.md. For at most 3 of the riskiest gaps, add tests in the repo's existing
+style that pass on the current code and would fail if the covered behaviour broke. Change no
+non-test file and no existing test. Run the profile's test script. Stop if no gap can be covered
+that way.
+```
+
 ## Follow-up (attended)
 
-The user picks a gap and asks their harness to write that test and open a draft PR.
+At `report`, the user picks a gap and asks their harness to write that test and open a draft PR.

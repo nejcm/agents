@@ -6,6 +6,10 @@ on:
       target:
         description: Run ID or SHA range for event entries; empty for scheduled ones
         required: false
+      dry-run:
+        description: Skip the publish job
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,3 +65,20 @@ jobs:
           name: factory-ENTRY
           path: ${{ runner.temp }}/report.md
           retention-days: 30
+
+  publish:
+    needs: report
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: factory-ENTRY
+
+      - name: Post report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment NUMBER --repo "$GITHUB_REPOSITORY" --body-file report.md

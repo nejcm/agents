@@ -20,8 +20,8 @@ force-push or close an issue.
 
 Needs `.factory/profile.md` with `Run` and `Verification` sections (`setup-factory`). Without
 them, say which phase to run and stop. Never run from a schedule: scheduled runs are the
-report-only `issue-pipeline` and `new-error-triage` entries of `automate-factory`, and this skill
-is their attended follow-up.
+`issue-pipeline` and `new-error-triage` entries of `automate-factory`, which never open PRs, and
+this skill is their attended follow-up.
 
 ## Sources
 

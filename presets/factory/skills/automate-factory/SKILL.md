@@ -28,42 +28,47 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    rest once with the missing piece.
 3. **Pick**: the user picks by number. Ask nothing else in this round.
 4. **Place** each pick: ask where to run it, offering only runners that are both in the entry's
-   `Runners` and detected in step 1. Then ask only the entry's `Choices`.
+   `Runners` and detected in step 1. Then ask its write level, `report` as the default, offering
+   only the entry's `Write levels` that the runner and profile allow
+   ([`references/runners.md`](references/runners.md#write-levels)), and only the entry's
+   `Choices`.
 5. **Write** per [`references/runners.md`](references/runners.md): the prompt to
-   `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and
-   the runner config as a proposed diff. Fill each `<skill-path:<name>>` in the script's
+   `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and the
+   runner config as a proposed diff; for `draft-pr` and `pr`, the entry's `Edit prompt` to
+   `.factory/automations/<entry>.edit.md` and the fixed values per [Write
+   levels](references/runners.md#write-levels). Fill each `<skill-path:<name>>` in the script's
    `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills); on a hosted
    runner only a committed project copy counts. A skill not found makes the entry unavailable on
    that runner. Also fill `<app>`, `<base>` and the entry's choices. For an agent-fetched source,
-   write `<prefix>.fetch.md` and, for MCP, `<prefix>.mcp.json` per `fix-issues`
-   [agent fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for
-   confirmation, since it names the commands the server runs.
+   write `<prefix>.fetch.md` and, for MCP, `<prefix>.mcp.json` per `fix-issues` [agent
+   fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for confirmation,
+   since it names the commands the server runs.
 6. **Smoke run as the runner** (activation gate): its checkout, identity, tools and secrets, in
    dry-run mode, per [`references/runners.md`](references/runners.md#smoke-run). A run on this
    laptop does not prove a hosted runner. On failure, report the exact error, leave the entry
    `proposed`, and fix nothing silently.
 7. **Record** each entry in the profile's `Automations` section: runner, trigger, files, smoke
-   run date and result, status (`active`, `proposed`, `failed: <reason>`).
+   run date and result, write level, status (`active`, `proposed`, `failed: <reason>`).
 
 On a re-run, read the `Automations` section first, re-check detected runners, and offer changes
 only to entries the user names or whose smoke run failed.
 
-## Scope (v1)
+## Scope
 
-- Written and activated: one local runner (systemd user timer or cron) and GitHub Actions for
-  report-only entries.
-- Later, not offered in v1: harness schedulers (Claude routines, Cursor Automations) and external
-  services. They do not run the fetch and view steps these prompts depend on.
-- No scheduled run edits code, pushes, opens PRs or replies to threads. Entries that lead to
-  changes name an attended follow-up the user starts from the report. The one external write is
-  the digest's post step, local only.
+- Written and activated: one local runner (systemd user timer or cron) and GitHub Actions.
+- Write levels: `report` everywhere, the default; `comment` on both; `draft-pr` and `pr` on the
+  local runner only, per [`references/safety.md`](references/safety.md#steps).
+- Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external
+  services, which do not run the fetch and view steps these prompts depend on; edits on hosted
+  runners; writes to trackers other than GitHub.
 
 ## Rules
 
 - **Safety**: every automation follows [`references/safety.md`](references/safety.md), including
   the lethal-trifecta rule. An entry that cannot meet it on a runner is not offered there.
-- **Writes**: freely only to `.factory/`. Runner config (workflow files, systemd units, crontab
+- **Writes**: freely only to `.factory/`. A run writes elsewhere only through its write level's
+  post or publish step. Runner config (workflow files, systemd units, crontab
   lines, scheduler settings) is shown as a proposed diff and applied only after the user confirms.
 - **Secrets**: never ask for, read, store or write one. Name a secret by its variable or setting
   name only ("repo secret `CLAUDE_CODE_OAUTH_TOKEN`") and print the steps for the user to set it.
