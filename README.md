@@ -98,10 +98,17 @@ ulis install --global --source . --preset react-web --yes
 
 ## Factory preset
 
-[`presets/factory/`](./presets/factory/) bundles `setup-factory` and pstack's verification skills.
-`setup-factory` explores a repo, interviews only for gaps, runs the app for real, generates a
-verify skill, and writes `.factory/profile.md` in that repo. Its skills only run when invoked
-explicitly.
+[`presets/factory/`](./presets/factory/) bundles four skills and pstack's verification skills:
+
+- `setup-factory` — explores a repo, interviews only for gaps, runs the app for real, generates a
+  verify skill, and writes `.factory/profile.md` in that repo
+- `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from local Claude Code,
+  Codex and Cursor transcripts
+- `automate-factory` — schedules report-only recurring runs (retros, PR babysitting, triage,
+  digests) from a catalog
+- `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a jailed pipeline
+
+Its skills only run when invoked explicitly.
 
 ULIS resolves preset names only from `~/.ulis/presets/` and its bundled presets, so link this one
 once, then install:

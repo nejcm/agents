@@ -9,10 +9,11 @@
   earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted.
 - **Writes**: report only, to `.factory/reports/issue-pipeline/<date>.md`. No tracker writes,
   branches or PRs from this entry.
-- **Steps**: `skills=("<skill-path:fix-issues>")`. Fetch is `fetch_new` then `fetch_context` from
+- **Steps**: `skills=("<skill-path:fix-issues>")`; set `repo="<owner/repo>"` below `ref`. Fetch is
+  `fetch_new` then `fetch_context` from
   [`fix-issues` triage.md](../../../fix-issues/references/triage.md#fetch), copied into the run
-  script; analyze is triage's [Analyze](../../../fix-issues/references/triage.md#analyze) prompt
-  below.
+  script with `fetch_items` and `since_last`, which `fetch_new` calls; analyze is triage's
+  [Analyze](../../../fix-issues/references/triage.md#analyze) prompt below.
 - **Choices**: day and time.
 
 ## Prompt

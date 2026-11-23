@@ -38,6 +38,7 @@ number.
 
    ```bash
    mkdir -p .factory/tmp
+   [ -e .factory/tmp/.gitignore ] || echo '*' > .factory/tmp/.gitignore
    dir=$(mktemp -d .factory/tmp/artifact.XXXXXX)
    gh run download <run-id> -n <artifact-name> -D "$dir" \
      && find "$dir" -type f -exec cat {} + | wc -c

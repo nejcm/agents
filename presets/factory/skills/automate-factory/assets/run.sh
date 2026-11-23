@@ -6,6 +6,7 @@ entry=$(basename "$0" .sh)
 day=$(date +%F)
 out=.factory/reports/$entry
 mkdir -p "$out" .factory/tmp
+[ -e .factory/tmp/.gitignore ] || echo '*' > .factory/tmp/.gitignore
 view=$(mktemp -d ".factory/tmp/$entry.XXXXXX")
 trap 'rm -rf "$view"' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"

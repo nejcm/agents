@@ -9,9 +9,10 @@
   no earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted:
   messages, stack traces, payloads.
 - **Writes**: report of new groups with a verdict each. No tracker writes from this entry.
-- **Steps**: `skills=("<skill-path:fix-issues>")`. Fetch takes `since_last` and `fetch_context`
-  from [`fix-issues` triage.md](../../../fix-issues/references/triage.md#fetch), exports each new
-  group to `input/items/err-<group id>.json` with the tracker's CLI or API, skipping groups whose
+- **Steps**: `skills=("<skill-path:fix-issues>")`; set `repo="<owner/repo>"` below `ref`. Fetch takes
+  `since_last` and `fetch_context` from
+  [`fix-issues` triage.md](../../../fix-issues/references/triage.md#fetch), exports each new group to
+  `input/items/err-<group id>.json` with the tracker's CLI or API, skipping groups whose
   `fix-issues: id=err-<group id> ` line is in an earlier day's report in `$out` (the `grep` in
   `fetch_new`), and stops on a failed query; analyze judges them with triage's rules.
 - **Choices**: tracker; environment; minimum event count.

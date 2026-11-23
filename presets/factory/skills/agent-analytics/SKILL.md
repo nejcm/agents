@@ -22,6 +22,7 @@ context. Run from the repo root.
 
    ```bash
    mkdir -p .factory/reports .factory/tmp
+   [ -e .factory/tmp/.gitignore ] || echo '*' > .factory/tmp/.gitignore
    prs=$(mktemp .factory/tmp/merged-prs.XXXXXX) report=$(mktemp .factory/tmp/agents.XXXXXX)
    merged=()
    gh pr list --state merged --limit 200 --json url,headRefName,isCrossRepository \

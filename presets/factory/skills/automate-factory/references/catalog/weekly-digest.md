@@ -16,8 +16,8 @@
   gh issue list --state all --search "updated:>=$since" --limit 500 \
     --json number,title,state,createdAt,closedAt > "$view/input/issues.json"
   git log "$ref" --since="$since" --format='%h %an %s' > "$view/input/commits.txt"
-  # local only; hosted marks reports unavailable. fix-issues specs and evidence are never copied.
-  tar -C .factory --exclude=reports/fix-issues -cf - reports | tar -x -C "$view/input"
+  # local only; hosted marks reports unavailable. fix-issues and security-review are never copied.
+  tar -C .factory --exclude=reports/fix-issues --exclude=reports/security-review -cf - reports | tar -x -C "$view/input"
   ```
 
   Post, when chosen, e.g. `gh issue comment <n> --repo <owner/repo> --body-file "$out/$day.md"`,
