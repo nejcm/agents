@@ -1,6 +1,6 @@
 ---
 name: automate-factory
-description: Use when the user asks to schedule or automate recurring agent work for a repo set up with setup-factory (retros, analytics, PR babysitting, CI triage, coverage, security review, digests), or to add, change or re-check a factory automation
+description: Use when the user asks to schedule or automate recurring agent work for a repo set up with setup-factory (retros, analytics, PR babysitting, CI, issue and error triage, coverage, security review, digests), or to add, change or re-check a factory automation
 category: workflow
 disable-model-invocation: true
 ---
@@ -25,8 +25,7 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
 2. **Suggest**: read each file in [`references/catalog/`](references/catalog/). For every entry
    whose requirements the profile meets, give one line: the entry and the profile fact that makes
    it worth running ("4 open PRs with review bots", "CI failed 9 of 40 runs on main"). List the
-   rest once with the missing piece. An entry whose `Status` condition is unmet is listed, never
-   offered.
+   rest once with the missing piece.
 3. **Pick**: the user picks by number. Ask nothing else in this round.
 4. **Place** each pick: ask where to run it, offering only runners that are both in the entry's
    `Runners` and detected in step 1. Then ask only the entry's `Choices`.
