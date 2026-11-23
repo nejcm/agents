@@ -1,8 +1,8 @@
 # Profile format
 
-`.factory/profile.md` in the target repo. One H2 per phase-owned section, each with an `Updated`
-date. A phase rewrites only its own section. Every fact names its source; a missing value is
-`unavailable: <reason>`. No secrets, ever.
+`.factory/profile.md` in the target repo. One H2 per phase-owned section (`Automations` belongs to
+`automate-factory`), each with an `Updated` date. A phase rewrites only its own section. Every
+fact names its source; a missing value is `unavailable: <reason>`. No secrets, ever.
 
 ```markdown
 # Factory profile: <repo name>
@@ -77,4 +77,12 @@ Updated: <YYYY-MM-DD> (baselines) at <short SHA>
 - Steps: <job> / <step>: <s> (run <id>, `gh run view --json jobs`)
 - Bundle size: <bytes> from artifact `<name>`, run <id> at <SHA> / unavailable: <reason>
 - Local build / test: <s> (<warm or cold>) / unavailable: <reason>
+
+## Automations
+Updated: <YYYY-MM-DD> (automate-factory)
+
+- Runners: systemd user <yes/no>, cron <yes/no>, isolated analyze <Claude Code version / no:
+  reason; managed policy confirmed none <yes/no>>, GitHub Actions <yes/no> (<command or source>)
+- <entry>: <runner>, <trigger>; files <paths>; smoke run <YYYY-MM-DD> <pass / fail: error>;
+  status <active / proposed / failed: reason>
 ```

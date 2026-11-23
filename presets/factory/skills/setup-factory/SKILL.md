@@ -40,7 +40,8 @@ your reply.
 6. **Repo baselines**: [`references/baselines.md`](references/baselines.md). CI durations, named
    steps and bundle size measured once; missing ones recorded as unavailable.
 7. **Hand-off**: summarize the profile in five lines or fewer, list what stayed unavailable or
-   unverified, and suggest running `automate-factory` next.
+   unverified, and offer to schedule recurring work. On yes, load `automate-factory` by path (see
+   loading other skills) and follow it from its first step; it reads the profile just written.
 
 Write each phase's result to its profile section as soon as the phase ends, in the format of
 [`references/profile.md`](references/profile.md), so a stopped run keeps finished phases.

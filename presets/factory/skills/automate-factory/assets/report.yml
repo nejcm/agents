@@ -1,0 +1,63 @@
+name: factory-ENTRY
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Run ID or SHA range for event entries; empty for scheduled ones
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: factory-ENTRY
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install CLI
+        run: npm install -g --silent @anthropic-ai/claude-code@VERSION
+
+      - name: Prepare view
+        run: |
+          mkdir -p "$RUNNER_TEMP/view/repo" "$RUNNER_TEMP/view/input" "$RUNNER_TEMP/view/skills"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/view/repo"
+          : # copy committed skills the prompt loads into "$RUNNER_TEMP/view/skills"
+
+      - name: Fetch input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          ref=HEAD
+          : # entry's fetch commands, writing into "$RUNNER_TEMP/view/input"
+
+      - name: Analyze (read-only)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          prompt="$(cat .factory/automations/ENTRY.md)
+          Date: $(date +%F)"
+          cd "$RUNNER_TEMP/view"
+          claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
+            --no-session-persistence --permission-mode dontAsk --output-format text \
+            "$prompt" < /dev/null > "$RUNNER_TEMP/report.md"
+          test -s "$RUNNER_TEMP/report.md"
+
+      - name: Publish report
+        run: cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: factory-ENTRY
+          path: ${{ runner.temp }}/report.md
+          retention-days: 30
