@@ -6,6 +6,7 @@ import subprocess
 import unittest
 
 import test_run
+from test_run import agent_analytics
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PIPELINE_SH = os.path.join(HERE, "..", "assets", "issue-pipeline.sh")
@@ -34,7 +35,8 @@ elif "--model" in args:
     with open(os.environ["LOG"] + ".review", "a") as f:
         f.write(json.dumps({"raw": raw, "top": sorted(os.listdir("."))}) + "\n")
     i = re.search(r"/fix-([^/]+)/review$", os.getcwd())[1]
-    out = scen["items"].get(i, {}).get("review", "- src/1:1: nit\nreview: verdict=approve\n")
+    s = scen["items"].get(i, {})
+    out = s.get("review-" + args[args.index("--model") + 1], s.get("review", "- src/1:1: nit\nreview: verdict=approve\n"))
     print(json.dumps({"result": out, "num_turns": 1}))
 elif tools == "Read,Grep,Glob":
     sys.stdout.write(open(os.environ["REPORT"]).read())
@@ -68,7 +70,10 @@ else:
             put(f"tests/{i}_test.sh", "true\n")
         if s.get("pause"):
             put(os.environ["REPO"] + "/.factory/pause", "")
-        put(ev + "/fix.md", "root cause\nscope: minimal\nfix: outcome=changed\n")
+        if s.get("edit_test"):
+            open("tests/run_all.sh", "a").write("true\n")
+        put(ev + "/fix.md", "root cause\n" + ("test-change: tests/run_all.sh: tidy\n" if s.get("edit_test") else "")
+            + "scope: minimal\nfix: outcome=changed\n")
     else:
         put(ev + "/verify.md", "runs\nverify: outcome=" + s.get("verify", "confirmed") + "\n")
 """
@@ -138,9 +143,25 @@ elif cmd == "pr view":
     p = st.get("pulls", {}).get(pos[0]) or sys.exit(1)
     if opt.get("jq") == ".state":
         print(p["state"])
+    elif opt.get("json") == "mergeCommit":
+        print(p.get("merge", "null"))
+    elif opt.get("json") == "state,mergeCommit,title,reviews":
+        print(p["state"], p.get("changes", 0), p.get("merge", "null"), p.get("title", "t"))
+    elif opt.get("json", "").startswith("state,isDraft,"):
+        print(p["state"], str(p.get("draft", False)).lower(), p["head"], p.get("mergeable", "MERGEABLE"),
+              p.get("base", "main"), p.get("branch", "factory/fix-1"), str(p.get("cross", False)).lower())
     else:
         print(p["state"], str(p.get("cross", False)).lower(), p.get("base", "main"), p.get("merge", "null"),
               p.get("commits", 1))
+elif cmd == "pr ready":
+    st["ready"] = st.get("ready", []) + [pos[0]]
+    save()
+elif cmd == "pr merge":
+    st["merged"] = st.get("merged", []) + [pos[0]]
+    st["pulls"][pos[0]].update(state="MERGED", merge=st["merge_sha"])
+    save()
+elif cmd == "api graphql":
+    print(st.get("ci", {}).get(next(a[2:] for a in pos if a.startswith("s=")), "SUCCESS"))
 elif cmd == "pr create":
     url = f"https://github.com/o/r/pull/{len(st['prs']) + 1}"
     st["prs"].append({"head": opt["head"], "url": url, "title": opt["title"], "draft": opt.get("draft", False),
@@ -208,7 +229,8 @@ class PipelineTest(unittest.TestCase):
             return json.load(f)
 
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
-                     report_extra="", cap="3", flow="fix", verify_fixed="on"):
+                     report_extra="", cap="3", flow="fix", verify_fixed="on", merge_level="draft",
+                     reviewers="sonnet", needs_human=None):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -225,8 +247,11 @@ class PipelineTest(unittest.TestCase):
             pipeline = f.read()
         pipeline = pipeline.replace('("<trust prefix>")', "(" + " ".join(f'"{p}"' for p in trust) + ")")
         for k, v in {"<label>": label, "<run minutes>": "240", "<app>": "app", "<cap>": cap, "<flow>": flow,
-                     "<verify-fixed>": verify_fixed}.items():
+                     "<verify-fixed>": verify_fixed, "<merge level>": merge_level,
+                     "reviewers=(sonnet)": f"reviewers=({reviewers})"}.items():
             pipeline = pipeline.replace(k, v)
+        if needs_human is not None:
+            pipeline = pipeline.replace("needs_human=(test-change dependency refactor)", f"needs_human=({needs_human})")
         fetch = "fetch_new; fetch_deferred; " + (f"fetch_labeled {label}; " if label else "") + extra_fetch + "fetch_context"
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
@@ -756,6 +781,187 @@ sys.exit(1 if spec else p.returncode)
         self.assertIn("1 review: sonnet approve", r.stdout)
         self.assertEqual(self.remote_heads() + "".join(self.gh_writes()), "")
         self.assertEqual(self.rows("pushed.tsv") + self.rows("linked.tsv"), [])
+
+    def merge_calls(self):
+        return [c for c in self.calls() if c.startswith("gh pr merge")]
+
+    def test_default_draft_marks_nothing_ready_and_records_no_merge(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("ready", self.gh())
+        self.assertEqual(self.rows("merges.tsv") + self.merge_calls(), [])
+        self.assertTrue(self.gh()["comments"][0]["body"].startswith("Draft PR "))
+
+    def test_ready_marks_ready_only_when_every_reviewer_approves(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "review-opus": "review: verdict=changes"}},
+                              merge_level="ready", reviewers="sonnet opus")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        url = {p["head"]: p["url"] for p in self.gh()["prs"]}
+        self.assertEqual(self.gh()["ready"], [url["factory/fix-1"]])
+        self.assertEqual(self.rows("merges.tsv") + self.merge_calls(), [])
+        bodies = {c["issue"]: c["body"] for c in self.gh()["comments"]}
+        self.assertTrue(bodies["1"].startswith(f"PR {url['factory/fix-1']}: "))
+        self.assertTrue(bodies["2"].startswith("Draft PR "))
+
+    def test_merge_level_approves_only_without_needs_human_disclosure_and_never_merges_in_the_same_run(self):
+        for needs_human, approved in ((None, "1"), ("dependency refactor", "13")):
+            with self.subTest(needs_human=needs_human):
+                self.setUp()
+                self.gh_state({1: {}, 2: {}, 3: {}}, [])
+                r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "review-opus": "x"},
+                                       "3": {"feature": "c", "edit_test": True}},
+                                      merge_level="merge", reviewers="sonnet opus", needs_human=needs_human)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                prs = {p["head"]: p for p in self.gh()["prs"]}
+                urls = [prs[f"factory/fix-{i}"]["url"] for i in approved]
+                self.assertEqual(self.gh()["ready"], urls)
+                heads = [self.git("--git-dir", self.remote, "rev-parse", f"factory/fix-{i}").strip() for i in approved]
+                self.assertEqual(self.rows("merges.tsv"), [f"{i} approved {u} {h}" for i, u, h in zip(approved, urls, heads)])
+                self.assertIn("then squash-merged by a later run once CI is green on", prs["factory/fix-1"]["body"])
+                self.assertEqual(self.merge_calls(), [])
+                self.tearDown()
+
+    def test_merge_level_needs_two_reviewers_and_known_settings_before_any_write(self):
+        for kw, msg in (({"merge_level": "merge"}, "merge_level merge needs at least 2 reviewers"),
+                        ({"merge_level": "<merge level>"}, "merge_level <merge level> is not draft, ready or merge"),
+                        ({"merge_level": "auto"}, "merge_level auto is not draft, ready or merge"),
+                        ({"needs_human": "tests"}, "needs_human tests is not test-change, dependency or refactor")):
+            with self.subTest(msg):
+                self.gh_state({1: {}}, [])
+                r = self.run_pipeline({"1": {}}, **kw)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("gate: " + msg, r.stderr)
+                self.assertEqual(self.stage_calls() + self.gh_writes(), [])
+                self.assertFalse(os.path.exists(self.fx))
+
+    def land(self, merges, pulls, ci=None, fail=(), **kw):
+        os.makedirs(self.fx, exist_ok=True)
+        with open(f"{self.fx}/merges.tsv", "w") as f:
+            f.write("".join(m + "\n" for m in merges))
+        self.gh_state({}, list(fail), pulls=pulls, ci=ci or {}, merge_sha="b" * 40)
+        r = self.run_pipeline({}, report_extra="No new issues\n", **kw)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        return r
+
+    def test_merge_runs_only_when_every_condition_holds(self):
+        url, sha = "https://github.com/o/r/pull/1", "a" * 40
+        ok = {"state": "OPEN", "head": sha}
+        for name, pull, ci, fail, kw, row in (
+                ("all hold", {}, "SUCCESS", (), {}, "merged"),
+                ("closed", {"state": "CLOSED"}, "SUCCESS", (), {}, "left"),
+                ("merged by a human", {"state": "MERGED"}, "SUCCESS", (), {}, "left"),
+                ("back in draft", {"draft": True}, "SUCCESS", (), {}, "left"),
+                ("head moved", {"head": "c" * 40}, "SUCCESS", (), {}, "left"),
+                ("a revert branch", {"branch": "factory/revert-1"}, "SUCCESS", (), {}, "left"),
+                ("a fork", {"cross": True}, "SUCCESS", (), {}, "left"),
+                ("other base", {"base": "dev"}, "SUCCESS", (), {}, "left"),
+                ("conflicting", {"mergeable": "CONFLICTING"}, "SUCCESS", (), {}, "left"),
+                ("mergeable unknown", {"mergeable": "UNKNOWN"}, "SUCCESS", (), {}, "approved"),
+                ("CI red", {}, "FAILURE", (), {}, "left"),
+                ("CI pending", {}, "PENDING", (), {}, "approved"),
+                ("CI none", {}, "", (), {}, "approved"),
+                ("level lowered", {}, "SUCCESS", (), {"merge_level": "ready"}, "approved"),
+                ("merge refused", {}, "SUCCESS", ("pr merge",), {}, "left")):
+            with self.subTest(name):
+                self.land([f"1 approved {url} {sha}"], {url: dict(ok, **pull)}, {sha: ci}, fail,
+                          **dict({"merge_level": "merge", "reviewers": "sonnet opus"}, **kw))
+                calls = self.merge_calls()
+                self.assertEqual(calls, [f"gh pr merge {url} --repo o/r --squash --match-head-commit {sha}"]
+                                 if name in ("all hold", "merge refused") else [])
+                self.assertEqual(self.rows("merges.tsv")[-1].split()[1], row)
+                if row == "merged":
+                    self.assertEqual(self.rows("merges.tsv")[-1], f"1 merged {url} {'b' * 40}")
+                    self.assertIn(f"land: 1 {url} merged as {'b' * 40}", self.report())
+                if row == "left":
+                    self.assertIn(f"land: 1 {url} not merged: ", self.report())
+
+    def test_pause_stops_a_pending_merge(self):
+        url, sha = "https://github.com/o/r/pull/1", "a" * 40
+        self.write(".factory/pause", "")
+        self.land([f"1 approved {url} {sha}"], {url: {"state": "OPEN", "head": sha}}, {sha: "SUCCESS"},
+                  merge_level="merge", reviewers="sonnet opus")
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.rows("merges.tsv"), [f"1 approved {url} {sha}"])
+
+    def main_commit(self, path, msg):
+        self.write(path, "x\n")
+        self.git("-C", self.repo, "add", path)
+        self.git("-C", self.repo, "commit", "-qm", msg)
+        return self.git("-C", self.repo, "rev-parse", "HEAD").strip()
+
+    def test_red_main_after_a_factory_merge_opens_a_draft_revert_and_escalates(self):
+        u1, u2 = "https://github.com/o/r/pull/1", "https://github.com/o/r/pull/2"
+        m1, m2 = self.main_commit("src/one", "fix: #1 a (#1)"), self.main_commit("src/two", "fix: #2 b (#2)")
+        self.push_main()
+        self.land([f"1 merged {u1} {m1}", f"2 merged {u2} {m2}"], {}, {m1: "SUCCESS", m2: "FAILURE"})
+        [pr] = self.gh()["prs"]
+        self.assertEqual((pr["head"], pr["draft"], pr["title"]), ("factory/revert-2", True, f"revert: #2 factory merge {m2[:12]}"))
+        self.assertIn(f"Reverts the factory merge {m2} of {u2}", pr["body"])
+        tip = self.git("--git-dir", self.remote, "rev-parse", "factory/revert-2").strip()
+        self.assertEqual(self.git("--git-dir", self.remote, "rev-parse", f"{tip}^").strip(), m2)
+        self.assertEqual(self.git("--git-dir", self.remote, "rev-parse", f"{tip}^{{tree}}").strip(),
+                         self.git("-C", self.repo, "rev-parse", f"{m1}^{{tree}}").strip())
+        self.assertEqual(sorted(self.rows("merges.tsv")[2:]), [f"1 green {u1} {m1}", f"2 reverted {u2} {m2}"])
+        self.assertIn(f"escalated: main-red: CI failed on main for the factory merge {m2} of {u2}; revert PR {pr['url']}; "
+                      "needs a human.", self.report())
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            rec = json.loads(f.read().splitlines()[-1])
+        self.assertEqual([(i["id"], i["outcome"], i["reason"], i["pr"]) for i in rec["items"]],
+                         [("revert-2", "escalated", "main-red", pr["url"])])
+        self.assertEqual(self.merge_calls(), [])
+        self.git("-C", self.repo, "checkout", "-q", "main")
+        r = self.run_pipeline({}, report_extra="No new issues\n", merge_level="merge", reviewers="sonnet opus")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((len(self.gh()["prs"]), self.merge_calls()), (1, []))
+
+    def test_pr_fates_feed_agreement_metrics(self):
+        m1 = self.main_commit("src/one", "fix: #1 a (#1)")
+        m2 = self.main_commit("src/two", "fix: #2 b (#2)")
+        m4 = self.main_commit("src/four", "fix: #4 d (#4)")
+        m6 = self.main_commit("src/six", "fix: #6 f (#6)")
+        self.git("-C", self.repo, "revert", "--no-edit", m1)
+        self.push_main()
+        u = {i: f"https://github.com/o/r/pull/{i}" for i in "123456"}
+        pulls = {u["1"]: {"state": "MERGED", "merge": m1, "title": "fix: #1 a"},
+                 u["2"]: {"state": "MERGED", "merge": m2, "changes": 1},
+                 u["3"]: {"state": "CLOSED"}, u["4"]: {"state": "MERGED", "merge": m4},
+                 u["5"]: {"state": "OPEN"}, u["6"]: {"state": "MERGED", "merge": m6}}
+        os.makedirs(self.fx)
+        with open(f"{self.fx}/linked.tsv", "w") as f:
+            f.write("".join(f"{i} {u[i]}\n" for i in "123456") + "7 abc123\n")
+        approve = [{"model": "sonnet", "family": "same family", "verdict": "approve", "valid": True}]
+        items = [{"id": i, "pr": u[i], "scope": "refactor" if i == "3" else "minimal",
+                  "reviews": [dict(approve[0], verdict="changes")] if i == "3" else approve} for i in "123456"]
+        os.makedirs(f"{self.repo}/.factory/reports", exist_ok=True)
+        with open(f"{self.repo}/.factory/reports/runs.jsonl", "w") as f:
+            f.write(json.dumps({"entry": "issue-pipeline", "started": "2026-11-01T00:00:00Z", "outcome": "completed",
+                                "items": items}) + "\n")
+        self.land([f"4 merged {u['4']} {m4}"], pulls)
+        rows = {r.split()[0]: r.split()[1:4] for r in self.rows("fates.tsv")}
+        self.assertEqual({k[-1]: v for k, v in rows.items()}, {
+            "1": ["reverted", "0", m1], "2": ["merged", "1", m2], "3": ["closed", "0", "-"],
+            "4": ["factory-merged", "0", m4], "5": ["open", "0", "-"], "6": ["merged", "0", m6]})
+        n = len(self.rows("fates.tsv"))
+        self.run_pipeline({}, report_extra="No new issues\n")
+        self.assertEqual(len(self.rows("fates.tsv")), n)
+        self.assertEqual(len([c for c in self.calls() if c.startswith("gh pr view")]), 1)
+        report = "\n".join(agent_analytics.render_runs(agent_analytics.factory_runs(self.repo, None)))
+        self.assertIn("Review: approved 5 of 6 reviewed PRs; human outcome known for 4, agreeing 2; misses 1 "
+                      "(approved, then closed or reverted). Merged of resolved PRs: minimal 3 of 4, refactor 0 of 1.",
+                      report)
+
+    def test_merge_and_fate_state_must_be_regular_files(self):
+        for name in ("merges.tsv", "fates.tsv"):
+            with self.subTest(name):
+                os.makedirs(f"{self.fx}/{name}")
+                self.gh_state({1: {}}, [])
+                r = self.run_pipeline({"1": {}})
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn(f"{name} is a symlink or not a regular file", r.stderr)
+                self.assertEqual(self.stage_calls() + self.gh_writes(), [])
+                os.rmdir(f"{self.fx}/{name}")
 
     def fix_commit(self, branch=None):
         if branch:

@@ -31,6 +31,7 @@ EXPECTED = {
               ("tool call records", "tool_calls", {"tool_calls", "escalations"})),
     "Cursor": (("tool_use blocks", "tool_calls", {"tool_calls"}),),
 }
+FATES = ("open", "merged", "factory-merged", "closed", "reverted")
 RUN_METRICS = ("turns", "input_tokens", "cache_write_tokens", "cache_read_tokens", "output_tokens", "cost_usd")
 DRIFT_MIN_SESSIONS = 5
 DRIFT_EXIT = 3
@@ -254,10 +255,45 @@ def cursor(home, repo, since):
     return s
 
 
+def pr_fates(repo):
+    fates = {}
+    path = os.path.join(repo, ".factory", "reports", "fix-issues", "fates.tsv")
+    if os.path.isfile(path) and not os.path.islink(path):
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                t = line.split(" ", 4)
+                if len(t) >= 3 and t[1] in FATES:
+                    fates[t[0]] = (t[1], t[2].isdigit() and int(t[2]) > 0)
+    return fates
+
+
+def agreement(prs, fates):
+    reviewed = [(ok, scope, fates.get(pr)) for pr, (ok, has, scope) in prs.items() if has]
+    approved = sum(ok for ok, _, _ in reviewed)
+    known = agree = misses = 0
+    for ok, _, fate in reviewed:
+        f, asked = fate or (None, False)
+        bad = asked or f in ("closed", "reverted")
+        if bad or f == "merged":
+            known += 1
+            agree += ok != bad
+        misses += ok and f in ("closed", "reverted")
+    merged = {s: [0, 0] for s in ("minimal", "refactor")}
+    for pr, (_, _, scope) in prs.items():
+        f = (fates.get(pr) or (None,))[0]
+        if scope in merged and f in ("merged", "factory-merged", "closed", "reverted"):
+            merged[scope][0] += f in ("merged", "factory-merged")
+            merged[scope][1] += 1
+    return (f"Review: approved {approved} of {len(reviewed)} reviewed PRs; human outcome known for {known}, "
+            f"agreeing {agree}; misses {misses} (approved, then closed or reverted). Merged of resolved PRs: "
+            f"minimal {merged['minimal'][0]} of {merged['minimal'][1]}, refactor {merged['refactor'][0]} of {merged['refactor'][1]}.")
+
+
 def factory_runs(repo, since):
     path = os.path.join(repo, ".factory", "reports", "runs.jsonl")
     if not os.path.isfile(path):
         return None
+    fates = pr_fates(repo)
     runs = collections.OrderedDict()
     for rec in load(path, new_stats()) or []:
         started = text(rec.get("started")) or ""
@@ -268,7 +304,7 @@ def factory_runs(repo, since):
         r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
                                     "items": collections.Counter(), "escalations": collections.Counter(),
                                     "tests": 0, "test_files": 0, "deps": 0, "capped": 0,
-                                    "scopes": collections.Counter(), "weighted": None, **{k: 0 for k in RUN_METRICS}})
+                                    "scopes": collections.Counter(), "weighted": None, "prs": {}, **{k: 0 for k in RUN_METRICS}})
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
         r["capped"] += is_num(rec.get("max_turns_hit")) and rec["max_turns_hit"] > 0
@@ -277,6 +313,10 @@ def factory_runs(repo, since):
         for i in items:
             o = i.get("outcome") if isinstance(i, dict) else None
             r["items"][o if re.fullmatch(r"[a-z-]{1,20}", str(o)) else "?"] += 1
+            pr, rv = (i.get("pr"), i.get("reviews")) if isinstance(i, dict) else (None, None)
+            if isinstance(pr, str) and re.search(r"/pull/[0-9]+$", pr):
+                rv = [x for x in rv if isinstance(x, dict)] if isinstance(rv, list) else []
+                r["prs"][pr] = (bool(rv) and all(x.get("verdict") == "approve" for x in rv), bool(rv), i.get("scope"))
         for u in [rec] + [i for i in items if isinstance(i, dict)]:
             if u.get("outcome") == "escalated":
                 why = u.get("reason")
@@ -293,6 +333,8 @@ def factory_runs(repo, since):
         for k in RUN_METRICS:
             r["seen"][k] += is_num(rec.get(k))
             r[k] += num(rec.get(k))
+    for r in runs.values():
+        r["agreement"] = agreement(r.pop("prs"), fates) if r["prs"] else ""
     return runs
 
 
@@ -321,7 +363,8 @@ def render_runs(runs):
                    + (f" Disclosed: existing tests changed in {r['tests']} ({r['test_files']} files), "
                       f"dependencies in {r['deps']}." if r["tests"] or r["deps"] else "")
                    + (f" Scope: minimal {r['scopes']['minimal']}, refactor {r['scopes']['refactor']}; "
-                      f"largest {r['weighted'] or 0:,} weighted lines." if r["scopes"] else ""))
+                      f"largest {r['weighted'] or 0:,} weighted lines." if r["scopes"] else "")
+                   + (" " + r["agreement"] if r["agreement"] else ""))
     return out + [""]
 
 

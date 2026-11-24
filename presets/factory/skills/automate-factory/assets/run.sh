@@ -253,7 +253,7 @@ missing = [n for n, f in new if norm(n) not in {norm(m[1]) for m in said}]
 if missing:
     sys.exit("new package without a dependency line: " + ", ".join(missing))
 if new or unparsed or locks:
-    print("## Adds dependencies\n\nNeeds human approval; the factory never merges.\n")
+    print("## Adds dependencies\n\nNeeds human approval.\n")
     for m in said[:50]:
         print(f"- {m[1]}: {m[2]}"[:200])
     if new:
@@ -293,8 +293,8 @@ ci_state() {
 }
 
 ledger_ok() {
-  [ ! -L "$out/pushed.tsv" ] && { [ ! -e "$out/pushed.tsv" ] || [ -f "$out/pushed.tsv" ]; } ||
-    block "$out/pushed.tsv is a symlink or not a regular file"
+  local f=${1:-$out/pushed.tsv}
+  [ ! -L "$f" ] && { [ ! -e "$f" ] || [ -f "$f" ]; } || block "$f is a symlink or not a regular file"
 }
 
 # Prints red after two red factory pushes on the PR, unknown on a failed lookup.
@@ -483,7 +483,7 @@ gates() {
     git -C "$view/old" checkout -q "$start" -- "${changed[@]}"
     rc=0
     (cd "$view/old" && timeout "${minutes}m" sh -c "$test_cmd") > "$view/old.log" 2>&1 || rc=$?
-    { printf '## Modifies existing tests\n\nNeeds human approval; the factory never merges.\n\n'
+    { printf '## Modifies existing tests\n\nNeeds human approval.\n\n'
       clip 50 < "$view/reasons.md"
       if [ "$rc" = 124 ]; then
         printf '\nOld tests timed out after %s minutes: no evidence.\n' "$minutes"

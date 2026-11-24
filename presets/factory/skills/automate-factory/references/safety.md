@@ -26,14 +26,17 @@ in its environment.
 
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
-  `run_minutes`, `cap`, budgets, `ceiling`, `issue-pipeline` `reviewers`.
+  `run_minutes`, `cap`, budgets, `ceiling`, `issue-pipeline` `reviewers`, `merge_level` and
+  `needs_human`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
 - `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
 
 Locked in the run scripts, at every write: model-free writes to destinations fixed at setup; dry
 run writes nothing external; item text reaches stages only through the checked spec; gates on the
 exact pushed commit; credential check and size cap on every final body (`sendable`); the consumed
-in-repo skills in `deny`; pause, claims, never merge; `issue-pipeline` PRs always draft. A
+in-repo skills in `deny`; pause, claims; a merge only at `issue-pipeline` `merge_level` `merge`,
+by the model-free rule under Merge levels, never of a revert; every other PR stays unmerged, and
+`issue-pipeline` PRs open as drafts. A
 user-owned executable flow is not offered: sourced Bash can redefine `gates` or `publish`, or call
 `gh` directly, so no lock would hold.
 
@@ -115,10 +118,12 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   worktree) and record whether they fail (change needed), still pass (edit not needed, review
   closely) or time out (no evidence); none blocks. The section (reasons, that outcome with a
   capped output tail, each deleted path, the capped diff of the others, "needs human approval") goes to `.factory/reports/<entry>/<date>-test-change.md` and
-  tops the PR body or comment. The PR is a draft at any level: a new one opens as a draft, a reused
+  tops the PR body or comment. The PR is a draft at any write level, and at any `merge_level` while
+  its disclosure is in `needs_human`: a new one opens as a draft, a reused
   one is returned to draft before the push or the run stops. It gets the `factory:test-change`
   label, created if missing (a label failure only warns). A body over GitHub's 65536 characters
-  stops the run before the push. The factory never merges.
+  stops the run before the push. At the default `needs_human`, a PR with this disclosure never
+  merges.
 - **Scope**: the edit chooses it; size is not judged. `refactor` needs at least one refactor
   commit before the behaviour commit; each refactor commit leaves existing test files unchanged and
   passes the test command (same timeout, in its own worktree), or the gate blocks. A refactor PR is
@@ -128,8 +133,30 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   runs as analyze does (`--restricted`, read-only tools, `--model <name>`) on an export of the
   gated commit with the checked spec, the diff and the gate and verify records, never item text.
   Its last line must be `review: verdict=approve` or `review: verdict=changes`; anything else
-  counts as `changes`. Verdicts and capped findings go in the PR body, advisory at `draft-pr`, and
-  in the item's run record.
+  counts as `changes`. Verdicts and capped findings go in the PR body and the item's run record;
+  they decide nothing at the default `merge_level` `draft`.
+- **Merge levels**: `issue-pipeline` only, the one entry with reviewer verdicts; other entries
+  never merge, and `pr` opens ready-for-review PRs as before. `merge_level` `ready`: after the
+  push, a PR whose every reviewer approved and that has no disclosure in `needs_human` is marked
+  ready for review. `merge` (at least two reviewers): such a PR is also recorded in
+  `fix-issues/merges.tsv`, and a later run squash-merges it with `gh pr merge --squash
+  --match-head-commit <gated commit>` only when, checked model-free in that run, the PR is open,
+  not draft, on `factory/fix-<id>` into `<base>` from this repo, its head is still the gated
+  commit, `mergeable` is `MERGEABLE`, the commit's CI rollup is `SUCCESS` (a commit with no CI
+  never merges), `merge_level` is still `merge`, and `.factory/pause` is absent. Pending CI or
+  mergeability waits for the next run; any other failure drops the PR from factory merging with a
+  "needs a human" line in the report.
+- **Revert**: each later run checks the CI rollup of every factory merge commit on `<base>`.
+  `SUCCESS` closes it; `FAILURE` or `ERROR` opens a revert PR (`git revert` on the fetched
+  `<base>`, the same gates and publish, always draft, on `factory/revert-<id>`), records the item
+  `escalated` `main-red` and says "needs a human" in the report. The factory never merges a
+  revert PR: only `factory/fix-<id>` heads recorded as approved can merge.
+- **PR fates**: each non-dry `issue-pipeline` run looks up, with `gh pr view` and `git log` on
+  the fetched `<base>`, every PR in `linked.tsv`: open, merged by a human, merged by the factory,
+  closed unmerged, or reverted (a later commit carrying `This reverts commit <merge commit>`,
+  `Revert "<title>` or `Reverts <repo>#<n>`), plus a count of change-request reviews. Rows go to
+  `fix-issues/fates.tsv`; `agent-analytics` reports agreement from them. `merges.tsv` and
+  `fates.tsv` must be regular files, like the push ledger.
 - **Dependencies**: disclosed, never blocked. Gates compare dependency keys of every changed
   `package.json`, `pyproject.toml`, `Cargo.toml` and `go.mod` between the start and the commit
   (all package managers using that manifest). A new package without a `dependency: <name>` line
@@ -160,7 +187,7 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
 - **Dry run**: no post or publish. Writes go to `.factory/reports/`, the run's temp view under
   `.factory/tmp/` and its worktree, nothing else; `issue-pipeline` also uses its claim under
   `.factory/reports/fix-issues/tmp/` and stages only the first selected item, with no ticket, link
-  or state rows.
+  or state rows, and no merge, revert or fate lookup.
 - **Fixed destination**: the post and publish steps' targets (`--repo <owner/repo>`, remote URL,
   branch, issue or PR number, channel, team) are written into the run script, or the
   `<prefix>.<op>.sh` it calls, when the user approves them, never taken from model output or

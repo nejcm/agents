@@ -40,6 +40,11 @@ the items the user selected. Skip the phase when there are no gaps.
    the user's `claude` subscription login, never an API key.
 6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or
    ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.
+   For `issue-pipeline`, `merge_level` stays `draft` unless the user picks more. Offer `ready` or
+   `merge` only together with that entry's `Review:` line from the latest `agent-analytics`
+   report (approve rate, agreement with human outcomes, misses, merge rates by scope); with no
+   line or no resolved PR, say there is no evidence yet and recommend `draft`. `merge` needs two
+   reviewers.
 7. **Environment**: recommend running unattended and issue-driven work in an isolated VM,
    container or devcontainer, set up as the user likes, holding only the credentials runs need:
    the model's login, a fine-grained `gh` token scoped to this one repo, and tracker tokens the

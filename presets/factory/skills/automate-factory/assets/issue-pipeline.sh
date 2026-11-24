@@ -1,8 +1,10 @@
 # issue-pipeline at draft-pr: inserted into run.sh after publish; run.sh then calls pipeline.
 trust=("<trust prefix>") label="<label>" run_minutes="<run minutes>" app="<app>" cap="<cap>"
 flow="<flow>" verify_fixed="<verify-fixed>"
-# Shadow reviewers: Claude models other than the edit's; advisory at draft-pr.
-reviewers=(sonnet)
+# Reviewers: Claude models other than the edit's. merge_level draft, ready or merge (needs 2+ reviewers).
+reviewers=(sonnet) merge_level="<merge level>"
+# Disclosures that keep a PR draft and unmerged at any merge_level: test-change, dependency, refactor.
+needs_human=(test-change dependency refactor)
 fx=$PWD/.factory/reports/fix-issues
 items=$fx/items
 
@@ -25,6 +27,7 @@ preflight() {
   mkdir -p "$fx/tmp" "$items"
   [ -e "$fx/.gitignore" ] || (set -C; printf '*\n' > "$fx/.gitignore")
   [ "$(cat "$fx/.gitignore")" = '*' ] && git check-ignore -q "$fx/tmp/x/spec.md" || block "$fx is not ignored"
+  for p in merges.tsv fates.tsv; do ledger_ok "$fx/$p"; done
 }
 
 # $1 stage, $2 its directory, $3 reference, $4 tools, $5 commit of the verify skill, then inputs.
@@ -107,7 +110,12 @@ body() {
   printf '\n## Root cause and fix\n\n'; clip 60 < "$item/fix.md"
   printf '\n## Tests\n\nGates passed on the fix: allowlist, deny list, size ceiling, scope and the test command.\n%s\n' "$red"
   printf '\n## Verification\n\n'; clip 60 < "$item/verify.md"
-  printf '\n## Shadow review\n\nAdvisory; nothing merges on it.\n'; cat "$item/review.md"
+  case $merge_level in
+    draft) printf '\n## Shadow review\n\nAdvisory; nothing merges on it.\n' ;;
+    ready) printf '\n## Shadow review\n\nAll approve and nothing needs a human: marked ready for review. Nothing merges on it.\n' ;;
+    merge) printf '\n## Shadow review\n\nAll approve and nothing needs a human: marked ready, then squash-merged by a later run once CI is green on %s.\n' "$commit" ;;
+  esac
+  cat "$item/review.md"
   printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"
 }
 
@@ -150,9 +158,10 @@ or review: verdict=changes."
 
 # $1 item, $2 PR URL, $3 commit, $4 base.
 link_item() {
-  local f=$runview/link-$1.md
-  printf 'Draft PR %s: reproduced on %s, and the fix %s passed the same check. Nothing merges without review.\n' \
-    "$2" "$4" "$3" > "$f"
+  local f=$runview/link-$1.md kind="Draft PR" end="Nothing merges without review."
+  [ -z "${ready:-}" ] || kind=PR
+  [ -z "${ready:-}" ] || [ "$merge_level" != merge ] || end="It merges once CI is green on that commit, unless a human acts first."
+  printf '%s %s: reproduced on %s, and the fix %s passed the same check. %s\n' "$kind" "$2" "$4" "$3" "$end" > "$f"
   send "$1" "$f" "$2"
 }
 
@@ -340,7 +349,7 @@ run_item() {
   local r prs
   id=$1 feature=$2 item=$fx/tmp/fix-$1
   view=$item out=$items/$1 branch=factory/fix-$1 title="fix: $(tag "$1") $2"
-  outcome="" reason="" url=none step=claim claimed="" ticket="" red="" stat="" reviews=""
+  outcome="" reason="" url=none step=claim claimed="" ticket="" red="" stat="" reviews="" ready=""
   trap release EXIT
   mkdir "$item" 2> /dev/null || finish skipped claimed
   claimed=1
@@ -414,10 +423,142 @@ run_item() {
   publish > "$item/pr-url"
   url=$(tail -n 1 "$item/pr-url")
   printf '%s %s %s %s\n' "$id" "$commit" "$entry" "$start" >> "$fx/pushed.tsv"
+  [ "$merge_level" = draft ] || ! approved || mark_ready
 
   step=link
   link_item "$id" "$url" "$commit" "$start"
   finish fixed "$linked"
+}
+
+# Model-free: every configured reviewer approved and no disclosure in needs_human.
+approved() {
+  local d
+  [ "$reviews" = "$(printf '%s=approve ' "${reviewers[@]}")" ] || return 1
+  for d in ${needs_human[@]+"${needs_human[@]}"}; do
+    case $d in
+      test-change) [ ${#changed[@]} = 0 ] ;;
+      dependency) [ ! -s "$item/deps.md" ] ;;
+      refactor) [ "$scope" = minimal ] ;;
+    esac || return 1
+  done
+}
+
+mark_ready() {
+  gh pr ready "$url" --repo "$repo" > /dev/null || { echo "publish: $url not marked ready" >&2; return 0; }
+  ready=1
+  [ "$merge_level" != merge ] || printf '%s approved %s %s\n' "$id" "$url" "$commit" >> "$fx/merges.tsv"
+}
+
+# $1 item, $2 PR, $3 commit, $4 why: the PR leaves factory merging for good.
+left() {
+  printf '%s left %s %s\n' "$1" "$2" "$3" >> "$fx/merges.tsv"
+  echo "land: $1 $2 not merged: $4; needs a human." | tee -a "$report"
+}
+
+# $1 item, $2 PR, $3 the gated commit. Pending CI or mergeability waits for a later run.
+merge_item() {
+  local v st dr h mg b hb x m
+  v=$(gh pr view "$2" --repo "$repo" --json state,isDraft,headRefOid,mergeable,baseRefName,headRefName,isCrossRepository \
+    --jq '"\(.state) \(.isDraft) \(.headRefOid) \(.mergeable) \(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
+  read -r st dr h mg b hb x <<< "$v"
+  [ "$st" = OPEN ] || { left "$1" "$2" "$3" "state $st"; return; }
+  [ "$dr" = false ] || { left "$1" "$2" "$3" "draft"; return; }
+  [ "$h" = "$3" ] || { left "$1" "$2" "$3" "head moved"; return; }
+  [ "$hb $b $x" = "factory/fix-$1 $ref false" ] || { left "$1" "$2" "$3" "not factory/fix-$1 into $ref"; return; }
+  case $mg in MERGEABLE) ;; UNKNOWN) return ;; *) left "$1" "$2" "$3" "mergeable $mg"; return ;; esac
+  case $(ci_state "$3") in SUCCESS) ;; FAILURE | ERROR) left "$1" "$2" "$3" "CI failed"; return ;; *) return ;; esac
+  [ ! -e .factory/pause ] || return 0
+  gh pr merge "$2" --repo "$repo" --squash --match-head-commit "$3" || { left "$1" "$2" "$3" "merge refused"; return; }
+  m=$(gh pr view "$2" --repo "$repo" --json mergeCommit --jq .mergeCommit.oid) || true
+  [[ $m =~ ^[0-9a-f]{40}$ ]] || m=-
+  printf '%s merged %s %s\n' "$1" "$2" "$m" >> "$fx/merges.tsv"
+  echo "land: $1 $2 merged as $m" | tee -a "$report"
+}
+
+# $1 item, $2 merged PR, $3 its merge commit. Same gates, draft, never merged by the factory.
+revert_pr() {
+  local d=$runview/revert-$1 p
+  view=$d out=$items/$1 work=$d/work branch=factory/revert-$1 pr="" commit="" gated=""
+  title="revert: $(tag "$1") factory merge ${3:0:12}"
+  ! git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null || { echo "land: $branch exists" >&2; exit 1; }
+  git fetch -q "$remote" "refs/heads/$ref"
+  start=$(git rev-parse FETCH_HEAD)
+  mkdir -p "$d" "$out"
+  git worktree add -q --detach "$work" "$start"
+  git -C "$work" revert --no-edit "$3" > /dev/null
+  commit=$(git -C "$work" rev-parse HEAD)
+  { printf 'Reverts the factory merge %s of %s: CI failed for it on %s. Needs a human; the factory never merges a revert.\n' \
+      "$3" "$2" "$ref"
+    git diff --name-only --no-renames --diff-filter=MD "$start" "$commit" | while IFS= read -r p; do
+      [[ ! $p =~ $tests_re ]] || echo "test-change: $p: reverts the merged fix"
+    done
+    echo "scope: minimal"; } > "$d/summary.md"
+  publish > "$d/pr-url"
+}
+
+# $1 item, $2 PR, $3 merge commit: red CI on it opens a draft revert PR and escalates.
+revert_item() {
+  local u=none
+  [[ $3 =~ ^[0-9a-f]{40}$ ]] || { left "$1" "$2" "$3" "merged, merge commit unknown: check CI on $ref"; return; }
+  case $(ci_state "$3") in
+    SUCCESS) printf '%s green %s %s\n' "$1" "$2" "$3" >> "$fx/merges.tsv"; return ;;
+    FAILURE | ERROR) ;;
+    *) return 0 ;;
+  esac
+  try revert_pr "$1" "$2" "$3" < /dev/null
+  [ ! -s "$runview/revert-$1/pr-url" ] || u=$(tail -n 1 "$runview/revert-$1/pr-url")
+  printf '%s reverted %s %s\n' "$1" "$2" "$3" >> "$fx/merges.tsv"
+  printf 'escalated main-red %s\n%s %s\n\n\n\n' "$u" "$3" "$3" > "$runview/outcomes/revert-$1"
+  echo "escalated: main-red: CI failed on $ref for the factory merge $3 of $2; revert PR $u; needs a human." | tee -a "$report"
+}
+
+# merges.tsv, newest row per item wins: <id> approved|merged|left|green|reverted <PR> <commit>.
+land() {
+  local id s u c
+  [ -f "$fx/merges.tsv" ] || return 0
+  while read -r id s u c; do
+    if [ "$s" = approved ] && [ "$merge_level" = merge ]; then
+      try merge_item "$id" "$u" "$c" < /dev/null
+    elif [ "$s" = merged ]; then
+      try revert_item "$id" "$u" "$c" < /dev/null
+    fi
+  done < <(awk '{r[$1] = $0} END {for (i in r) print r[i]}' "$fx/merges.tsv")
+}
+
+# fates.tsv, newest row per PR wins: <PR> <open|merged|factory-merged|closed|reverted> <change requests> <merge commit> <title>.
+fates() {
+  local id u f c m t v tip old pats
+  [ -f "$fx/linked.tsv" ] || return 0
+  touch "$fx/fates.tsv"
+  git fetch -q "$remote" "refs/heads/$ref"
+  tip=$(git rev-parse FETCH_HEAD)
+  while read -r id u; do
+    old=$(awk -v k="$u" '$1 == k {v = $0} END {print v}' "$fx/fates.tsv")
+    read -r _ f c m t <<< "$old"
+    case $f in
+      closed | reverted) continue ;;
+      merged | factory-merged) ;;
+      *)
+        v=$(gh pr view "$u" --repo "$repo" --json state,mergeCommit,title,reviews \
+          --jq '"\(.state) \([.reviews[] | select(.state == "CHANGES_REQUESTED")] | length) \(.mergeCommit.oid) \(.title)"') ||
+          continue
+        read -r f c m t <<< "$v"
+        case $f in
+          MERGED) f=merged; ! grep -qF " merged $u " "$fx/merges.tsv" 2> /dev/null || f=factory-merged ;;
+          CLOSED) f=closed ;;
+          *) f=open ;;
+        esac
+        [[ $m =~ ^[0-9a-f]{40}$ ]] || m=- ;;
+    esac
+    pats=(-e "Reverts $repo#${u##*/}")
+    [ "$m" = - ] || pats+=(-e "This reverts commit $m")
+    [ -z "$t" ] || pats+=(-e "Revert \"$t")
+    if [ "$m" != - ] && git merge-base --is-ancestor "$m" "$tip" 2> /dev/null &&
+      grep -qF "${pats[@]}" <<< "$(git log --format=%B "$m..$tip")"; then
+      f=reverted
+    fi
+    [ "$u $f $c $m $t" = "$old" ] || printf '%s %s %s %s %s\n' "$u" "$f" "$c" "$m" "$t" >> "$fx/fates.tsv"
+  done < <(awk '$2 ~ /\/pull\/[0-9]+$/' "$fx/linked.tsv")
 }
 
 pipeline() {
@@ -426,6 +567,11 @@ pipeline() {
   [[ $cap =~ ^[1-9][0-9]*$ ]] || block "cap $cap is not a positive whole number"
   [[ $flow =~ ^(fix|repro-only)$ ]] || block "flow $flow is not fix or repro-only"
   [[ $verify_fixed =~ ^(on|off)$ ]] || block "verify-fixed $verify_fixed is not on or off"
+  [[ $merge_level =~ ^(draft|ready|merge)$ ]] || block "merge_level $merge_level is not draft, ready or merge"
+  [ "$merge_level" != merge ] || [ ${#reviewers[@]} -ge 2 ] || block "merge_level merge needs at least 2 reviewers"
+  for p in ${needs_human[@]+"${needs_human[@]}"}; do
+    [[ $p =~ ^(test-change|dependency|refactor)$ ]] || block "needs_human $p is not test-change, dependency or refactor"
+  done
   preflight
   [ "${FACTORY_DRY_RUN:-0}" = 1 ] || recover
   for p in ${trust[@]+"${trust[@]}"}; do sel+=(--trust "$p"); done
@@ -435,6 +581,7 @@ pipeline() {
     ${sel[@]+"${sel[@]}"} > "$view/select.tsv"
   mkdir "$view/outcomes"
   printf '\n## Pipeline\n\n' >> "$report"
+  [ "${FACTORY_DRY_RUN:-0}" = 1 ] || { land; try fates < /dev/null; }
   grep -qE $'\t(fix$|verify\t)' "$view/select.tsv" || echo "pipeline: no candidates" | tee -a "$report"
   while IFS=$'\t' read -r id feature why fref; do
     u=none

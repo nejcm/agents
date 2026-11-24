@@ -51,7 +51,10 @@ the run script ([runners.md](../automate-factory/references/runners.md#run-recor
 runs, dry runs, outcomes (`escalated` among them), item outcomes for `issue-pipeline`, escalation
 reasons (`ci-cap` among them), runs and items that disclosed existing-test changes (and how many
 files) or dependencies, turns,
-tokens and cost (the CLI's own estimate); a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the record's
+tokens and cost (the CLI's own estimate), and for reviewed PRs, joined with
+`.factory/reports/fix-issues/fates.tsv`: reviewer approve rate, agreement with the human outcome
+(merged is agreement with approve; closed, reverted or a change request with changes), misses
+(approved, then closed or reverted) and merge rates by scope; a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the record's
 start date. Factory runs keep no transcript, so they are not counted again below. Gate messages,
 items and commits stay in the file, never in the report.
 

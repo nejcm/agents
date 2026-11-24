@@ -138,7 +138,8 @@ disclosed), `scope` and `weighted_lines`, all `null` unless the gates passed, `e
 `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
 commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`, `scope`, `weighted_lines`, `reviews`
-(`model`, `family`, `verdict`, `valid`: false when the output had no verdict line)). Usage comes from `claude -p --output-format json`
+(`model`, `family`, `verdict`, `valid`: false when the output had no verdict line)); a revert
+opened after a red factory merge adds item `revert-<id>`, outcome `escalated`, reason `main-red`. Usage comes from `claude -p --output-format json`
 (`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers; a total is
 `null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
 `agent-analytics` reads it.

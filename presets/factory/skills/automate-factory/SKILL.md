@@ -54,7 +54,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
    `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
 7. **Record** each entry in the profile's `Automations` section: runner, trigger, files, smoke
-   run date and result, write level, `issue-pipeline`'s `flow` and `verify_fixed`, status
+   run date and result, write level, `issue-pipeline`'s `flow`, `verify_fixed`, `reviewers`,
+   `merge_level` and `needs_human`, status
    (`active`, `proposed`, `failed: <reason>`).
 
 ## Re-run
@@ -65,7 +66,8 @@ entries the user names or whose smoke run failed. To change an entry:
 1. Regenerate its files (step 5) into a scratch directory from the current profile, never
    writing `*.local.md`: the before copy.
 2. Write the change where it lives: a setting (schedule, write level, destination, trust,
-   `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, budgets) to the profile, or guidance to the entry's
+   `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`, `merge_level`, `needs_human`,
+   budgets) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the
    deny list are not settings.
 3. Regenerate only that entry's files again from the changed profile. A file in

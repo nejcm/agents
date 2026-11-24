@@ -11,9 +11,11 @@
 - **Writes**: report to `.factory/reports/issue-pipeline/<date>.md`; at `comment`, the report to
   one fixed destination, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). At
   `draft-pr`, per selected item: state under `.factory/reports/fix-issues/` (claim, `items/<id>/`,
-  `pushed.tsv`, `tickets.tsv`, `linked.tsv`), a ticket for an `err-` item, one draft PR on
+  `pushed.tsv`, `tickets.tsv`, `linked.tsv`, `merges.tsv`, `fates.tsv`), a ticket for an `err-` item, one draft PR on
   `factory/fix-<id>`, one link comment (for verdict `fixed`, or any item under `flow` `repro-only`,
-  its one comment only), and `pipeline:` lines under `## Pipeline` in the report.
+  its one comment only), and `pipeline:` lines under `## Pipeline` in the report. At
+  `merge_level` `ready` or `merge`, [merge levels](../safety.md#steps) add marking a PR ready, a
+  squash merge, and a draft revert PR on `factory/revert-<id>`.
 - **Write levels**: report, comment, draft-pr (never `pr`).
 - **Steps**: `skills=("<skill-path:fix-issues>")`, plus `"<skill-path:debugging>"` at `draft-pr`;
   fill `repo`. Fetch is
@@ -29,7 +31,7 @@
   `fetch_labeled <label>` for a `label` trust, and `agent_fetch_deferred <prefix>` after each
   `agent_fetch_new`; then
   [`../../assets/issue-pipeline.sh`](../../assets/issue-pipeline.sh) goes into the run script
-  after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>`, `<cap>`, `<flow>`, `<verify-fixed>` and `<app>` filled, and
+  after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>`, `<cap>`, `<flow>`, `<verify-fixed>`, `<merge level>` and `<app>` filled, and
   `run.sh` runs its `pipeline` in place of edit, gates and publish. Spec prompt below to
   `.factory/automations/issue-pipeline.spec.md`; no edit prompt. Per item, oldest first, at most `cap`
   per run and one per feature: claim, a tool-less spec-writer checked by `check_items.py --spec`,
@@ -63,7 +65,12 @@
   `verify_fixed`, `on` (default) or `off`; `trust`, one array element per `Fetch` line with
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
   name of the `gh` line, or empty; `allow` globs; `reviewers`, Claude model aliases or names
-  other than the runner's default model (default `sonnet`), recorded as same family.
+  other than the runner's default model (default `sonnet`), recorded as same family, at least two
+  for `merge`; `merge_level`, `draft` (default), `ready` or `merge`, offered per
+  [interview](../../../setup-factory/references/interview.md) only with the entry's agreement
+  numbers shown; `needs_human`, the disclosures that keep a PR draft and unmerged, any of
+  `test-change`, `dependency`, `refactor` (default all three). Any other value fails the run
+  before any write.
 
 ## Prompt
 

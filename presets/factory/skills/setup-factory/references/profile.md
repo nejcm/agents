@@ -96,5 +96,5 @@ Updated: <YYYY-MM-DD> (automate-factory)
 - <entry>: <runner>, <trigger>; level <report / comment / draft-pr / pr>; files <paths>; smoke
   run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>; for
   `issue-pipeline` at draft-pr: flow <fix / repro-only>, verify_fixed <on / off>, reviewers
-  <models>
+  <models>, merge_level <draft / ready / merge>, needs_human <test-change dependency refactor>
 ```

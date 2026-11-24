@@ -106,7 +106,10 @@ ulis install --global --source . --preset react-web --yes
   catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
   you, so run them in an isolated VM or container holding only a repo-scoped token.
   `issue-pipeline` at `draft-pr` turns items from trusted sources into verified draft PRs,
-  at most 3 per run by default, never merged. Every run past the pause and Git config checks appends one redacted line to
+  at most 3 per run by default. They stay unmerged unless the entry's `merge_level` is `merge`:
+  then a later run squash-merges a PR only after two or more reviewers approve, CI is green on
+  the gated commit and nothing needs a human, and opens a draft revert PR if `main`'s CI goes red
+  after it. Every run past the pause and Git config checks appends one redacted line to
   `.factory/reports/runs.jsonl`. Changed, deleted or renamed tests and new dependencies are
   disclosed with a reason and force a draft; a run that would guess escalates instead, and a PR
   stops getting pushes after two red CI rounds (see
