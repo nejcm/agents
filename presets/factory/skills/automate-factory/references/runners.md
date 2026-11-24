@@ -133,7 +133,7 @@ Every run past the pause and Git config checks appends one line to
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
-disclosed), both `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, and the summed `turns`, `input_tokens`, `cache_write_tokens`,
+disclosed), both `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
 commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`). Usage comes from `claude -p --output-format json`

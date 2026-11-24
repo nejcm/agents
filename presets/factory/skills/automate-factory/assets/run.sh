@@ -46,7 +46,8 @@ if mode == "json":
     u = d.get("usage") if isinstance(d.get("usage"), dict) else {}
     keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
     with open(a[1], "a") as f:
-        f.write(json.dumps(dict({k: u.get(k) for k in keys}, turns=d.get("num_turns"), cost_usd=d.get("total_cost_usd"))) + "\n")
+        f.write(json.dumps(dict({k: u.get(k) for k in keys}, turns=d.get("num_turns"), cost_usd=d.get("total_cost_usd"),
+                            max_turns=d.get("subtype") == "error_max_turns")) + "\n")
     sys.exit()
 creds, calls, gates, outcomes, *kv = a
 rec = dict(x.split("=", 1) for x in kv)
@@ -56,6 +57,7 @@ rec.update(disclosed(rec.pop("disclosure")))
 rec["gates"] = lines(gates)
 use = [json.loads(x) for x in lines(calls)]
 rec["calls"] = len(use)
+rec["max_turns_hit"] = sum(u.get("max_turns") is True for u in use)
 for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write_tokens", "cache_creation_input_tokens"),
              ("cache_read_tokens", "cache_read_input_tokens"), ("output_tokens", "output_tokens"), ("cost_usd", "cost_usd")):
     v = [u.get(n) for u in use]

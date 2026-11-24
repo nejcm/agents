@@ -123,7 +123,7 @@ cd "$dir" && check=$check evidence=$evidence timeout <stage minutes>m claude -p 
   hooks, confirmed as in automate-factory
   [`runners.md`](../automate-factory/references/runners.md#analyze-command). Missing either: stop
   after triage.
-- **Budget**: per stage from the profile's per-run caps (default 30 minutes, 50 turns):
+- **Budget**: per stage from the profile's per-run caps (default 30 minutes, 200 turns):
   `timeout` and `--max-turns`.
 - **Model tools**: reproduce and verify get `Bash,Read,Grep,Glob`; fix adds `Edit,Write`.
 - **Inputs**: the coordinator copies each stage's inputs (its reference's Inputs list) into

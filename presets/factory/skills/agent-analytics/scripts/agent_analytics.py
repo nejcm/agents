@@ -267,9 +267,10 @@ def factory_runs(repo, since):
         outcome = rec.get("outcome") if re.fullmatch(r"[a-z-]{1,20}", str(rec.get("outcome"))) else "?"
         r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
                                     "items": collections.Counter(), "escalations": collections.Counter(),
-                                    "tests": 0, "test_files": 0, "deps": 0, **{k: 0 for k in RUN_METRICS}})
+                                    "tests": 0, "test_files": 0, "deps": 0, "capped": 0, **{k: 0 for k in RUN_METRICS}})
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
+        r["capped"] += is_num(rec.get("max_turns_hit")) and rec["max_turns_hit"] > 0
         r["outcomes"][outcome] += 1
         items = rec.get("items") if isinstance(rec.get("items"), list) else []
         for i in items:
@@ -310,6 +311,7 @@ def render_runs(runs):
         out.append(f"- {entry}: {r['dry']} of {r['runs']} runs dry. Turns reported by {r['seen']['turns']}, "
                    f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}."
                    + (f" Items: {items}." if items else "")
+                   + (f" Runs that hit the turn cap: {r['capped']}." if r["capped"] else "")
                    + (f" Escalation reasons: {escalations}." if escalations else "")
                    + (f" Disclosed: existing tests changed in {r['tests']} ({r['test_files']} files), "
                       f"dependencies in {r['deps']}." if r["tests"] or r["deps"] else ""))

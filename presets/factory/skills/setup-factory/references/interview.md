@@ -35,7 +35,7 @@ the items the user selected. Skip the phase when there are no gaps.
    Slack channel, email, a file in `.factory/reports/`).
 4. **Deploy targets**: environments and how they deploy (CI on merge, manual, platform name),
    and which ones an agent may touch (default: none).
-5. **Budgets**: per run in minutes and turns (default 30 and 50); per scheduled `issue-pipeline`
+5. **Budgets**: per run in minutes and turns (default 30 and 200); per scheduled `issue-pipeline`
    run that opens PRs, in minutes (default 240) and items (default 3); per week; which models are allowed. Runs use
    the user's `claude` subscription login, never an API key.
 6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or

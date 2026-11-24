@@ -96,8 +96,8 @@ entries the user names or whose smoke run failed. To change an entry:
   diff and applied only after the user confirms.
 - **Secrets**: never ask for, read, store or write one. Name a secret by its variable or setting
   name only ("`LINEAR_API_KEY` env var") and print the steps for the user to set it.
-- **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 50 turns when
-  unset: `--max-turns` (print mode; absent from `--help` but accepted and validated), and the
+- **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 200 turns when
+  unset; minutes are the budget, turns only stop a looping run: `--max-turns` (print mode; absent from `--help` but accepted and validated), and the
   minutes as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
   unit or cron timeout is `run_minutes` plus 10; and an item cap, `cap` (default 3).

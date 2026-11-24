@@ -286,6 +286,7 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         [rec] = self.records()
         self.assertEqual((rec["outcome"], rec["exit_code"], rec["turns"], rec["cost_usd"], rec["output_tokens"]),
                          ("failed", 1, 5, 0.1, None))
+        self.assertEqual(rec["max_turns_hit"], 1)
 
     def test_run_record_redacts_a_credential_from_the_summary(self):
         self.json_claude("test-change: sk-ant-1234567890abcdefXYZ: why\nedit: outcome=changed")
