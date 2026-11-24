@@ -217,6 +217,175 @@ class CheckItems(unittest.TestCase):
             with self.subTest(args=args), self.assertRaises(SystemExit):
                 write(args)
 
+    def test_deferred_item_is_fetched_again_and_a_final_one_is_not(self):
+        reports = tempfile.mkdtemp()
+        with open(os.path.join(reports, "2026-11-20.md"), "w") as f:
+            f.write("fix-issues: id=lin-ENG-12 verdict=new-bug feature=save ref=none\n"
+                    "fix-issues: id=lin-7 verdict=new-bug feature=save ref=none\n## Pipeline\n"
+                    "pipeline: id=lin-ENG-12 outcome=deferred reason=cap pr=none\n"
+                    "pipeline: id=lin-7 outcome=deferred reason=cap pr=none\n")
+        with open(os.path.join(reports, "2026-11-21.md"), "w") as f:
+            f.write("## Pipeline\npipeline: id=lin-7 outcome=fixed reason=none pr=https://github.com/o/r/pull/3\n")
+        with open(os.path.join(reports, "2026-11-22.md"), "w") as f:
+            f.write("## lin-9\npipeline: id=lin-7 outcome=deferred reason=cap pr=none\n"
+                    "## Pipeline\npipeline: id=--x outcome=deferred reason=cap pr=none\n"
+                    "pipeline: id=.. outcome=deferred reason=cap pr=none\n"
+                    "pipeline: id=lin-a..b outcome=deferred reason=cap pr=none\n")
+        with open(os.path.join(reports, "2026-11-23.md"), "w") as f:
+            f.write("pipeline: id=lin-7 outcome=deferred reason=cap pr=none\n")
+        with open(os.path.join(reports, "2026-11-24.md"), "w") as f:
+            f.write("## Pipeline\npipeline: id=lin-7 outcome=deferred reason=cap pr=none\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ci.main(["--deferred", reports, "2026-11-24.md"])
+        self.assertEqual(buf.getvalue(), "lin-ENG-12\n")
+        out = run([ITEM, dict(ITEM, id=7)], extra=["--skip-judged", reports, "2026-11-24.md"])
+        self.assertEqual(os.listdir(out), ["lin-ENG-12.json"])
+
+
+SPEC = ("feature: save\n\n## Preconditions and data\nA saved draft.\n\n## Steps\n1. Click Save.\n\n"
+        "## Expected final state\nSaved.\n\n## Broken final state\nThe app crashes.\n")
+
+
+class Spec(unittest.TestCase):
+    def setUp(self):
+        self.features = tempfile.mkdtemp()
+        open(os.path.join(self.features, "save.md"), "w").close()
+
+    def spec(self, text, feature="save"):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ci.main(["--spec", self.features, feature], io.BytesIO(text.encode()))
+        return buf.getvalue()
+
+    def test_valid_spec_is_printed(self):
+        self.assertEqual(self.spec(SPEC), SPEC)
+
+    def test_rejects_and_prints_nothing(self):
+        cases = {
+            "missing heading": SPEC.replace("## Steps\n1. Click Save.\n\n", ""),
+            "reordered": SPEC.replace("## Expected final state", "## X").replace("## Broken final state",
+                                      "## Expected final state").replace("## X", "## Broken final state"),
+            "extra heading": SPEC + "### Notes\nx\n",
+            "blank section": SPEC.replace("1. Click Save.", "  "),
+            "text before first heading": SPEC.replace("feature: save\n\n", "feature: save\nhi\n"),
+            "feature mismatch": SPEC.replace("feature: save", "feature: load"),
+            "no feature line": SPEC.replace("feature: save\n", ""),
+            "oversize": SPEC + "x" * ci.MAX_SPEC,
+            "control character": SPEC.replace("Saved.", "Saved.\x1b[2J"),
+            "carriage return": SPEC.replace("\n", "\r\n"),
+            "bidi override": SPEC.replace("Saved.", "Saved\u202e."),
+            "url": SPEC.replace("A saved draft.", "See HTTPS://x.y/z."),
+            "empty": "",
+        }
+        runs = [("save", text.encode(), name) for name, text in cases.items()]
+        runs += [(f, SPEC.replace("save", f, 1).encode(), f) for f in ("load", "../save", "none")]
+        runs.append(("save", SPEC.encode() + b"\xff", "invalid UTF-8"))
+        for feature, data, name in runs:
+            with self.subTest(name), contextlib.redirect_stdout(io.StringIO()) as buf, \
+                    self.assertRaises(SystemExit) as e:
+                ci.main(["--spec", self.features, feature], io.BytesIO(data))
+            self.assertTrue(e.exception.code)
+            self.assertEqual(buf.getvalue(), "")
+
+
+def gh_item(n, created, **kw):
+    return dict({"number": n, "title": "t", "body": "b", "createdAt": created, "url": "https://x",
+                 "labels": [], "state": "OPEN", "assignees": []}, **kw)
+
+
+class Select(unittest.TestCase):
+    def select(self, verdicts, items, cap=3, extra=()):
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "items"))
+        for name, obj in items.items():
+            with open(os.path.join(d, "items", name + ".json"), "w") as f:
+                f.write(obj if isinstance(obj, str) else json.dumps(obj))
+        with open(os.path.join(d, "projected"), "w") as f:
+            f.write("".join(f"fix-issues: id={v[0]} verdict={v[1]} feature={v[2]} ref={v[3]}\n" for v in verdicts))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ci.main(["--select", os.path.join(d, "projected"), os.path.join(d, "items"), str(cap), *extra])
+        return [line.split("\t") for line in buf.getvalue().splitlines()]
+
+    def test_reasons_order_and_cap(self):
+        day = "2026-11-%02dT08:00:00Z"
+        items = {
+            "1": gh_item(1, day % 1),
+            "2": gh_item(2, day % 2, labels=[{"name": "factory"}]),
+            "3": gh_item(3, day % 3),
+            "4": gh_item(4, day % 4, labels=[{"name": "factory"}], state="CLOSED"),
+            "5": gh_item(5, day % 5, labels=[{"name": "factory"}], assignees=[{"login": "x"}]),
+            "lin-A": dict(ITEM, id="A", created="2026-11-06T08:00:00"),
+            "lin-B": dict(ITEM, id="B", created=day % 7),
+            "lin-C": dict(ITEM, id="C", created=day % 8),
+            "lin-D": dict(ITEM, id="D", created=day % 9),
+            "lin-E": dict(ITEM, id="E", created=day % 10),
+            "lin-F": dict(ITEM, id="F", created=day % 11),
+            "lin-G": dict(ITEM, id="G", created=day % 12),
+            "err-s-H": dict(ITEM, id="H", created=day % 13),
+            "err-s-I": dict(ITEM, id="I", created=day % 14),
+            "err-s-J": dict(ITEM, id="J", created=day % 15),
+            "lin-K": dict(ITEM, id="K", created=day % 16),
+        }
+        verdicts = [
+            ("lin-K", "new-bug", "k", "none"),
+            ("err-s-J", "duplicate", "j", "lin-F"),
+            ("1", "new-bug", "one", "none"),
+            ("2", "new-bug", "two", "none"),
+            ("3", "fixed", "three", "abc1234"),
+            ("4", "new-bug", "four", "none"),
+            ("5", "new-bug", "five", "none"),
+            ("lin-A", "new-bug", "none", "none"),
+            ("lin-B", "new-bug", "two", "none"),
+            ("lin-C", "new-bug", "c", "none"),
+            ("lin-D", "new-bug", "d", "none"),
+            ("lin-E", "duplicate", "e", "#2"),
+            ("lin-F", "duplicate", "f", "err-s-I"),
+            ("lin-G", "new-bug", "g", "none"),
+            ("err-s-H", "new-bug", "h", "none"),
+            ("err-s-I", "duplicate", "i", "lin-F"),
+            ("lin-Z", "new-bug", "z", "none"),
+            ("lin-K", "new-bug", "other", "none"),
+        ]
+        got = self.select(verdicts, items, 3, ["--trust", "lin", "--label", "factory"])
+        self.assertEqual(got, [
+            ["1", "one", "untrusted"],
+            ["2", "two", "fix"],
+            ["3", "three", "verdict"],
+            ["4", "four", "closed"],
+            ["5", "five", "assigned"],
+            ["lin-A", "none", "no-feature"],
+            ["lin-B", "two", "same-feature"],
+            ["lin-C", "c", "fix"],
+            ["lin-D", "d", "fix"],
+            ["lin-E", "e", "verdict"],
+            ["lin-F", "f", "mutual-duplicate"],
+            ["lin-G", "g", "cap"],
+            ["err-s-H", "h", "untrusted"],
+            ["err-s-I", "i", "mutual-duplicate"],
+            ["err-s-J", "j", "verdict"],
+            ["lin-K", "k", "cap"],
+        ])
+
+    def test_github_trust(self):
+        items = {"1": gh_item(1, "2026-11-01T08:00:00Z", labels=[{"name": "other"}])}
+        verdicts = [("1", "new-bug", "one", "none")]
+        self.assertEqual(self.select(verdicts, items, extra=["--trust", "#"])[0][2], "fix")
+        self.assertEqual(self.select(verdicts, items, extra=["--label", "factory"])[0][2], "untrusted")
+        self.assertEqual(self.select(verdicts, items, cap=0, extra=["--trust", "#"])[0][2], "cap")
+        with self.assertRaises(SystemExit):
+            self.select(verdicts, items, extra=["--trust", "../x"])
+
+    def test_self_duplicate_and_bad_items(self):
+        day = "2026-11-0%dT08:00:00Z"
+        items = {"1": gh_item(1, day % 1), "2": [], "3": gh_item(3, day % 3, labels=123),
+                 "4": gh_item(4, day % 4, labels=[{"name": ["factory"]}]), "5": gh_item(5, day % 5), "6": "{"}
+        verdicts = [("1", "duplicate", "one", "#1")] + [(str(n), "new-bug", f"f{n}", "none") for n in range(2, 7)]
+        got = self.select(verdicts, items, extra=["--label", "factory"])
+        self.assertEqual(got, [["1", "one", "verdict"], ["4", "f4", "untrusted"], ["5", "f5", "untrusted"],
+                               ["2", "f2", "bad-item"], ["3", "f3", "bad-item"], ["6", "f6", "bad-item"]])
+
 
 if __name__ == "__main__":
     unittest.main()

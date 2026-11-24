@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Check a fetch agent's stream-json run and write one <prefix>-<id>.json per item; check a write agent's
-run; or project a report."""
+run; project a report; check a written spec; select fix candidates; or list deferred items."""
 import argparse
 import datetime
 import json
 import os
 import re
 import sys
+import unicodedata
 
 # Error trackers are err-<source>, so two trackers' group IDs never share a key.
 PREFIX = re.compile(r"err-[a-z][a-z0-9]{0,14}|(?!err$)[a-z][a-z0-9]{0,14}")
@@ -16,20 +17,30 @@ VERDICT = re.compile(
     r"fix-issues: id=[A-Za-z0-9._-]{1,96} verdict=(new-bug|fixed|duplicate|related|owned|not-a-bug|needs-info)"
     r" feature=[a-z0-9_-]{1,64} ref=(#[0-9]+|[0-9a-f]{7,40}|[a-z][a-z0-9-]{0,18}-[A-Za-z0-9._-]{1,64}|none)"
 )
+PIPELINE = re.compile(
+    r"pipeline: id=([A-Za-z0-9._-]{1,96}) outcome=(fixed|not-reproduced|blocked|skipped|deferred)"
+    r" reason=[a-z-]{1,32} pr=(https?://\S+|none)"
+)
+SPEC_HEADINGS = ["## Preconditions and data", "## Steps", "## Expected final state", "## Broken final state"]
+MAX_SPEC = 4096
 MAX_ITEMS = 500
 MAX_LINE = 256 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_STREAM = 64 * 1024 * 1024
 
 
-def is_time(v):
+def parse_time(v):
     if not isinstance(v, str):
-        return False
+        return None
     try:
-        datetime.datetime.fromisoformat(v[:-1] + "+00:00" if v.endswith("Z") else v)
+        t = datetime.datetime.fromisoformat(v[:-1] + "+00:00" if v.endswith("Z") else v)
     except ValueError:
-        return False
-    return True
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)
+
+
+def is_time(v):
+    return parse_time(v) is not None
 
 
 def check(obj):
@@ -107,7 +118,107 @@ def judged(reports, today):
         if name.endswith(".md") and name != today:
             with open(os.path.join(reports, name), errors="replace") as f:
                 seen.update(line.split(" ")[1][3:] for line in f if line.startswith("fix-issues: id="))
-    return seen
+    return seen - deferred(reports, today)
+
+
+def is_item_name(i):
+    m = re.fullmatch(r"(err-[^-]+|[^-]+)-(.+)", i)
+    return i.isdigit() or bool(m and PREFIX.fullmatch(m[1]) and ITEM_ID.fullmatch(m[2]))
+
+
+def deferred(reports, today):
+    last = {}
+    for name in sorted(os.listdir(reports)) if os.path.isdir(reports) else ():
+        if name.endswith(".md") and name != today:
+            # Only the model-free section appended after the Judge's text counts.
+            section = None
+            with open(os.path.join(reports, name), errors="replace") as f:
+                for line in f:
+                    line = line.rstrip("\n")
+                    if line == "## Pipeline":
+                        section = []
+                    elif section is not None:
+                        section.append(line)
+            for m in filter(None, map(PIPELINE.fullmatch, section or ())):
+                if is_item_name(m[1]):
+                    last[m[1]] = m[2]
+    return {i for i, outcome in last.items() if outcome == "deferred"}
+
+
+def check_spec(features, feature, stdin):
+    data = stdin.read(MAX_SPEC + 1)
+    if len(data) > MAX_SPEC:
+        sys.exit(f"spec over {MAX_SPEC} bytes")
+    try:
+        text = data.decode()
+    except UnicodeDecodeError:
+        sys.exit("spec not UTF-8")
+    if any(c != "\n" and unicodedata.category(c) in ("Cc", "Cf") for c in text):
+        sys.exit("spec has a control or format character")
+    if re.search(r"https?://", text, re.I):
+        sys.exit("spec has a URL")
+    if not re.fullmatch(r"[a-z0-9_-]{1,64}", feature) or not os.path.isfile(os.path.join(features, feature + ".md")):
+        sys.exit(f"feature {feature} not in the feature map")
+    lines = text.rstrip("\n").split("\n")
+    if lines[0] != f"feature: {feature}":
+        sys.exit(f"first line is not 'feature: {feature}'")
+    heads = [n for n, line in enumerate(lines) if line.startswith("#")]
+    if [lines[n] for n in heads] != SPEC_HEADINGS:
+        sys.exit("headings are not exactly: " + ", ".join(SPEC_HEADINGS))
+    if any(line.strip() for line in lines[1:heads[0]]):
+        sys.exit("text between the feature line and the first heading")
+    for a, b in zip(heads, heads[1:] + [len(lines)]):
+        if not any(line.strip() for line in lines[a + 1:b]):
+            sys.exit(f"{lines[a]} is blank")
+    sys.stdout.write("\n".join(lines) + "\n")
+
+
+def select(projected, items, cap, trust, label):
+    if not all(p == "#" or PREFIX.fullmatch(p) for p in trust):
+        sys.exit("bad --trust prefix")
+    never = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
+    run = {}
+    with open(projected, errors="replace") as f:
+        for line in f:
+            if VERDICT.fullmatch(line.rstrip("\n")):
+                i, verdict, feature, ref = (x.split("=", 1)[1] for x in line.split()[1:])
+                path = os.path.join(items, i + ".json")
+                if i not in run and os.path.isfile(path):
+                    try:
+                        with open(path) as g:
+                            obj = json.load(g)
+                        labels = {x["name"] for x in obj.get("labels") or ()
+                                  if isinstance(x, dict) and isinstance(x.get("name"), str)}
+                        created = parse_time(obj.get("createdAt", obj.get("created"))) or never
+                    except (OSError, ValueError, AttributeError, TypeError):
+                        obj, labels, created = None, set(), never
+                    run[i] = created, verdict, feature, ref.lstrip("#"), obj, labels
+    taken, fixes = set(), 0
+    for i in sorted(run, key=lambda i: (run[i][0], i)):
+        _, verdict, feature, ref, obj, labels = run[i]
+        gh = i.isdigit()
+        if obj is None:
+            why = "bad-item"
+        elif verdict == "duplicate" and ref != i and ref in run and run[ref][1] == "duplicate" and run[ref][3] == i:
+            why = "mutual-duplicate"
+        elif verdict != "new-bug":
+            why = "verdict"
+        elif feature == "none":
+            why = "no-feature"
+        elif not (any(i.startswith(p + "-") for p in trust) or gh and ("#" in trust or label in labels)):
+            why = "untrusted"
+        elif gh and obj.get("state") != "OPEN":
+            why = "closed"
+        elif gh and obj.get("assignees") != []:
+            why = "assigned"
+        elif feature in taken:
+            why = "same-feature"
+        elif fixes >= cap:
+            why = "cap"
+        else:
+            why, fixes = "fix", fixes + 1
+            taken.add(feature)
+        print(f"{i}\t{feature}\t{why}")
 
 
 def project(report):
@@ -150,9 +261,24 @@ def main(argv, stdin=sys.stdin.buffer):
         return project(argv[1])
     if len(argv) == 5 and argv[0] == "--write":
         return check_write(*argv[1:], stdin)
+    if len(argv) == 3 and argv[0] == "--spec":
+        return check_spec(*argv[1:], stdin)
+    if len(argv) == 3 and argv[0] == "--deferred":
+        return sys.stdout.write("".join(i + "\n" for i in sorted(deferred(*argv[1:]))))
+    if argv[:1] == ["--select"]:
+        sp = argparse.ArgumentParser(usage="check_items.py --select <projected lines> <items dir> <cap> "
+                                     "[--trust <prefix or '#' for GitHub>]... [--label <name>]")
+        sp.add_argument("projected")
+        sp.add_argument("items")
+        sp.add_argument("cap", type=int)
+        sp.add_argument("--trust", action="append", default=[])
+        sp.add_argument("--label")
+        return select(**vars(sp.parse_args(argv[1:])))
     ap = argparse.ArgumentParser(usage="check_items.py <prefix> <dir> [--mcp <tools>] "
                                  "[--skip-judged <reports dir> <today>.md] < stream.jsonl | --project <report> | "
-                                 "--write <tool> <body key or ''> <body file> <fixed args JSON> < stream.jsonl")
+                                 "--write <tool> <body key or ''> <body file> <fixed args JSON> < stream.jsonl | "
+                                 "--spec <features dir> <feature> < spec.md | --select ... | "
+                                 "--deferred <reports dir> <today>.md")
     ap.add_argument("prefix")
     ap.add_argument("out")
     ap.add_argument("--mcp", default="")
