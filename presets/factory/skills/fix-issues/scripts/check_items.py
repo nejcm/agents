@@ -20,7 +20,7 @@ VERDICT = re.compile(
 # A fixed line with any ref, so a malformed one is still rejected with a reason.
 FIXED_ANY_REF = re.compile(r"fix-issues: id=[A-Za-z0-9._-]{1,96} verdict=fixed feature=[a-z0-9_-]{1,64} ref=.*")
 PIPELINE = re.compile(
-    r"pipeline: id=([A-Za-z0-9._-]{1,96}) outcome=(fixed|not-reproduced|blocked|skipped|deferred)"
+    r"pipeline: id=([A-Za-z0-9._-]{1,96}) outcome=(fixed|reproduced|not-reproduced|blocked|skipped|deferred)"
     r" reason=[a-z-]{1,32} pr=(https?://\S+|none)"
 )
 SPEC_HEADINGS = ["## Preconditions and data", "## Steps", "## Expected final state", "## Broken final state"]
@@ -175,7 +175,7 @@ def check_spec(features, feature, stdin):
     sys.stdout.write("\n".join(lines) + "\n")
 
 
-def select(report, items, cap, trust, label):
+def select(report, items, cap, trust, label, verify):
     if not all(p == "#" or PREFIX.fullmatch(p) for p in trust):
         sys.exit("bad --trust prefix")
     never = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
@@ -204,7 +204,7 @@ def select(report, items, cap, trust, label):
             why = "bad-item"
         elif verdict == "duplicate" and ref != i and ref in run and run[ref][1] == "duplicate" and run[ref][3] == i:
             why = "mutual-duplicate"
-        elif verdict not in ("new-bug", "fixed"):
+        elif verdict not in (("new-bug", "fixed") if verify else ("new-bug",)):
             why = "verdict"
         elif feature == "none":
             why = "no-feature"
@@ -273,12 +273,13 @@ def main(argv, stdin=sys.stdin.buffer):
         return sys.stdout.write("".join(i + "\n" for i in sorted(deferred(*argv[1:]))))
     if argv[:1] == ["--select"]:
         sp = argparse.ArgumentParser(usage="check_items.py --select <report> <items dir> <cap> "
-                                     "[--trust <prefix or '#' for GitHub>]... [--label <name>]")
+                                     "[--trust <prefix or '#' for GitHub>]... [--label <name>] [--no-verify]")
         sp.add_argument("report")
         sp.add_argument("items")
         sp.add_argument("cap", type=int)
         sp.add_argument("--trust", action="append", default=[])
         sp.add_argument("--label")
+        sp.add_argument("--no-verify", dest="verify", action="store_false")
         return select(**vars(sp.parse_args(argv[1:])))
     ap = argparse.ArgumentParser(usage="check_items.py <prefix> <dir> [--mcp <tools>] "
                                  "[--skip-judged <reports dir> <today>.md] < stream.jsonl | --project <report> | "

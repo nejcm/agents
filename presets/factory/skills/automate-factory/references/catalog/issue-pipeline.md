@@ -29,7 +29,7 @@
   `fetch_labeled <label>` for a `label` trust, and `agent_fetch_deferred <prefix>` after each
   `agent_fetch_new`; then
   [`../../assets/issue-pipeline.sh`](../../assets/issue-pipeline.sh) goes into the run script
-  after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>`, `<cap>` and `<app>` filled, and
+  after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>`, `<cap>`, `<flow>`, `<verify-fixed>` and `<app>` filled, and
   `run.sh` runs its `pipeline` in place of edit, gates and publish. Spec prompt below to
   `.factory/automations/issue-pipeline.spec.md`; no edit prompt. Per item, oldest first, at most `cap`
   per run and one per feature: claim, a tool-less spec-writer checked by `check_items.py --spec`,
@@ -45,9 +45,16 @@
   commit's parent and the fix commit, and one comment, verified or not confirmed, with the spec
   and verify record. No branch, PR or ticket; a not-confirmed fix is never re-filed. Links go to the GitHub issue or
   ticket, or through a source's `<prefix>.comment.sh`; an MCP comment write is not used, and the
-  report says so. `.factory/pause` stops it before the next item.
+  report says so. `.factory/pause` stops it before the next item. With `flow` `repro-only`, a
+  `new-bug` item needs a comment destination as above (an `err-` item has no ticket, so it is
+  skipped), runs the spec and reproduce only, and a reproduced one gets one comment with the spec
+  and repro record, recorded in `linked.tsv` so a rerun skips it; no fix stage, branch, PR or
+  ticket. `fixed` items follow `verify_fixed` either way. With `verify_fixed` `off`, a `fixed` item
+  is skipped with reason `verdict` and uses no cap or feature slot. Any other value of either fails
+  the run before any stage.
 - **Choices**: day and time; where to post at `comment`. At `draft-pr`: `run_minutes` (the
-  profile's pipeline budget, default 240); `cap` (its item count, default 3); `trust`, one array element per `Fetch` line with
+  profile's pipeline budget, default 240); `cap` (its item count, default 3); `flow`, `fix` (default) or `repro-only`;
+  `verify_fixed`, `on` (default) or `off`; `trust`, one array element per `Fetch` line with
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
   name of the `gh` line, or empty; `allow` globs.
 

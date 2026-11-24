@@ -198,7 +198,7 @@ class PipelineTest(unittest.TestCase):
             return json.load(f)
 
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
-                     report_extra="", cap="3"):
+                     report_extra="", cap="3", flow="fix", verify_fixed="on"):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -214,7 +214,8 @@ class PipelineTest(unittest.TestCase):
         with open(PIPELINE_SH) as f:
             pipeline = f.read()
         pipeline = pipeline.replace('("<trust prefix>")', "(" + " ".join(f'"{p}"' for p in trust) + ")")
-        for k, v in {"<label>": label, "<run minutes>": "240", "<app>": "app", "<cap>": cap}.items():
+        for k, v in {"<label>": label, "<run minutes>": "240", "<app>": "app", "<cap>": cap, "<flow>": flow,
+                     "<verify-fixed>": verify_fixed}.items():
             pipeline = pipeline.replace(k, v)
         fetch = "fetch_new; fetch_deferred; " + (f"fetch_labeled {label}; " if label else "") + extra_fetch + "fetch_context"
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
@@ -407,6 +408,70 @@ class PipelineTest(unittest.TestCase):
                 self.assertIn(f"gate: cap {cap} is not a positive whole number", r.stderr)
                 self.assertEqual(self.stage_calls() + self.spec_calls(), [])
                 self.assertEqual(self.gh_writes(), [])
+
+    def test_unknown_flow_or_verify_fixed_fails_before_any_stage(self):
+        self.gh_state({1: {}}, [])
+        for kw, msg in (({"flow": "fix-only"}, "flow fix-only is not fix or repro-only"),
+                        ({"flow": "<flow>"}, "flow <flow> is not fix or repro-only"),
+                        ({"verify_fixed": "no"}, "verify-fixed no is not on or off")):
+            with self.subTest(kw):
+                r = self.run_pipeline({"1": {}}, **kw)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn(f"gate: {msg}", r.stderr)
+                self.assertEqual(self.stage_calls() + self.spec_calls(), [])
+                self.assertEqual(self.gh_writes(), [])
+
+    def test_repro_only_posts_one_evidence_comment_and_starts_no_fix(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        items = {"1": {"feature": "a"}, "2": {"feature": "b", "repro": "not-reproduced"}}
+        r = self.run_pipeline(items, flow="repro-only")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("reproduced", "linked", "none"))
+        self.assertEqual(self.outcome("2")[:2], ("not-reproduced", "reproduce"))
+        self.assertEqual([c.rsplit("/", 1)[1] for c in self.stage_calls()], ["reproduce", "reproduce"])
+        comments = self.gh()["comments"]
+        self.assertEqual([c["issue"] for c in comments], ["1"])
+        start = self.git("-C", self.repo, "rev-parse", "main").strip()
+        self.assertTrue(comments[0]["body"].startswith(f"Reproduced on {start} by a scheduled run."))
+        self.assertIn("## Spec\n\nfeature: a\n", comments[0]["body"])
+        self.assertIn("repro: outcome=reproduced", comments[0]["body"])
+        self.assertEqual(self.gh_writes(), [c for c in self.calls() if c.startswith("gh issue comment")])
+        self.assertEqual(self.remote_heads(), "")
+        self.assertEqual(self.rows("pushed.tsv") + self.rows("tickets.tsv"), [])
+        self.assertEqual(self.rows("linked.tsv"), [f"1 {start}"])
+        r = self.run_pipeline(items, flow="repro-only")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("skipped", "linked"))
+        self.assertEqual(self.stage_calls("1") + self.gh_writes(), [])
+        self.assertEqual(len(self.gh()["comments"]), 1)
+
+    def test_repro_only_without_a_comment_destination_or_in_dry_run_writes_nothing(self):
+        agent = {"err-sentry": [{"id": "C1", "title": "e", "body": "b", "url": "https://s.invalid/C1",
+                                 "created": "2026-11-01T00:00:00Z", "updated": "2026-11-01T00:00:00Z",
+                                 "labels": []}]}
+        r = self.run_pipeline({"err-sentry-C1": {}}, trust=("err-sentry",), agent=agent, flow="repro-only",
+                              extra_fetch="agent_fetch_new err-sentry < /dev/null; ")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("err-sentry-C1")[:2], ("skipped", "no-ticket"))
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}}, flow="repro-only", dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 repro: outcome=reproduced", r.stdout)
+        self.assertEqual(self.outcome("1")[:2], ("deferred", "dry-run"))
+        self.assertEqual(self.gh_writes() + self.rows("linked.tsv"), [])
+
+    def test_verify_fixed_off_sends_fixed_items_to_the_report(self):
+        sha = self.fix_commit()
+        self.push_main()
+        self.gh_state({1: {}, 2: {}}, [])
+        items = {"1": {"verdict": "fixed", "ref": sha}, "2": {"feature": "a"}}
+        r = self.run_pipeline(items, verify_fixed="off", cap="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("skipped", "verdict", "none"))
+        self.assertEqual(self.stage_calls("1"), [])
+        self.assertEqual([c["issue"] for c in self.gh()["comments"]], ["2"])
+        self.assertEqual(self.outcome("2")[0], "fixed")
 
     def test_pause_during_item_defers_the_next(self):
         self.gh_state({1: {}, 2: {}}, [])

@@ -1,5 +1,6 @@
 # issue-pipeline at draft-pr: inserted into run.sh after publish; run.sh then calls pipeline.
 trust=("<trust prefix>") label="<label>" run_minutes="<run minutes>" app="<app>" cap="<cap>"
+flow="<flow>" verify_fixed="<verify-fixed>"
 fx=$PWD/.factory/reports/fix-issues
 items=$fx/items
 
@@ -132,15 +133,32 @@ send() {
   printf '%s %s\n' "$1" "$3" >> "$fx/linked.tsv"
 }
 
-# $1 the triage ref, #<n> or a SHA: qualified model-free per fix-issues reproduce.md, verify mode.
-verify_item() {
-  local tip v s x b k before after
+# Skips an item already commented on, or with nowhere to comment.
+commentable() {
   [ -z "$(row "$fx/linked.tsv" "$id")" ] || finish skipped linked
-  linked_pr merged
   case $id in
     err-*) [ -n "$(row "$fx/tickets.tsv" "${id#err-}")" ] || finish skipped no-ticket ;;
     *[!0-9]*) [ -f ".factory/automations/${id%%-*}.comment.sh" ] || finish skipped no-comment-write ;;
   esac
+}
+
+# repro-only: one comment with the spec and repro record, then stop.
+repro_item() {
+  step=link
+  { printf 'Reproduced on %s by a scheduled run. No fix was attempted.\n' "$start"
+    printf '\n## Spec\n\n'; cat "$item/spec.md"
+    printf '\n## Reproduction\n\n'; clip 60 < "$item/repro.md"
+    printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
+  sendable "$item/body.md" || finish deferred dry-run
+  send "$id" "$item/body.md" "$start"
+  finish reproduced "$linked"
+}
+
+# $1 the triage ref, #<n> or a SHA: qualified model-free per fix-issues reproduce.md, verify mode.
+verify_item() {
+  local tip v s x b k before after
+  commentable
+  linked_pr merged
   step=qualify
   git fetch -q "$remote" "refs/heads/$ref"
   tip=$(git rev-parse FETCH_HEAD)
@@ -276,6 +294,7 @@ run_item() {
     'Never delete or rename a test file.' > "$item/bans.md"
   { awk '/^## /{p = $0 == "## Run"} p' .factory/profile.md; grep '^- Scripts: ' .factory/profile.md || true; } > "$item/run.md"
   [ -z "$3" ] || verify_item "$3"
+  [ "$flow" = fix ] || commentable
 
   step=spec
   spec_item
@@ -288,6 +307,7 @@ run_item() {
   r=$(tail -n 1 "$item/repro.md")
   case $r in "repro: outcome=reproduced" | "repro: outcome=not-reproduced") echo "$id $r" ;; *) exit 1 ;; esac
   [ "$r" = "repro: outcome=reproduced" ] || finish not-reproduced reproduce
+  [ "$flow" = fix ] || repro_item
 
   step=fix
   linked_pr
@@ -334,10 +354,13 @@ pipeline() {
   local id feature why fref o r u p sel=() started="" halt=""
   runview=$view report=$out/$day.md start=$(git rev-parse "$ref")
   [[ $cap =~ ^[1-9][0-9]*$ ]] || block "cap $cap is not a positive whole number"
+  [[ $flow =~ ^(fix|repro-only)$ ]] || block "flow $flow is not fix or repro-only"
+  [[ $verify_fixed =~ ^(on|off)$ ]] || block "verify-fixed $verify_fixed is not on or off"
   preflight
   [ "${FACTORY_DRY_RUN:-0}" = 1 ] || recover
   for p in ${trust[@]+"${trust[@]}"}; do sel+=(--trust "$p"); done
   [ -z "$label" ] || sel+=(--label "$label")
+  [ "$verify_fixed" = on ] || sel+=(--no-verify)
   python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$report" "$view/input/items" "$cap" \
     ${sel[@]+"${sel[@]}"} > "$view/select.tsv"
   mkdir "$view/outcomes"
