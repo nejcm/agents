@@ -29,9 +29,9 @@
   `fetch_labeled <label>` for a `label` trust, and `agent_fetch_deferred <prefix>` after each
   `agent_fetch_new`; then
   [`../../assets/issue-pipeline.sh`](../../assets/issue-pipeline.sh) goes into the run script
-  after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>` and `<app>` filled, and
+  after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>`, `<cap>` and `<app>` filled, and
   `run.sh` runs its `pipeline` in place of edit, gates and publish. Spec prompt below to
-  `.factory/automations/issue-pipeline.spec.md`; no edit prompt. Per item, oldest first, at most 3
+  `.factory/automations/issue-pipeline.spec.md`; no edit prompt. Per item, oldest first, at most `cap`
   per run and one per feature: claim, a tool-less spec-writer checked by `check_items.py --spec`,
   then `fix-issues` reproduce, fix, `run.sh` gates, a fresh verify stage, a ticket for `err-`
   items (GitHub Issues only), draft PR, link comment. Only `new-bug` and `fixed` items with a
@@ -47,7 +47,7 @@
   ticket, or through a source's `<prefix>.comment.sh`; an MCP comment write is not used, and the
   report says so. `.factory/pause` stops it before the next item.
 - **Choices**: day and time; where to post at `comment`. At `draft-pr`: `run_minutes` (the
-  profile's pipeline budget, default 240); `trust`, one array element per `Fetch` line with
+  profile's pipeline budget, default 240); `cap` (its item count, default 3); `trust`, one array element per `Fetch` line with
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
   name of the `gh` line, or empty; `allow` globs.
 

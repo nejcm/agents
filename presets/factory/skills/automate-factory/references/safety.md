@@ -100,8 +100,8 @@ in its environment.
   `pr-babysitting`, the opted-in PR's branch); while that branch has an open same-repo PR, the
   run starts from the PR's head, pushes on top, never forced, and comments instead of opening
   another. `factory/<entry>` without an open PR, or a fixed PR branch without one, stops the run.
-  Exception: `issue-pipeline` opens one draft PR per item on `factory/fix-<id>`, at most 3 items
-  per run, and skips an item whose branch or PR exists.
+  Exception: `issue-pipeline` opens one draft PR per item on `factory/fix-<id>`, at most `cap` items
+  per run (default 3), and skips an item whose branch or PR exists.
 - **Pause**: `.factory/pause` makes every run exit 0 before any work; `issue-pipeline` also checks
   it before each item and defers the rest.
 - **Dry run**: no post or publish. Writes go to `.factory/reports/`, the run's temp view under

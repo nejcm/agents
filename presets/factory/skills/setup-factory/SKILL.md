@@ -18,6 +18,8 @@ Run from the target repo's root.
   `analytics`, `baselines`, `handoff`). It reads the profile and updates only its own section.
   A phase whose inputs are missing from the profile (run or baselines without explore,
   verification without run) says which phase to run first and stops.
+- "Change my factory" (a setting, prompt guidance, an automation): load `automate-factory` by
+  path (see loading other skills) and follow its [re-run](../automate-factory/SKILL.md#re-run).
 
 ## Re-runs
 

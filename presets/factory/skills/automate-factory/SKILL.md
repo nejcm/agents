@@ -37,8 +37,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `.factory/automations/<entry>.edit.md` and the fixed values per [Write
    levels](references/runners.md#write-levels). For `issue-pipeline` at `draft-pr`, instead of the
    edit prompt: its `Spec prompt` to `.factory/automations/issue-pipeline.spec.md`, and
-   [`assets/issue-pipeline.sh`](assets/issue-pipeline.sh) inserted into the script after `publish`. Fill each `<skill-path:<name>>` in the script's
-   `skills` list with that skill's resolved directory, found by the lookup in
+   [`assets/issue-pipeline.sh`](assets/issue-pipeline.sh) inserted into the script after `publish`.
+   Never write a `*.local.md` [overlay](references/runners.md#prompt-overlays). Fill each
+   `<skill-path:<name>>` in the script's `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills). A skill not
    found makes the entry unavailable on that runner. Also fill `<app>`, `<base>` and the entry's
    choices. For an agent-fetched source, write `<prefix>.fetch.md` and, for MCP,
@@ -55,8 +56,24 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
 7. **Record** each entry in the profile's `Automations` section: runner, trigger, files, smoke
    run date and result, write level, status (`active`, `proposed`, `failed: <reason>`).
 
-On a re-run, read the `Automations` section first, re-check detected runners, and offer changes
-only to entries the user names or whose smoke run failed.
+## Re-run
+
+Read the `Automations` section first, re-check detected runners, and offer changes only to
+entries the user names or whose smoke run failed. To change an entry:
+
+1. Regenerate its files (step 5) into a scratch directory from the current profile, never
+   writing `*.local.md`: the before copy.
+2. Write the change where it lives: a setting (schedule, write level, destination, trust,
+   `label`, `run_minutes`, `cap`, budgets) to the profile, or guidance to the entry's
+   [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the
+   deny list are not settings.
+3. Regenerate only that entry's files again from the changed profile. A file in
+   `.factory/automations/` that differs from the before copy is hand-edited: show that diff and
+   settle it with the user (guidance into an overlay, a value into the profile, or drop it).
+   Never overwrite it silently.
+4. Show the diff of the regenerated files and the runner config, apply after the user confirms,
+   and mark the entry `proposed`. An overlay alone regenerates nothing.
+5. Smoke run (step 6) and record (step 7); the entry is `active` again only after a pass.
 
 ## Scope
 
@@ -82,7 +99,7 @@ only to entries the user names or whose smoke run failed.
   unset: `--max-turns` (print mode; absent from `--help` but accepted and validated), and the
   minutes as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
-  unit or cron timeout is `run_minutes` plus 10.
+  unit or cron timeout is `run_minutes` plus 10; and an item cap, `cap` (default 3).
 - **Pause**: `.factory/pause` in the target repo makes every run exit 0 before any work, and
   stops `issue-pipeline` before its next item; delete it to resume.
 - **Loading skills**: the run script copies the skills a prompt needs into the run's view, and

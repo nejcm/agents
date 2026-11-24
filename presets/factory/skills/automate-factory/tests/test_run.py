@@ -8,6 +8,7 @@ RUN_SH = os.path.join(HERE, "..", "assets", "run.sh")
 
 CLAUDE = r"""#!/usr/bin/env bash
 echo "claude ${*//$'\n'/ }" >> "$LOG"
+printf '%s\0' "${@: -1}" >> "$LOG.prompts"
 case " $* " in *" --restricted "*) [ "$SCEN" != cred ] || echo sk-ant-1234567890abcdef; echo report; exit 0 ;; esac
 case "$SCEN" in
   plain) echo 2 > src/w ;;
@@ -120,6 +121,27 @@ class RunShTest(unittest.TestCase):
         creates = [c for c in self.gh_writes() if c.startswith("gh pr create")]
         self.assertEqual(len(creates), 1)
         self.assertIn("--draft", creates[0])
+
+    def test_local_overlays_reach_analyze_and_edit_before_the_record_format(self):
+        self.write(".factory/automations/e.judge.local.md", "overlay-judge\n")
+        self.write(".factory/automations/e.edit.local.md", "overlay-edit\n")
+        r = self.run_entry("draft-pr")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(self.log + ".prompts") as f:
+            analyze, edit = f.read().split("\0")[:2]
+        self.assertTrue(analyze.startswith("p\n\noverlay-judge\nDate: "))
+        self.assertNotIn("overlay-edit", analyze)
+        self.assertTrue(edit.startswith("e\n\noverlay-edit\nInputs, read-only: "))
+        self.assertTrue(edit.endswith("Never delete or rename a test file."))
+        with open(f"{self.repo}/.factory/automations/e.edit.local.md") as f:
+            self.assertEqual(f.read(), "overlay-edit\n")
+
+    def test_missing_default_prompt_fails(self):
+        self.write(".factory/automations/e.judge.local.md", "overlay-judge\n")
+        os.remove(f"{self.repo}/.factory/automations/e.md")
+        r = self.run_entry("report")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_gate_block_publishes_nothing(self):
         r = self.run_entry("draft-pr", scen="deny")

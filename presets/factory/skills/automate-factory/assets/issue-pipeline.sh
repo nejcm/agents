@@ -1,5 +1,5 @@
 # issue-pipeline at draft-pr: inserted into run.sh after publish; run.sh then calls pipeline.
-trust=("<trust prefix>") label="<label>" run_minutes="<run minutes>" app="<app>"
+trust=("<trust prefix>") label="<label>" run_minutes="<run minutes>" app="<app>" cap="<cap>"
 fx=$PWD/.factory/reports/fix-issues
 items=$fx/items
 
@@ -30,7 +30,7 @@ stage() {
   mkdir -p "$check" "$evidence"
   git archive "$5" ".cursor/skills/verify-$app" | tar -x -C "$check"
   cp -R "${@:6}" "$check/"
-  prompt="$(cat "$runview/skills/fix-issues/references/$3" "$item/bans.md")
+  prompt="$(cat "$runview/skills/fix-issues/references/$3" && overlay "$1" && cat "$item/bans.md")
 Stage: $1."
   (cd "$2" && check=$check evidence=$evidence timeout "${minutes}m" claude -p --safe-mode --setting-sources '' \
     --strict-mcp-config --no-session-persistence --tools "$4" --allowedTools "$4" "${caps[@]}" \
@@ -39,7 +39,7 @@ Stage: $1."
 
 spec_item() {
   local features=$runview/repo/.cursor/skills/verify-$app/features prompt
-  prompt=$(cat ".factory/automations/$entry.spec.md")
+  prompt=$(cat ".factory/automations/$entry.spec.md" && overlay spec)
   { cat "$runview/input/items/$id.json"; echo
     awk -v h="## $id" '$0 == h {p = 1} p {print} p && /^fix-issues: / {exit}' "$report"; echo
     cat "$features/$feature.md"; } > "$item/spec-input.md"
@@ -333,11 +333,12 @@ run_item() {
 pipeline() {
   local id feature why fref o r u p sel=() started="" halt=""
   runview=$view report=$out/$day.md start=$(git rev-parse "$ref")
+  [[ $cap =~ ^[1-9][0-9]*$ ]] || block "cap $cap is not a positive whole number"
   preflight
   [ "${FACTORY_DRY_RUN:-0}" = 1 ] || recover
   for p in ${trust[@]+"${trust[@]}"}; do sel+=(--trust "$p"); done
   [ -z "$label" ] || sel+=(--label "$label")
-  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$report" "$view/input/items" 3 \
+  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$report" "$view/input/items" "$cap" \
     ${sel[@]+"${sel[@]}"} > "$view/select.tsv"
   mkdir "$view/outcomes"
   printf '\n## Pipeline\n\n' >> "$report"

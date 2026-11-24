@@ -29,6 +29,8 @@ with the default branch, `<level>` with the chosen write level, `<owner/repo>` w
 the profile's per-run caps (see [Budgets](../SKILL.md#rules)), `skills` with the skill dirs the
 prompt loads (a project skill as its repo-relative path, so it is read from the tracked snapshot;
 an installed one as its absolute resolved dir) and the step functions from the entry, `chmod +x`.
+These values come from the profile and the entry's choices; the profile is the source of truth,
+so a changed value regenerates the entry ([re-run](../SKILL.md#re-run)).
 `repo/` and fetch's `git` reads use the local `<base>` branch, as fresh as the user's last pull;
 the prompt states its SHA.
 Then propose one of these, with absolute paths:
@@ -77,6 +79,23 @@ PATH=<tool dirs>:/usr/local/bin:/usr/bin:/bin
 Propose `.factory/automations/*.log` for `.gitignore`. Apply crontab changes only after the user
 confirms, with `crontab -e` or by editing the output of `crontab -l` and piping it back to
 `crontab -`.
+
+## Prompt overlays
+
+`.factory/automations/<entry>.<name>.local.md` belongs to the user; generation never writes it.
+The run script appends it to one prompt, after the default and before the record format the
+script adds, so it adds guidance only: record formats, checkers and gates still apply, and its
+text reaches no command, path or destination.
+
+| Name | Prompt it extends |
+| ---- | ----------------- |
+| `judge` | analyze, `<entry>.md`; at `comment` this also shapes the posted report |
+| `edit` | the `draft-pr` and `pr` edit step, `<entry>.edit.md` |
+| `spec` | `issue-pipeline` spec-writer, `issue-pipeline.spec.md` |
+| `reproduce`, `fix`, `verify` | `issue-pipeline` stages of that name, verify mode included |
+
+No `body` overlay: PR, ticket and link bodies are assembled model-free from the stage records;
+steer their wording through `edit`, `fix` or `verify`.
 
 ## Write levels
 

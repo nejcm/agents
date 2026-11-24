@@ -108,7 +108,7 @@ ulis install --global --source . --preset react-web --yes
   catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
   you, so run them in an isolated VM or container holding only a repo-scoped token.
   `issue-pipeline` at `draft-pr` turns items from trusted sources into verified draft PRs,
-  at most 3 per run, never merged
+  at most 3 per run by default, never merged
 - `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a staged pipeline;
   writes tickets, comments and status back to GitHub, or to any tracker through a CLI or MCP tool
   recorded at setup

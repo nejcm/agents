@@ -18,6 +18,8 @@ args = sys.argv[1:]
 ev = os.environ.get("evidence", "")
 with open(os.environ["LOG"], "a") as f:
     f.write("claude " + " ".join(a.replace("\n", " ") for a in args[:-1]) + (" evidence=" + ev if ev else "") + "\n")
+with open(os.environ["LOG"] + ".prompts", "a") as f:
+    f.write(json.dumps({"evidence": ev, "args": args[:-1], "prompt": args[-1]}) + "\n")
 scen = json.load(open(os.environ["SCEN"]))
 tools = args[args.index("--tools") + 1]
 fmt = args[args.index("--output-format") + 1] if "--output-format" in args else ""
@@ -196,7 +198,7 @@ class PipelineTest(unittest.TestCase):
             return json.load(f)
 
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
-                     report_extra=""):
+                     report_extra="", cap="3"):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -212,7 +214,7 @@ class PipelineTest(unittest.TestCase):
         with open(PIPELINE_SH) as f:
             pipeline = f.read()
         pipeline = pipeline.replace('("<trust prefix>")', "(" + " ".join(f'"{p}"' for p in trust) + ")")
-        for k, v in {"<label>": label, "<run minutes>": "240", "<app>": "app"}.items():
+        for k, v in {"<label>": label, "<run minutes>": "240", "<app>": "app", "<cap>": cap}.items():
             pipeline = pipeline.replace(k, v)
         fetch = "fetch_new; fetch_deferred; " + (f"fetch_labeled {label}; " if label else "") + extra_fetch + "fetch_context"
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
@@ -224,10 +226,15 @@ class PipelineTest(unittest.TestCase):
         with open(path, "w") as f:
             f.write(script)
         os.chmod(path, 0o755)
-        if os.path.exists(self.log):
-            os.remove(self.log)
+        for p in (self.log, self.log + ".prompts"):
+            if os.path.exists(p):
+                os.remove(p)
         env = dict(self.env, **({"FACTORY_DRY_RUN": "1"} if dry else {}))
         return subprocess.run([path], env=env, capture_output=True, text=True, timeout=300)
+
+    def prompts(self):
+        with open(self.log + ".prompts") as f:
+            return [json.loads(x) for x in f]
 
     def report(self):
         with open(f"{self.out}/{datetime.date.today()}.md") as f:
@@ -357,6 +364,49 @@ class PipelineTest(unittest.TestCase):
         views = [c.split()[3] for c in self.calls() if c.startswith("gh issue view") and "--json number," in c]
         self.assertEqual(views, ["4"])
         self.assertEqual(self.outcome("4")[0], "fixed")
+
+    def test_cap_from_profile_applied(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b"}}, cap="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.gh()["prs"]), 1)
+        self.assertEqual(self.outcome("2"), ("deferred", "cap", "none"))
+        self.assertEqual(self.stage_calls("2"), [])
+
+    def test_local_overlays_reach_each_prompt_before_its_record_rules(self):
+        names = ("judge", "spec", "reproduce", "fix", "verify")
+        for n in names:
+            self.write(f".factory/automations/issue-pipeline.{n}.local.md", f"overlay-{n}" + "\n" * (n != "reproduce"))
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[0], "fixed")
+        seen = {}
+        for c in self.prompts():
+            ev, args = c["evidence"], c["args"]
+            n = ev.rsplit("/", 1)[1] if ev else "judge" if "--restricted" in args and "Read,Grep,Glob" in args else "spec"
+            seen[n] = c["prompt"]
+        self.assertEqual(sorted(seen), sorted(names))
+        for n, prompt in seen.items():
+            with self.subTest(n):
+                self.assertEqual([x for x in names if f"overlay-{x}" in prompt], [n])
+                if n in ("reproduce", "fix", "verify"):
+                    self.assertLess(prompt.index(f"overlay-{n}"), prompt.index("Never delete or rename a test file."))
+                    self.assertRegex(prompt, rf"overlay-{n}\n+No git commit")
+                    self.assertTrue(prompt.endswith(f"Stage: {n}."))
+        for n in names:
+            with open(f"{self.repo}/.factory/automations/issue-pipeline.{n}.local.md") as f:
+                self.assertEqual(f.read(), f"overlay-{n}" + "\n" * (n != "reproduce"))
+
+    def test_non_positive_cap_fails_before_any_stage(self):
+        self.gh_state({1: {}}, [])
+        for cap in ("0", "-1"):
+            with self.subTest(cap):
+                r = self.run_pipeline({"1": {}}, cap=cap)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn(f"gate: cap {cap} is not a positive whole number", r.stderr)
+                self.assertEqual(self.stage_calls() + self.spec_calls(), [])
+                self.assertEqual(self.gh_writes(), [])
 
     def test_pause_during_item_defers_the_next(self):
         self.gh_state({1: {}, 2: {}}, [])
@@ -529,7 +579,7 @@ class PipelineTest(unittest.TestCase):
         if branch:
             self.git("-C", self.repo, "checkout", "-qb", branch)
         self.write(f"src/{branch or 'fix'}", "fixed\n")
-        self.git("-C", self.repo, "add", "-A")
+        self.git("-C", self.repo, "add", "src")
         self.git("-C", self.repo, "commit", "-qm", "fix")
         sha = self.git("-C", self.repo, "rev-parse", "HEAD").strip()
         if branch:

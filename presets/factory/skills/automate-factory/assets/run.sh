@@ -46,10 +46,14 @@ for s in ${skills[@]+"${skills[@]}"}; do
     tar --null -T - -cf -) | tar -x -C "$d"
 done
 
+# User guidance after the default prompt, before the record format; setup never writes these files.
+overlay() { local f=.factory/automations/$entry.$1.local.md; [ ! -f "$f" ] || { echo; cat "$f"; echo; }; }
+
 fetch() { :; }
 
 analyze() {
-  prompt="$(cat ".factory/automations/$entry.md")
+  prompt="$(cat ".factory/automations/$entry.md" && overlay judge)"
+  prompt+="
 Date: $day
 Snapshot: $ref at $(git rev-parse --short "$ref")"
   (cd "$view" && claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
@@ -121,7 +125,7 @@ edit() {
   cp "$out/$day.md" "$check/report.md"
   cp .factory/profile.md "$check/"
   cp -R "$view/skills" "$check/"
-  prompt="$(cat ".factory/automations/$entry.edit.md")
+  prompt="$(cat ".factory/automations/$entry.edit.md" && overlay edit)
 Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory; never
 commit, push or run gh.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
