@@ -37,7 +37,8 @@ The stage follows the target repo's `AGENTS.md` and:
 2. Writes a failing test first when the repo has a cheap local test target for the path; otherwise
    says why not.
 3. Makes the smallest change that fixes the root cause. No unrelated cleanup, no edits to the
-   verify skill, no deleted or weakened tests.
+   verify skill, no weakened tests; a deleted or renamed test gets a stated reason. Prefers existing
+   code and the standard library; adds a package only for substantial functionality, naming why.
 4. Runs the profile's test, lint and typecheck scripts and writes `$evidence/fix.md`: root cause,
    change, tests, what it skipped, and last `fix: outcome=changed` or `fix: outcome=stopped`.
 

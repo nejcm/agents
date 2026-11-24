@@ -86,7 +86,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   the runner's own login, with `--safe-mode --setting-sources ''` so the checkout's tracked
   settings cannot change auth, hooks or permissions. Its summary is its stdout, capped at
   `summary_cap` bytes, with one `test-change: <path>: <reason>` line per existing
-  test file it changed, ending `edit: outcome=changed` or `edit: outcome=stopped`; the script
+  test file it changed, deleted or renamed (old path), one `dependency: <name> <why>` line per new
+  package, ending `edit: outcome=changed` or `edit: outcome=stopped`; the script
   never opens a file the step wrote. On `changed` it commits with hooks off (Git stores symlinks
   as links and skips FIFOs). Residual risk: its input derives from untrusted text, so injected
   text can use whatever the environment holds; keep write credentials there to the one repo and
@@ -94,23 +95,36 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
 - **Gates**, model-free, all must pass or nothing is published: a non-empty diff of at most
   `max_lines` changed lines, no binary files; every path in the entry's `allow` globs and none in
   `deny` (CI, hooks, agent harness and editor settings, `.factory/`, `CODEOWNERS`,
-  `.gitattributes`, the verify skill, the in-repo skills the run reads, link and target); no test
-  file deleted or renamed; every changed existing test file, and only those, has exactly one
-  `test-change` line whose path matches it exactly and whose reason is not blank; added test
-  lines carry no skip or focus
-  marker; the fixed test command passes in the checkout; no credential-shaped text (`sk-ant-`)
-  in the diff, summary or test-change section. The test command, allowlist
+  `.gitattributes`, the verify skill, the in-repo skills the run reads, link and target); every
+  changed, deleted or renamed existing test file (a rename counts as its old path), and only
+  those, has exactly one `test-change` line whose path matches it exactly and whose reason is not
+  blank; added test lines carry no skip or focus marker; every new package has a `dependency`
+  line; the fixed test command passes in the checkout; no credential-shaped text (`sk-ant-`)
+  in the diff, summary or disclosure sections. The test command, allowlist
   and cap are fixed at setup; `allow` must exclude the files that define the test command
-  (manifests, test config).
-- **Changed tests**: when the edit changed existing test files, gates run the start versions of
-  those files against the new code (same test command and timeout, in a second worktree) and
-  record whether they fail (change needed), still pass (edit not needed, review closely) or time
-  out (no evidence); none blocks. The section (reasons, that outcome with a capped output tail, the capped test
-  diff, "needs human approval") goes to `.factory/reports/<entry>/<date>-test-change.md` and
+  (manifests, test config); with `dep_files=1` a manifest outside `allow` may change only its
+  dependency keys.
+- **Changed tests**: when the edit changed, deleted or renamed existing test files, gates run the
+  start versions of those files against the new code (same test command and timeout, in a second
+  worktree) and record whether they fail (change needed), still pass (edit not needed, review
+  closely) or time out (no evidence); none blocks. The section (reasons, that outcome with a
+  capped output tail, each deleted path, the capped diff of the others, "needs human approval") goes to `.factory/reports/<entry>/<date>-test-change.md` and
   tops the PR body or comment. The PR is a draft at any level: a new one opens as a draft, a reused
   one is returned to draft before the push or the run stops. It gets the `factory:test-change`
   label, created if missing (a label failure only warns). A body over GitHub's 65536 characters
   stops the run before the push. The factory never merges.
+- **Dependencies**: disclosed, never blocked. Gates compare dependency keys of every changed
+  `package.json`, `pyproject.toml`, `Cargo.toml` and `go.mod` between the start and the commit
+  (all package managers using that manifest). A new package without a `dependency: <name>` line
+  fails the gate; with one, a section (the lines, the new packages) tops the body, the PR is a
+  draft as for changed tests and gets the `factory:dependency` label. Only entries set up with
+  `dep_files=1` (those that fix source code) may change manifests and generated lockfiles outside
+  `allow`: such a manifest passes only if it parses and nothing but its dependency keys changed
+  (tables left empty by removing them are ignored). Generated lockfiles skip the line cap, and
+  `bun.lockb` the binary check; an exempt file must stay a regular, non-executable file. A changed
+  lockfile or `requirements.txt`, or an allowed manifest it cannot parse, is listed as
+  "dependency files changed" with the same draft and label; a lockfile change without a manifest
+  dependency change gets its own line.
 - **Loop caps**: at most one PR per automation per run. Its branch is `factory/<entry>` (for
   `pr-babysitting`, the opted-in PR's branch); while that branch has an open same-repo PR, the
   run starts from the PR's head, pushes on top, never forced, and comments instead of opening

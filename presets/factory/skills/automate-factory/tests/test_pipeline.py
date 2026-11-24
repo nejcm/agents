@@ -427,7 +427,7 @@ sys.exit(1 if spec else p.returncode)
             with self.subTest(n):
                 self.assertEqual([x for x in names if f"overlay-{x}" in prompt], [n])
                 if n in ("reproduce", "fix", "verify"):
-                    self.assertLess(prompt.index(f"overlay-{n}"), prompt.index("Never delete or rename a test file."))
+                    self.assertLess(prompt.index(f"overlay-{n}"), prompt.index("dependency: <name> <why not in-house>."))
                     self.assertRegex(prompt, rf"overlay-{n}\n+No git commit")
                     self.assertTrue(prompt.endswith(f"Stage: {n}."))
         for n in names:

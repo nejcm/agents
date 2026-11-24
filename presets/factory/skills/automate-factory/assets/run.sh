@@ -138,7 +138,8 @@ post() { :; }
 # draft-pr and pr only. Destination, gates and test command are fixed here at setup.
 remote="<remote url>" branch="factory/$entry"
 title="chore: $entry automation $day"
-test_cmd="<test command>" max_lines=400 summary_cap=65536
+# dep_files=1 only for entries that fix source code; see runners.md.
+test_cmd="<test command>" max_lines=400 summary_cap=65536 dep_files=0
 # Patterns stay literal; expanded against the checkout they would miss new files.
 set -f
 allow=("<path glob>")
@@ -149,7 +150,105 @@ deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .
 set +f
 deny+=(${consumed[@]+"${consumed[@]}"})
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
+# Generated lockfiles skip the line cap (bun.lockb the binary check) and are disclosed instead.
+locks_re='(^|/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|uv\.lock|poetry\.lock|pdm\.lock|Pipfile\.lock|Cargo\.lock|go\.sum)$'
+manifests_re='(^|/)(package\.json|pyproject\.toml|Cargo\.toml|go\.mod)$'
 pr="" start="" commit="" gated="" changed=()
+deps_py=$(cat <<'PY'
+import json, re, subprocess, sys
+start, commit, summary, locks_re, *guarded = sys.argv[1:]
+def show(rev, p):
+    r = subprocess.run(["git", "show", f"{rev}:{p}"], capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else ""
+def norm(n):
+    return re.sub(r"[-_.]+", "-", n).lower()
+def pep508(xs):
+    return {norm(re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", x)[1]) for x in xs if isinstance(x, str)}
+def pop(d, path):
+    *parents, key = path
+    chain = [d]
+    for k in parents:
+        if not isinstance(chain[-1].get(k), dict):
+            return None
+        chain.append(chain[-1][k])
+    v = chain[-1].pop(key, None)
+    for parent, k in zip(reversed(chain[:-1]), reversed(parents)):
+        if v is None or parent[k]:
+            break
+        del parent[k]
+    return v
+def npm(t):
+    d = json.loads(t or "{}")
+    deps = {k: pop(d, (k,)) for k in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")}
+    return {k for v in deps.values() for k in v or {}}, d, deps
+def pyproject(t):
+    import tomllib
+    d = tomllib.loads(t)
+    py = [("project", "dependencies"), ("tool", "uv", "dev-dependencies")]
+    groups = [("project", "optional-dependencies"), ("dependency-groups",)]
+    poetry = [("tool", "poetry", "dependencies"), ("tool", "poetry", "dev-dependencies")] + [
+        ("tool", "poetry", "group", g, "dependencies") for g in d.get("tool", {}).get("poetry", {}).get("group", {})]
+    deps = {p: pop(d, p) for p in py + groups + poetry}
+    xs = [x for p in py for x in deps[p] or []] + [x for p in groups for v in (deps[p] or {}).values() for x in v]
+    return pep508(xs) | {norm(k) for p in poetry for k in deps[p] or {} if k != "python"}, d, deps
+def cargo(t):
+    import tomllib
+    d = tomllib.loads(t)
+    keys = ("dependencies", "dev-dependencies", "build-dependencies")
+    paths = [(s,) for s in keys] + [("target", x, s) for x in d.get("target", {}) for s in keys] + [("workspace", "dependencies")]
+    deps = {p: pop(d, p) for p in paths}
+    return {k for v in deps.values() for k in v or {}}, d, deps
+def gomod(t):
+    names, rest, req, inside = set(), [], [], False
+    for l in t.splitlines():
+        w = l.split("//")[0].split()
+        if inside:
+            inside = w != [")"]
+            req += [w] if inside and w else []
+        elif w[:1] == ["require"]:
+            inside = w[1:] == ["("]
+            req += [] if inside else [w[1:]]
+        elif w:
+            rest.append(w)
+    return {w[0] for w in req}, rest, sorted(req)
+parsers = {"package.json": npm, "pyproject.toml": pyproject, "Cargo.toml": cargo, "go.mod": gomod}
+files = subprocess.run(["git", "diff", "--name-only", "-z", "--no-renames", start, commit], capture_output=True, text=True, check=True).stdout.split("\0")
+new, unparsed, locks, moved = [], [], [], False
+for f in filter(None, files):
+    base = f.rsplit("/", 1)[-1]
+    if base in parsers:
+        try:
+            (now, rest, dn), (was, old, do) = parsers[base](show(commit, f)), parsers[base](show(start, f))
+        except Exception:
+            if f in guarded:
+                sys.exit(f"{f} outside the allowlist and not parsed")
+            unparsed.append(f)
+            continue
+        if f in guarded and rest != old:
+            sys.exit(f"{f} outside the allowlist: changes more than dependencies")
+        new += [(n, f) for n in sorted(now - was)]
+        moved = moved or dn != do
+    elif re.search(locks_re, f):
+        locks.append(f)
+    elif base in ("requirements.txt", "Pipfile"):
+        unparsed.append(f)
+said = [m for m in (re.match(r"dependency: (\S+) +(\S.*)", l) for l in open(summary, errors="replace")) if m]
+missing = [n for n, f in new if norm(n) not in {norm(m[1]) for m in said}]
+if missing:
+    sys.exit("new package without a dependency line: " + ", ".join(missing))
+if new or unparsed or locks:
+    print("## Adds dependencies\n\nNeeds human approval; the factory never merges.\n")
+    for m in said[:50]:
+        print(f"- {m[1]}: {m[2]}"[:200])
+    if new:
+        print("\nNew packages: " + ", ".join(f"{n} ({f})" for n, f in new))
+    if unparsed or locks:
+        print("\nDependency files changed: " + ", ".join(unparsed + locks))
+    if locks and not moved:
+        print("\nLockfile changed without a detected manifest dependency change; review resolutions and integrity.")
+    print()
+PY
+)
 
 clip() {
   local l n=0
@@ -196,8 +295,10 @@ edit() {
 Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory; never
 commit, push or run gh.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
-edit: outcome=stopped. Before that, one line per existing test file you changed:
-test-change: <path from the repo root>: <one-line reason>. Never delete or rename a test file."
+edit: outcome=stopped. Before that, one line per existing test file you changed, deleted or renamed
+(old path): test-change: <path from the repo root>: <one-line reason>. Prefer existing code and the
+standard library; add a package only for substantial functionality, with one line per new package:
+dependency: <name> <why not in-house>."
   # No setting sources: tracked project settings in the checkout could switch auth or permissions.
   (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
     --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
@@ -217,21 +318,29 @@ test-change: <path from the repo root>: <one-line reason>. Never delete or renam
 }
 
 gates() {
-  local st p g ok a d r m rc lines=0 tests=() seen=$'\n'
+  local st p g ok a d r m rc lines=0 tests=() deleted=() guarded=() seen=$'\n'
   changed=()
   ! git diff --quiet "$start" "$commit" || block "empty diff"
   while IFS=$'\t' read -r st p; do
     for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
     ok=0
     for g in "${allow[@]}"; do [[ $p != $g ]] || ok=1; done
-    [ "$ok" = 1 ] || block "$p outside the allowlist"
+    if [ "$ok" = 0 ]; then
+      [ "$dep_files" = 1 ] && [[ $p =~ $locks_re || $p =~ $manifests_re ]] || block "$p outside the allowlist"
+      [[ $p =~ $locks_re ]] || guarded+=("$p")
+    fi
+    if [ "$ok" = 0 ] || [[ $p =~ $locks_re ]]; then
+      m=$(git ls-tree "$start" -- "$p" | cut -c1-6; git ls-tree "$commit" -- "$p" | cut -c1-6)
+      [ -z "$(grep -vx 100644 <<< "$m")" ] || block "$p is not a regular file"
+    fi
     [[ $p =~ $tests_re ]] || continue
-    [ "$st" != D ] || block "test $p deleted or renamed"
     tests+=("$p")
     [ "$st" = A ] || changed+=("$p")
+    [ "$st" != D ] || deleted+=("$p")
   done < <(git diff --name-status --no-renames "$start" "$commit")
   while read -r a d p; do
-    [ "$a" != - ] || block "binary change $p"
+    [ "$a" != - ] || [[ $p == bun.lockb || $p == */bun.lockb ]] || block "binary change $p"
+    [[ ! $p =~ $locks_re ]] || continue
     lines=$((lines + a + d))
   done < <(git diff --numstat --no-renames "$start" "$commit")
   [ "$lines" -le "$max_lines" ] || block "$lines changed lines, cap $max_lines"
@@ -255,6 +364,9 @@ gates() {
   for p in ${changed[@]+"${changed[@]}"}; do
     [[ $seen == *$'\n'"$p"$'\n'* ]] || block "no test-change reason for $p"
   done
+  python3 -I -c "$deps_py" "$start" "$commit" "$view/summary.md" "$locks_re" ${guarded[@]+"${guarded[@]}"} \
+    > "$view/deps.md" 2> "$view/deps.err" ||
+    block "$(tail -n 1 "$view/deps.err")"
   (cd "$work" && timeout "${minutes}m" sh -c "$test_cmd") > "$out/$day-tests.log" 2>&1 ||
     block "tests failed, exit $?"
   if [ ${#changed[@]} -gt 0 ]; then
@@ -272,27 +384,35 @@ gates() {
         printf '\nOld tests fail on the new code (exit %s): change needed.\n\n' "$rc"
         tail -n 20 "$view/old.log" | clip 20 | sed 's/^/    /'
       fi
+      [ ${#deleted[@]} = 0 ] || printf '\nDeleted: %s\n' "${deleted[@]}"
       printf '\nChanged test lines:\n\n'
-      git diff "$start" "$commit" -- "${changed[@]}" | clip 80 | sed 's/^/    /'
+      git diff --diff-filter=d "$start" "$commit" -- "${changed[@]}" | clip 80 | sed 's/^/    /'
       echo; } > "$view/section.md"
   fi
-  { git diff "$start" "$commit"; cat "$view/summary.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
+  { git diff "$start" "$commit"; cat "$view/summary.md" "$view/deps.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
     no_creds || block "credential-shaped text"
   [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
   gated=$start:$commit
   echo passed >> "$gates_log"
 }
 
+add_label() {
+  gh label create "$1" --repo "$repo" --description "$2" > /dev/null 2>&1 || true
+  gh pr edit "$url" --repo "$repo" --add-label "$1" > /dev/null || echo "publish: label $1 not added" >&2
+}
+
 publish() {
-  local draft=() url label=factory:test-change
+  local draft=() url disclosed=""
   if [ -z "$commit" ] || [ "$gated" != "$start:$commit" ]; then gates; fi
-  [ "$level" != draft-pr ] && [ ${#changed[@]} = 0 ] || draft=(--draft)
-  { [ ${#changed[@]} = 0 ] || cat "$view/section.md"
+  [ ${#changed[@]} = 0 ] && [ ! -s "$view/deps.md" ] || disclosed=1
+  [ "$level" != draft-pr ] && [ -z "$disclosed" ] || draft=(--draft)
+  { cat "$view/deps.md"
+    [ ${#changed[@]} = 0 ] || cat "$view/section.md"
     printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed.\n\n' \
     "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit"
     cat "$view/summary.md"; } > "$view/body.md"
   sendable "$view/body.md" || return 0
-  if [ -n "$pr" ] && [ ${#changed[@]} -gt 0 ]; then
+  if [ -n "$pr" ] && [ -n "$disclosed" ]; then
     gh pr ready "$pr" --repo "$repo" --undo || block "could not return PR $pr to draft"
   fi
   git push -q "$remote" "$commit:refs/heads/$branch"
@@ -304,10 +424,8 @@ publish() {
       --body-file "$view/body.md")
     echo "$url"
   fi
-  if [ ${#changed[@]} -gt 0 ]; then
-    gh label create "$label" --repo "$repo" --description "Factory edit changes existing tests" > /dev/null 2>&1 || true
-    gh pr edit "$url" --repo "$repo" --add-label "$label" > /dev/null || echo "publish: label $label not added" >&2
-  fi
+  [ ${#changed[@]} = 0 ] || add_label factory:test-change "Factory edit changes existing tests"
+  [ ! -s "$view/deps.md" ] || add_label factory:dependency "Factory edit adds dependencies"
   run_outcome=published
 }
 

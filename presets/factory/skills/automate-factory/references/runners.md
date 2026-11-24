@@ -112,7 +112,10 @@ the run script:
   fetch and push use that URL, not a name Git config can repoint; `branch` left as `factory/$entry` except for
   `pr-babysitting`.
 - `test_cmd`: the profile's test script, self-contained (installs its own dependencies), run in
-  the checkout; `allow`: the entry's path globs, confirmed by the user; `max_lines`.
+  the checkout; `allow`: the entry's path globs, confirmed by the user; `max_lines`;
+  `dep_files=1` only for entries that fix source code (`failed-ci-triage`, `pr-babysitting`,
+  `issue-pipeline`), so their edits may add a disclosed dependency through manifests and lockfiles
+  outside `allow` ([safety.md](safety.md#steps)); every other entry keeps `0`.
 - The entry's `Edit prompt` to `.factory/automations/<entry>.edit.md`.
 
 The edit step and the test command run as the runner identity, under its own `claude` login, and

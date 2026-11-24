@@ -295,8 +295,8 @@ run_item() {
   ! git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null || finish skipped branch-exists
   printf '%s\n' 'No git commit or git push, no gh, no tracker or chat writes, no edits outside the working directory and $evidence.' \
     'Unattended run: never ask a question; nobody answers.' \
-    'In fix.md, before its last line, one line per existing test file you changed: test-change: <path from the repo root>: <one-line reason>.' \
-    'Never delete or rename a test file.' > "$item/bans.md"
+    'In fix.md, before its last line, one line per existing test file you changed, deleted or renamed (old path): test-change: <path from the repo root>: <one-line reason>.' \
+    'Prefer existing code and the standard library; add a package only for substantial functionality, with one line in fix.md per new package: dependency: <name> <why not in-house>.' > "$item/bans.md"
   { awk '/^## /{p = $0 == "## Run"} p' .factory/profile.md; grep '^- Scripts: ' .factory/profile.md || true; } > "$item/run.md"
   [ -z "$3" ] || verify_item "$3"
   [ "$flow" = fix ] || commentable
