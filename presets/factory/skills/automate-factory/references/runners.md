@@ -93,6 +93,7 @@ text reaches no command, path or destination.
 | `edit` | the `draft-pr` and `pr` edit step, `<entry>.edit.md` |
 | `spec` | `issue-pipeline` spec-writer, `issue-pipeline.spec.md` |
 | `reproduce`, `fix`, `verify` | `issue-pipeline` stages of that name, verify mode included |
+| `review` | `issue-pipeline` shadow reviewers |
 
 No `body` overlay: PR, ticket and link bodies are assembled model-free from the stage records;
 steer their wording through `edit`, `reproduce`, `fix` or `verify`.
@@ -112,7 +113,7 @@ the run script:
   fetch and push use that URL, not a name Git config can repoint; `branch` left as `factory/$entry` except for
   `pr-babysitting`.
 - `test_cmd`: the profile's test script, self-contained (installs its own dependencies), run in
-  the checkout; `allow`: the entry's path globs, confirmed by the user; `max_lines`;
+  the checkout; `allow`: the entry's path globs, confirmed by the user; `ceiling` (default 10000);
   `dep_files=1` only for entries that fix source code (`failed-ci-triage`, `pr-babysitting`,
   `issue-pipeline`), so their edits may add a disclosed dependency through manifests and lockfiles
   outside `allow` ([safety.md](safety.md#steps)); every other entry keeps `0`.
@@ -133,11 +134,12 @@ Every run past the pause and Git config checks appends one line to
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
-disclosed), both `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
+disclosed), `scope` and `weighted_lines`, all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
-commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`). Usage comes from `claude -p --output-format json`
-(`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer and the `fix-issues` stages; a total is
+commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`, `scope`, `weighted_lines`, `reviews`
+(`model`, `family`, `verdict`, `valid`: false when the output had no verdict line)). Usage comes from `claude -p --output-format json`
+(`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers; a total is
 `null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
 `agent-analytics` reads it.
 

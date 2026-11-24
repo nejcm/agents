@@ -26,7 +26,7 @@ in its environment.
 
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
-  `run_minutes`, `cap`, budgets.
+  `run_minutes`, `cap`, budgets, `ceiling`, `issue-pipeline` `reviewers`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
 - `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
 
@@ -87,23 +87,27 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   settings cannot change auth, hooks or permissions. Its summary is its stdout, capped at
   `summary_cap` bytes, with one `test-change: <path>: <reason>` line per existing
   test file it changed, deleted or renamed (old path), one `dependency: <name> <why>` line per new
-  package, ending `edit: outcome=changed`, `edit: outcome=stopped` or `escalated: <reason>`
+  package, one `scope: minimal` or `scope: refactor <why a smaller fix is worse>` line, ending
+  `edit: outcome=changed`, `edit: outcome=stopped` or `escalated: <reason>`
   (`credentials`, `prod-access`, `ambiguous`, `out-of-scope`: the run ends `escalated`, the
   report says "needs a human", nothing is pushed); the script
   never opens a file the step wrote. On `changed` it commits with hooks off (Git stores symlinks
-  as links and skips FIFOs). Residual risk: its input derives from untrusted text, so injected
+  as links and skips FIFOs); the step's own commits are squashed into that commit unless the scope
+  is `refactor`, where they stay as refactor commits before it. Residual risk: its input derives from untrusted text, so injected
   text can use whatever the environment holds; keep write credentials there to the one repo and
   the writes publish needs.
-- **Gates**, model-free, all must pass or nothing is published: a non-empty diff of at most
-  `max_lines` changed lines, no binary files; every path in the entry's `allow` globs and none in
+- **Gates**, model-free, all must pass or nothing is published: a non-empty diff under the
+  runaway `ceiling` (default 10000 weighted lines: a deletion weighs 1/4; lockfiles and known
+  generated files such as `*.min.js` excluded), no binary files; every path in the entry's `allow` globs and none in
   `deny` (CI, hooks, agent harness and editor settings, `.factory/`, `CODEOWNERS`,
   `.gitattributes`, the verify skill, the in-repo skills the run reads, link and target); every
   changed, deleted or renamed existing test file (a rename counts as its old path), and only
   those, has exactly one `test-change` line whose path matches it exactly and whose reason is not
   blank; added test lines carry no skip or focus marker; every new package has a `dependency`
-  line; the fixed test command passes in the checkout; no credential-shaped text (`sk-ant-`)
-  in the diff, summary or disclosure sections. The test command, allowlist
-  and cap are fixed at setup; `allow` must exclude the files that define the test command
+  line; exactly one valid `scope` line; the commits descend linearly from the start and touch no
+  path the final diff leaves unchanged; the fixed test command passes in the checkout; no
+  credential-shaped text (`sk-ant-`) in the diff, commit messages, summary or disclosure sections.
+  The test command, allowlist and ceiling are fixed at setup; `allow` must exclude the files that define the test command
   (manifests, test config); with `dep_files=1` a manifest outside `allow` may change only its
   dependency keys.
 - **Changed tests**: when the edit changed, deleted or renamed existing test files, gates run the
@@ -115,6 +119,17 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   one is returned to draft before the push or the run stops. It gets the `factory:test-change`
   label, created if missing (a label failure only warns). A body over GitHub's 65536 characters
   stops the run before the push. The factory never merges.
+- **Scope**: the edit chooses it; size is not judged. `refactor` needs at least one refactor
+  commit before the behaviour commit; each refactor commit leaves existing test files unchanged and
+  passes the test command (same timeout, in its own worktree), or the gate blocks. A refactor PR is
+  a draft as for changed tests, gets the `factory:refactor` label, and its reason tops the body;
+  the run record keeps `scope` and `weighted_lines`.
+- **Shadow review**: `issue-pipeline` only, after verify: each model in the entry's `reviewers`
+  runs as analyze does (`--restricted`, read-only tools, `--model <name>`) on an export of the
+  gated commit with the checked spec, the diff and the gate and verify records, never item text.
+  Its last line must be `review: verdict=approve` or `review: verdict=changes`; anything else
+  counts as `changes`. Verdicts and capped findings go in the PR body, advisory at `draft-pr`, and
+  in the item's run record.
 - **Dependencies**: disclosed, never blocked. Gates compare dependency keys of every changed
   `package.json`, `pyproject.toml`, `Cargo.toml` and `go.mod` between the start and the commit
   (all package managers using that manifest). A new package without a `dependency: <name>` line
@@ -122,7 +137,7 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   draft as for changed tests and gets the `factory:dependency` label. Only entries set up with
   `dep_files=1` (those that fix source code) may change manifests and generated lockfiles outside
   `allow`: such a manifest passes only if it parses and nothing but its dependency keys changed
-  (tables left empty by removing them are ignored). Generated lockfiles skip the line cap, and
+  (tables left empty by removing them are ignored). Generated lockfiles skip the ceiling, and
   `bun.lockb` the binary check; an exempt file must stay a regular, non-executable file. A changed
   lockfile or `requirements.txt`, or an allowed manifest it cannot parse, is listed as
   "dependency files changed" with the same draft and label; a lockfile change without a manifest

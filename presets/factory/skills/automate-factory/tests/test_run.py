@@ -25,6 +25,7 @@ case "$SCEN" in
   do) sh -c "$DO" ;;
 esac
 [ -z "${SAY:-}" ] || printf '%b\n' "$SAY"
+echo "${SCOPE-scope: minimal}"
 echo "edit: outcome=changed"
 """
 
@@ -249,7 +250,7 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
             f.write(stub)
 
     def test_run_record_has_usage_and_run_fields(self):
-        self.json_claude("did it\nedit: outcome=changed\n")
+        self.json_claude("did it\nscope: minimal\nedit: outcome=changed\n")
         r = self.run_entry("draft-pr")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.git("--git-dir", self.remote, "show", "factory/e:src/w"), "2\n")
@@ -589,6 +590,65 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         self.assertEqual([c for c in self.gh_writes() if not c.startswith("gh api graphql")], [])
         with open(f"{self.tmp.name}/elsewhere") as f:
             self.assertEqual(len(f.read().splitlines()), 2)
+
+
+    def pushed_commits(self):
+        main = self.git("-C", self.repo, "rev-parse", "main").strip()
+        return self.git("--git-dir", self.remote, "rev-list", "--count", f"{main}..factory/e").strip()
+
+    def scoped_run(self, do, say, scope=""):
+        r = self.run_entry("pr", scen="do", extra={"DO": do, "SAY": say, "SCOPE": scope})
+        labels = [c.split("--add-label ")[1] for c in self.gh_writes() if c.startswith("gh pr edit")]
+        return r, labels, [c for c in self.gh_writes() if c.startswith("gh pr create")]
+
+    def test_refactor_scope_over_the_old_cap_publishes_split_commits(self):
+        r, labels, creates = self.scoped_run("seq 3000 > src/big; git add -A; git commit -qm refactor; echo 2 > src/w",
+                                             "scope: refactor the parser has to move out first")
+        self.assert_disclosed(r, labels, creates, "factory:refactor")
+        body = self.body()
+        self.assertTrue(body.startswith("## Refactor scope\n\nthe parser has to move out first\n"))
+        self.assertIn("Scope refactor, 3001 weighted lines.", body)
+        self.assertEqual(self.pushed_commits(), "2")
+        rec = self.records()[-1]
+        self.assertEqual((rec["outcome"], rec["scope"], rec["weighted_lines"]), ("published", "refactor", 3001))
+        report = "\n".join(agent_analytics.render_runs(agent_analytics.factory_runs(self.repo, None)))
+        self.assertIn("Scope: minimal 0, refactor 1; largest 3,001 weighted lines.", report)
+
+    def test_minimal_scope_squashes_edit_commits_and_weighs_deletions_a_quarter(self):
+        self.commit_file("src/big", "".join(f"{i}\n" for i in range(20000)))
+        r, labels, creates = self.scoped_run("git rm -q src/big; git commit -qm gone; echo 2 > src/w", "", "scope: minimal")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((labels, "--draft" in creates[0]), ([], False))
+        self.assertEqual(self.pushed_commits(), "1")
+        self.assertEqual(self.records()[-1]["weighted_lines"], 5001)
+
+    def test_over_the_ceiling_blocks(self):
+        r, _, _ = self.scoped_run("seq 10001 > src/big", "", "scope: minimal")
+        self.assert_blocked(r, "10001 weighted changed lines, ceiling 10000")
+
+    def test_missing_or_malformed_scope_line_blocks(self):
+        for say, scope in (("", ""), ("", "scope: refactor  "), ("", "scope: large"),
+                           ("scope: minimal", "scope: minimal")):
+            with self.subTest(scope=scope, say=say):
+                r, _, _ = self.scoped_run("echo 2 > src/w", say, scope)
+                self.assert_blocked(r, "more than one scope line" if say else "no scope line: scope: minimal or scope: refactor")
+
+    def test_refactor_without_a_separate_commit_blocks(self):
+        r, _, _ = self.scoped_run("echo 2 > src/w", "scope: refactor needs room")
+        self.assert_blocked(r, "scope refactor needs refactor commits before the behaviour commit")
+
+    def test_refactor_commit_that_changes_or_fails_tests_blocks(self):
+        for do, say, msg in (
+                ("echo true >> tests/a_test.sh; git commit -qam r; echo 2 > src/w",
+                 "test-change: tests/a_test.sh: tidy\nscope: refactor split", "changes existing test tests/a_test.sh"),
+                ("echo 9 > src/v; git commit -qam r; printf '1\\n\\n' > src/v; echo 2 > src/w",
+                 "scope: refactor split", "tests failed at refactor commit "),
+                ("echo x > src/tmp; git add -A; git commit -qm r; rm src/tmp; echo 2 > src/w",
+                 "scope: refactor split", "a commit changes src/tmp, unchanged in the final diff")):
+            with self.subTest(msg):
+                r, _, _ = self.scoped_run(do, say)
+                self.assert_blocked(r, "")
+                self.assertIn(msg, r.stderr)
 
 
 if __name__ == "__main__":

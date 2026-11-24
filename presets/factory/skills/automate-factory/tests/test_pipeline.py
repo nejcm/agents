@@ -28,6 +28,14 @@ if fmt == "stream-json":
     result = "".join(json.dumps(o) + "\n" for o in scen.get("agent", {}).get(prefix, []))
     print(json.dumps({"type": "system", "subtype": "init", "mcp_servers": []}))
     print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": result}))
+elif "--model" in args:
+    seen = [os.path.join(d, n) for d, _, ns in os.walk(".") for n in ns]
+    raw = any("RAW-ISSUE-TEXT" in open(p, errors="replace").read() for p in seen) or "RAW-ISSUE-TEXT" in args[-1]
+    with open(os.environ["LOG"] + ".review", "a") as f:
+        f.write(json.dumps({"raw": raw, "top": sorted(os.listdir("."))}) + "\n")
+    i = re.search(r"/fix-([^/]+)/review$", os.getcwd())[1]
+    out = scen["items"].get(i, {}).get("review", "- src/1:1: nit\nreview: verdict=approve\n")
+    print(json.dumps({"result": out, "num_turns": 1}))
 elif tools == "Read,Grep,Glob":
     sys.stdout.write(open(os.environ["REPORT"]).read())
 elif tools == "":
@@ -60,7 +68,7 @@ else:
             put(f"tests/{i}_test.sh", "true\n")
         if s.get("pause"):
             put(os.environ["REPO"] + "/.factory/pause", "")
-        put(ev + "/fix.md", "root cause\nfix: outcome=changed\n")
+        put(ev + "/fix.md", "root cause\nscope: minimal\nfix: outcome=changed\n")
     else:
         put(ev + "/verify.md", "runs\nverify: outcome=" + s.get("verify", "confirmed") + "\n")
 """
@@ -305,7 +313,7 @@ class PipelineTest(unittest.TestCase):
                          {"id": "1", "outcome": "fixed", "reason": "linked", "pr": url, "start_commit": rec["base"],
                           "diff_stat": "1 file changed, 1 insertion(+)"})
         self.assertEqual(item["end_commit"], self.git("--git-dir", self.remote, "rev-parse", "factory/fix-1").strip())
-        self.assertEqual((rec["outcome"], rec["calls"], rec["gates"]), ("completed", 5, ["passed"]))
+        self.assertEqual((rec["outcome"], rec["calls"], rec["gates"]), ("completed", 6, ["passed"]))
 
     def test_item_records_carry_disclosures_once_gated(self):
         self.gh_state({1: {}, 2: {}}, [])
@@ -422,7 +430,7 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(self.stage_calls("2"), [])
 
     def test_local_overlays_reach_each_prompt_before_its_record_rules(self):
-        names = ("judge", "spec", "reproduce", "fix", "verify")
+        names = ("judge", "spec", "reproduce", "fix", "verify", "review")
         for n in names:
             self.write(f".factory/automations/issue-pipeline.{n}.local.md", f"overlay-{n}" + "\n" * (n != "reproduce"))
         self.gh_state({1: {}}, [])
@@ -432,7 +440,7 @@ sys.exit(1 if spec else p.returncode)
         seen = {}
         for c in self.prompts():
             ev, args = c["evidence"], c["args"]
-            n = ev.rsplit("/", 1)[1] if ev else "judge" if "--restricted" in args and "Read,Grep,Glob" in args else "spec"
+            n = ev.rsplit("/", 1)[1] if ev else "review" if "--model" in args else "judge" if "--restricted" in args and "Read,Grep,Glob" in args else "spec"
             seen[n] = c["prompt"]
         self.assertEqual(sorted(seen), sorted(names))
         for n, prompt in seen.items():
@@ -718,6 +726,36 @@ sys.exit(1 if spec else p.returncode)
             self.assertEqual(self.rows(name), [])
         self.assertFalse(os.path.exists(f"{self.fx}/items/1/summary.md"))
         self.assertEqual([self.outcome(i)[:2] for i in "12"], [("deferred", "dry-run")] * 2)
+
+    def reviews(self):
+        with open(self.log + ".review") as f:
+            return [json.loads(x) for x in f]
+
+    def test_shadow_review_sees_no_item_text_and_lands_in_body_and_record(self):
+        self.gh_state({1: {"body": "RAW-ISSUE-TEXT"}, 2: {"body": "RAW-ISSUE-TEXT"}}, [])
+        r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "review": "looks fine"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.reviews(), [{"raw": False, "top": ["input", "repo"]}] * 2)
+        [call] = {c for c in self.calls() if "--model" in c and "--tools Read,Grep,Glob" in c and "--restricted" in c}
+        self.assertIn("--model sonnet", call)
+        bodies = {p["head"]: p["body"] for p in self.gh()["prs"]}
+        self.assertIn("## Shadow review\n\nAdvisory; nothing merges on it.\n\n- sonnet (same family): approve\n\n"
+                      "    - src/1:1: nit\n", bodies["factory/fix-1"])
+        self.assertIn("- sonnet (same family): changes (invalid output)\n", bodies["factory/fix-2"])
+        self.assertNotIn("looks fine", bodies["factory/fix-2"])
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            [rec] = [json.loads(x) for x in f]
+        self.assertEqual([(i["id"], i["scope"], i["weighted_lines"], i["reviews"]) for i in rec["items"]], [
+            ("1", "minimal", 1, [{"model": "sonnet", "family": "same family", "verdict": "approve", "valid": True}]),
+            ("2", "minimal", 1, [{"model": "sonnet", "family": "same family", "verdict": "changes", "valid": False}])])
+
+    def test_shadow_review_in_dry_run_writes_nothing(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}}, dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 review: sonnet approve", r.stdout)
+        self.assertEqual(self.remote_heads() + "".join(self.gh_writes()), "")
+        self.assertEqual(self.rows("pushed.tsv") + self.rows("linked.tsv"), [])
 
     def fix_commit(self, branch=None):
         if branch:

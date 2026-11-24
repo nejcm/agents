@@ -267,7 +267,8 @@ def factory_runs(repo, since):
         outcome = rec.get("outcome") if re.fullmatch(r"[a-z-]{1,20}", str(rec.get("outcome"))) else "?"
         r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
                                     "items": collections.Counter(), "escalations": collections.Counter(),
-                                    "tests": 0, "test_files": 0, "deps": 0, "capped": 0, **{k: 0 for k in RUN_METRICS}})
+                                    "tests": 0, "test_files": 0, "deps": 0, "capped": 0,
+                                    "scopes": collections.Counter(), "weighted": None, **{k: 0 for k in RUN_METRICS}})
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
         r["capped"] += is_num(rec.get("max_turns_hit")) and rec["max_turns_hit"] > 0
@@ -285,6 +286,10 @@ def factory_runs(repo, since):
                 r["tests"] += 1
                 r["test_files"] += int(n)
             r["deps"] += u.get("dependency_change") is True
+            if u.get("scope") in ("minimal", "refactor"):
+                r["scopes"][u["scope"]] += 1
+            if is_num(u.get("weighted_lines")):
+                r["weighted"] = max(r["weighted"] or 0, int(u["weighted_lines"]))
         for k in RUN_METRICS:
             r["seen"][k] += is_num(rec.get(k))
             r[k] += num(rec.get(k))
@@ -314,7 +319,9 @@ def render_runs(runs):
                    + (f" Runs that hit the turn cap: {r['capped']}." if r["capped"] else "")
                    + (f" Escalation reasons: {escalations}." if escalations else "")
                    + (f" Disclosed: existing tests changed in {r['tests']} ({r['test_files']} files), "
-                      f"dependencies in {r['deps']}." if r["tests"] or r["deps"] else ""))
+                      f"dependencies in {r['deps']}." if r["tests"] or r["deps"] else "")
+                   + (f" Scope: minimal {r['scopes']['minimal']}, refactor {r['scopes']['refactor']}; "
+                      f"largest {r['weighted'] or 0:,} weighted lines." if r["scopes"] else ""))
     return out + [""]
 
 

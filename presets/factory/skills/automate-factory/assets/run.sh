@@ -30,7 +30,12 @@ def lines(p):
     return read(p).splitlines()
 def disclosed(t):
     t = (t or "").split()
-    return dict(test_changes=int(t[0]), dependency_change=t[1] == "1") if len(t) == 2 else dict(test_changes=None, dependency_change=None)
+    if len(t) != 4:
+        return dict(test_changes=None, dependency_change=None, scope=None, weighted_lines=None)
+    return dict(test_changes=int(t[0]), dependency_change=t[1] == "1", scope=t[2], weighted_lines=int(t[3]))
+def reviews(t):
+    return [dict(model=m, family="same family", verdict="approve" if v == "approve" else "changes", valid=v != "invalid")
+            for m, _, v in (x.rpartition("=") for x in (t or "").split())]
 if mode == "json":
     raw = read(a[0])
     try:
@@ -65,9 +70,9 @@ for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write
 if os.path.isdir(outcomes):
     rec["items"] = []
     for i in sorted(os.listdir(outcomes)):
-        o = lines(os.path.join(outcomes, i)) + ["", "", "", ""]
+        o = lines(os.path.join(outcomes, i)) + ["", "", "", "", ""]
         rec["items"].append(dict(zip(("outcome", "reason", "pr", "start_commit", "end_commit"), (o[0] + " " + o[1]).split()),
-                                 id=i, diff_stat=o[2] or None, **disclosed(o[3])))
+                                 id=i, diff_stat=o[2] or None, **disclosed(o[3]), reviews=reviews(o[4])))
 path = ".factory/reports/runs.jsonl"
 if os.path.islink(path):
     sys.exit("record: runs.jsonl is a symlink")
@@ -75,8 +80,8 @@ with open(path, "a") as f:
     f.write(re.sub(creds + "[A-Za-z0-9_-]*", "[redacted]", json.dumps(rec)) + "\n")
 PY
 )
-# Existing test files changed and whether dependencies were disclosed, once gates passed.
-disclosure() { [ -z "${gated:-}" ] || echo "${#changed[@]} $([ -s "$view/deps.md" ] && echo 1 || echo 0)"; }
+# Existing test files changed, dependencies disclosed, scope and weighted size, once gates passed.
+disclosure() { [ -z "${gated:-}" ] || echo "${#changed[@]} $([ -s "$view/deps.md" ] && echo 1 || echo 0) $scope $weighted"; }
 record() {
   local rc=$1 o=$run_outcome stat=""
   [ "$rc" = 0 ] || { o=failed; [ -z "$gate_block" ] || o=blocked; }
@@ -147,7 +152,8 @@ post() { :; }
 remote="<remote url>" branch="factory/$entry"
 title="chore: $entry automation $day"
 # dep_files=1 only for entries that fix source code; see runners.md.
-test_cmd="<test command>" max_lines=400 summary_cap=65536 dep_files=0
+# ceiling: a runaway guard in weighted lines (a deletion weighs 1/4), not a quality limit.
+test_cmd="<test command>" ceiling=10000 summary_cap=65536 dep_files=0
 # Patterns stay literal; expanded against the checkout they would miss new files.
 set -f
 allow=("<path glob>")
@@ -158,10 +164,12 @@ deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .
 set +f
 deny+=(${consumed[@]+"${consumed[@]}"})
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
-# Generated lockfiles skip the line cap (bun.lockb the binary check) and are disclosed instead.
+# Generated lockfiles skip the ceiling (bun.lockb the binary check) and are disclosed instead.
 locks_re='(^|/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|uv\.lock|poetry\.lock|pdm\.lock|Pipfile\.lock|Cargo\.lock|go\.sum)$'
+generated_re='\.min\.(js|css)$|\.(js|css)\.map$|_pb2(_grpc)?\.pyi?$|\.pb\.go$'
 manifests_re='(^|/)(package\.json|pyproject\.toml|Cargo\.toml|go\.mod)$'
-pr="" start="" commit="" gated="" changed=()
+pr="" start="" commit="" gated="" changed=() scope="" why="" weighted="" refactors=()
+scope_rule='scope: minimal, or scope: refactor <why a smaller fix is worse> when restructuring first makes the fix better; then commit each refactor step yourself with git commit, existing tests unchanged and passing at each, and leave the behaviour change uncommitted.'
 deps_py=$(cat <<'PY'
 import json, re, subprocess, sys
 start, commit, summary, locks_re, *guarded = sys.argv[1:]
@@ -342,11 +350,12 @@ edit() {
   cp -R "$view/skills" "$check/"
   prompt="$(cat ".factory/automations/$entry.edit.md" && overlay edit)
 Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory; never
-commit, push or run gh.
+push or run gh, and commit only refactor steps as below.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
 edit: outcome=stopped. When the fix needs credentials, production access, a decision the report
 leaves open, or work outside this automation, do not guess: say what is missing and make the last
-line escalated: <credentials|prod-access|ambiguous|out-of-scope>. Before that, one line per
+line escalated: <credentials|prod-access|ambiguous|out-of-scope>. Before that, one line
+$scope_rule One line per
 existing test file you changed, deleted or renamed (old path):
 test-change: <path from the repo root>: <one-line reason>. Prefer existing code and the standard
 library; add a package only for substantial functionality, with one line per new package:
@@ -369,14 +378,54 @@ dependency: <name> <why not in-house>."
     run_outcome=no-change
     exit 0
   fi
+  commit_edit "$title"
+}
+
+# The edit's own commits survive only under scope refactor; what is left becomes the last commit.
+commit_edit() {
+  grep -q '^scope: *refactor ' "$view/summary.md" || git -C "$work" reset -q --soft "$start"
   git -C "$work" add -A
-  git -C "$work" commit -q -m "$title"
+  git -C "$work" diff --cached --quiet || git -C "$work" commit -q -m "$1"
   commit=$(git -C "$work" rev-parse HEAD)
 }
 
+scope_gate() {
+  local l c p cs=()
+  [ "$(grep -c '^scope:' "$view/summary.md")" -le 1 ] || block "more than one scope line"
+  l=$(sed -n 's/^scope: *//p' "$view/summary.md")
+  case $l in
+    minimal) scope=minimal ;;
+    "refactor "*[![:space:]]*) scope=refactor why=${l#refactor } ;;
+    *) block "no scope line: scope: minimal or scope: refactor <why a smaller fix is worse>" ;;
+  esac
+  git merge-base --is-ancestor "$start" "$commit" || block "commit does not descend from the start"
+  [ -z "$(git rev-list --merges "$start..$commit")" ] || block "merge commit in the edit"
+  p=$(comm -23 <(git log --format= --name-only --no-renames "$start..$commit" | sort -u) \
+    <(git diff --name-only --no-renames "$start" "$commit" | sort -u) | head -n 1)
+  [ -z "$p" ] || block "a commit changes $p, unchanged in the final diff"
+  mapfile -t cs < <(git rev-list --reverse "$start..$commit")
+  [ "$scope" = minimal ] || [ ${#cs[@]} -ge 2 ] || block "scope refactor needs refactor commits before the behaviour commit"
+  [ "$scope" = minimal ] || refactors=("${cs[@]:0:${#cs[@]}-1}")
+  for c in ${refactors[@]+"${refactors[@]}"}; do
+    while IFS= read -r p; do
+      [[ ! $p =~ $tests_re ]] || block "refactor commit ${c:0:12} changes existing test $p"
+    done < <(git diff --name-only --no-renames --diff-filter=MD "$start" "$c")
+  done
+}
+
+refactor_tests() {
+  local c
+  for c in ${refactors[@]+"${refactors[@]}"}; do
+    git worktree add -q --detach "$view/at" "$c"
+    (cd "$view/at" && timeout "${minutes}m" sh -c "$test_cmd") > "$view/at.log" 2>&1 ||
+      block "tests failed at refactor commit ${c:0:12}, exit $?"
+    git worktree remove --force "$view/at"
+  done
+}
+
 gates() {
-  local st p g ok a d r m rc lines=0 tests=() deleted=() guarded=() seen=$'\n'
-  changed=()
+  local st p g ok a d r m rc quarters=0 tests=() deleted=() guarded=() seen=$'\n'
+  changed=() refactors=()
   ! git diff --quiet "$start" "$commit" || block "empty diff"
   while IFS=$'\t' read -r st p; do
     for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
@@ -397,10 +446,11 @@ gates() {
   done < <(git diff --name-status --no-renames "$start" "$commit")
   while read -r a d p; do
     [ "$a" != - ] || [[ $p == bun.lockb || $p == */bun.lockb ]] || block "binary change $p"
-    [[ ! $p =~ $locks_re ]] || continue
-    lines=$((lines + a + d))
+    [[ ! $p =~ $locks_re && ! $p =~ $generated_re ]] || continue
+    quarters=$((quarters + 4 * a + d))
   done < <(git diff --numstat --no-renames "$start" "$commit")
-  [ "$lines" -le "$max_lines" ] || block "$lines changed lines, cap $max_lines"
+  weighted=$((quarters / 4))
+  [ "$weighted" -le "$ceiling" ] || block "$weighted weighted changed lines, ceiling $ceiling"
   if [ ${#tests[@]} -gt 0 ]; then
     git diff -U0 --output-indicator-new='>' --output-indicator-old='<' "$start" "$commit" -- \
       "${tests[@]}" > "$view/tests.diff"
@@ -424,8 +474,10 @@ gates() {
   python3 -I -c "$deps_py" "$start" "$commit" "$view/summary.md" "$locks_re" ${guarded[@]+"${guarded[@]}"} \
     > "$view/deps.md" 2> "$view/deps.err" ||
     block "$(tail -n 1 "$view/deps.err")"
+  scope_gate
   (cd "$work" && timeout "${minutes}m" sh -c "$test_cmd") > "$out/$day-tests.log" 2>&1 ||
     block "tests failed, exit $?"
+  refactor_tests
   if [ ${#changed[@]} -gt 0 ]; then
     git worktree add -q --detach "$view/old" "$commit"
     git -C "$view/old" checkout -q "$start" -- "${changed[@]}"
@@ -446,7 +498,7 @@ gates() {
       git diff --diff-filter=d "$start" "$commit" -- "${changed[@]}" | clip 80 | sed 's/^/    /'
       echo; } > "$view/section.md"
   fi
-  { git diff "$start" "$commit"; cat "$view/summary.md" "$view/deps.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
+  { git diff "$start" "$commit"; git log --format=%B "$start..$commit"; cat "$view/summary.md" "$view/deps.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
     no_creds || block "credential-shaped text"
   [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
   gated=$start:$commit
@@ -461,12 +513,14 @@ add_label() {
 publish() {
   local draft=() url disclosed=""
   if [ -z "$commit" ] || [ "$gated" != "$start:$commit" ]; then gates; fi
-  [ ${#changed[@]} = 0 ] && [ ! -s "$view/deps.md" ] || disclosed=1
+  [ ${#changed[@]} = 0 ] && [ ! -s "$view/deps.md" ] && [ "$scope" = minimal ] || disclosed=1
   [ "$level" != draft-pr ] && [ -z "$disclosed" ] || draft=(--draft)
-  { cat "$view/deps.md"
+  { [ "$scope" = minimal ] || printf '## Refactor scope\n\n%s\n\n%s\n\n' "${why:0:500}" \
+      "Refactor commits first, existing tests unchanged and passing at each; the last commit changes behaviour."
+    cat "$view/deps.md"
     [ ${#changed[@]} = 0 ] || cat "$view/section.md"
-    printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed.\n\n' \
-    "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit"
+    printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed. Scope %s, %s weighted lines.\n\n' \
+    "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit" "$scope" "$weighted"
     cat "$view/summary.md"; } > "$view/body.md"
   sendable "$view/body.md" || return 0
   ledger_ok
@@ -486,6 +540,7 @@ publish() {
   fi
   [ ${#changed[@]} = 0 ] || add_label factory:test-change "Factory edit changes existing tests"
   [ ! -s "$view/deps.md" ] || add_label factory:dependency "Factory edit adds dependencies"
+  [ "$scope" = minimal ] || add_label factory:refactor "Factory edit refactors before the fix"
   run_outcome=published
 }
 

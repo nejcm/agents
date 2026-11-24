@@ -33,7 +33,8 @@
   `run.sh` runs its `pipeline` in place of edit, gates and publish. Spec prompt below to
   `.factory/automations/issue-pipeline.spec.md`; no edit prompt. Per item, oldest first, at most `cap`
   per run and one per feature: claim, a tool-less spec-writer checked by `check_items.py --spec`,
-  then `fix-issues` reproduce, fix, `run.sh` gates, a fresh verify stage, a ticket for `err-`
+  then `fix-issues` reproduce, fix, `run.sh` gates, a fresh verify stage, the
+  [shadow review](../safety.md#steps), a ticket for `err-`
   items (GitHub Issues only), draft PR, link comment. Only `new-bug` and `fixed` items with a
   mapped feature from a trusted source, open and unassigned on GitHub, are selected; a GitHub item
   with a PR or a remote branch on `factory/fix-<id>`, or (under `flow` `fix`) a linked PR, is
@@ -61,7 +62,8 @@
   profile's pipeline budget, default 240); `cap` (its item count, default 3); `flow`, `fix` (default) or `repro-only`;
   `verify_fixed`, `on` (default) or `off`; `trust`, one array element per `Fetch` line with
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
-  name of the `gh` line, or empty; `allow` globs.
+  name of the `gh` line, or empty; `allow` globs; `reviewers`, Claude model aliases or names
+  other than the runner's default model (default `sonnet`), recorded as same family.
 
 ## Prompt
 
