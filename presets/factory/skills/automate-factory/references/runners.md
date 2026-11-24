@@ -132,10 +132,11 @@ Every run past the pause and Git config checks appends one line to
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`; else `null`),
-`exit_code`, `dry_run`, `calls`, and the summed `turns`, `input_tokens`, `cache_write_tokens`,
+`test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
+disclosed), both `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
-commit verified), `diff_stat` (fixes only)). Usage comes from `claude -p --output-format json`
+commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`). Usage comes from `claude -p --output-format json`
 (`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer and the `fix-issues` stages; a total is
 `null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
 `agent-analytics` reads it.

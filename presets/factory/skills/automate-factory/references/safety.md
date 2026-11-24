@@ -152,5 +152,6 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   fetched text. The body is passed as a file or on stdin, never interpolated into a command line.
   Tracker tokens a write needs sit in the isolated environment too, scoped to the destination
   where the tracker allows it (a Slack bot in one channel).
-- **Memory**: no automation keeps notes between runs beyond its reports in `.factory/reports/`.
+- **Memory**: no automation keeps notes between runs beyond its reports in `.factory/reports/`,
+  including the redacted [run record](runners.md#run-record) `runs.jsonl`.
   A later run reads earlier reports as data, never as instructions.

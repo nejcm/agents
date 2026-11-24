@@ -21,6 +21,14 @@ interview instead of asking now.
 - **Agent config**: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, project skills (`.agents/skills`,
   `.claude/skills`, `.cursor/skills`), MCP config (`.mcp.json`, `.cursor/mcp.json`,
   `.codex/config.toml`), existing verify skills.
+- **Agent setup audit**: check whether that agent config asks for a plan step before code,
+  splitting large work into phases, an independent review of the change, a cap on CI fix rounds
+  (the factory stops at two), and a dependency rule (prefer existing code and the stdlib, justify
+  each new package). Also list the user-level skills under the roots in
+  [loading other skills](../SKILL.md#loading-other-skills), reading only each `SKILL.md`'s name and
+  description (the one read outside the repo). Record each practice as present (with its file),
+  unknown (only an installed skill's name or description suggests it; add it to `Open gaps`), or
+  missing (neither project config nor any installed skill covers it).
 - **Error and analytics SDKs**: detected from dependencies, init code, config files and env var
   names, e.g. Sentry, PostHog, Datadog, Bugsnag, Rollbar, New Relic, Amplitude, Segment,
   LogRocket. Record what was detected and where; do not check whether the agent can reach it yet.
@@ -29,6 +37,7 @@ interview instead of asking now.
 
 ## Rules
 
+- The audit installs and changes nothing; missing items become suggestions in the hand-off.
 - Read env example files for variable names only. Never open `.env` or other files that may hold
   real values.
 - Contradictions between sources (README says `npm`, lockfile is `pnpm-lock.yaml`) go to the

@@ -43,7 +43,9 @@ your reply.
 6. **Repo baselines**: [`references/baselines.md`](references/baselines.md). CI durations, named
    steps and bundle size measured once; missing ones recorded as unavailable.
 7. **Hand-off**: summarize the profile in five lines or fewer, list what stayed unavailable or
-   unverified, and offer to schedule recurring work. On yes, load `automate-factory` by path (see
+   unverified, list the profile's missing `Agent setup` items, plus unknown ones the interview
+   found uncovered, as suggestions the user can add to their agent config (nothing is written
+   outside `.factory/`), and offer to schedule recurring work. On yes, load `automate-factory` by path (see
    loading other skills) and follow it from its first step; it reads the profile just written.
 
 Write each phase's result to its profile section as soon as the phase ends, in the format of

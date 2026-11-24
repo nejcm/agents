@@ -19,6 +19,8 @@ Updated: <YYYY-MM-DD> (explore) at <short SHA>
 - CI: <workflow files>; jobs <names>; triggers <events>
 - Dependent repos: <name>: <why needed> (<source>)
 - Agent config: <AGENTS.md, skills, MCP servers found>
+- Agent setup: <plan step, phase splitting, independent review, CI round cap, dependency rule>:
+  <present (<file>) / unknown (<skill>) / missing>
 - Detected SDKs: <tool> (<file>)
 - Open gaps: <unknown or contradiction> (<sources>)
 

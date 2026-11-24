@@ -266,13 +266,24 @@ def factory_runs(repo, since):
         entry = rec.get("entry") if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", str(rec.get("entry"))) else "?"
         outcome = rec.get("outcome") if re.fullmatch(r"[a-z-]{1,20}", str(rec.get("outcome"))) else "?"
         r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
-                                    "items": collections.Counter(), **{k: 0 for k in RUN_METRICS}})
+                                    "items": collections.Counter(), "escalations": collections.Counter(),
+                                    "tests": 0, "test_files": 0, "deps": 0, **{k: 0 for k in RUN_METRICS}})
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
         r["outcomes"][outcome] += 1
-        for i in rec.get("items") if isinstance(rec.get("items"), list) else ():
+        items = rec.get("items") if isinstance(rec.get("items"), list) else []
+        for i in items:
             o = i.get("outcome") if isinstance(i, dict) else None
             r["items"][o if re.fullmatch(r"[a-z-]{1,20}", str(o)) else "?"] += 1
+        for u in [rec] + [i for i in items if isinstance(i, dict)]:
+            if u.get("outcome") == "escalated":
+                why = u.get("reason")
+                r["escalations"][why if re.fullmatch(r"[a-z-]{1,20}", str(why)) else "?"] += 1
+            n = u.get("test_changes")
+            if is_num(n) and n > 0:
+                r["tests"] += 1
+                r["test_files"] += int(n)
+            r["deps"] += u.get("dependency_change") is True
         for k in RUN_METRICS:
             r["seen"][k] += is_num(rec.get(k))
             r[k] += num(rec.get(k))
@@ -295,9 +306,13 @@ def render_runs(runs):
     out.append("")
     for entry, r in runs.items():
         items = ", ".join(f"{o} {n}" for o, n in sorted(r["items"].items()))
+        escalations = ", ".join(f"{o} {n}" for o, n in sorted(r["escalations"].items()))
         out.append(f"- {entry}: {r['dry']} of {r['runs']} runs dry. Turns reported by {r['seen']['turns']}, "
                    f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}."
-                   + (f" Items: {items}." if items else ""))
+                   + (f" Items: {items}." if items else "")
+                   + (f" Escalation reasons: {escalations}." if escalations else "")
+                   + (f" Disclosed: existing tests changed in {r['tests']} ({r['test_files']} files), "
+                      f"dependencies in {r['deps']}." if r["tests"] or r["deps"] else ""))
     return out + [""]
 
 

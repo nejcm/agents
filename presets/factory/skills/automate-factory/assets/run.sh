@@ -28,6 +28,9 @@ def read(p):
         return ""
 def lines(p):
     return read(p).splitlines()
+def disclosed(t):
+    t = (t or "").split()
+    return dict(test_changes=int(t[0]), dependency_change=t[1] == "1") if len(t) == 2 else dict(test_changes=None, dependency_change=None)
 if mode == "json":
     raw = read(a[0])
     try:
@@ -49,6 +52,7 @@ creds, calls, gates, outcomes, *kv = a
 rec = dict(x.split("=", 1) for x in kv)
 rec = {k: v or None for k, v in rec.items()}
 rec["exit_code"], rec["dry_run"] = int(rec["exit_code"]), rec["dry_run"] == "1"
+rec.update(disclosed(rec.pop("disclosure")))
 rec["gates"] = lines(gates)
 use = [json.loads(x) for x in lines(calls)]
 rec["calls"] = len(use)
@@ -59,9 +63,9 @@ for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write
 if os.path.isdir(outcomes):
     rec["items"] = []
     for i in sorted(os.listdir(outcomes)):
-        o = lines(os.path.join(outcomes, i)) + ["", "", ""]
+        o = lines(os.path.join(outcomes, i)) + ["", "", "", ""]
         rec["items"].append(dict(zip(("outcome", "reason", "pr", "start_commit", "end_commit"), (o[0] + " " + o[1]).split()),
-                                 id=i, diff_stat=o[2] or None))
+                                 id=i, diff_stat=o[2] or None, **disclosed(o[3])))
 path = ".factory/reports/runs.jsonl"
 if os.path.islink(path):
     sys.exit("record: runs.jsonl is a symlink")
@@ -69,6 +73,8 @@ with open(path, "a") as f:
     f.write(re.sub(creds + "[A-Za-z0-9_-]*", "[redacted]", json.dumps(rec)) + "\n")
 PY
 )
+# Existing test files changed and whether dependencies were disclosed, once gates passed.
+disclosure() { [ -z "${gated:-}" ] || echo "${#changed[@]} $([ -s "$view/deps.md" ] && echo 1 || echo 0)"; }
 record() {
   local rc=$1 o=$run_outcome stat=""
   [ "$rc" = 0 ] || { o=failed; [ -z "$gate_block" ] || o=blocked; }
@@ -78,7 +84,7 @@ record() {
   python3 -I -c "$record_py" record "$creds_re" "$calls" "$gates_log" "$view/outcomes" entry="$entry" \
     started="$began" ended="$(date -u +%FT%TZ)" base="$base" \
     start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" reason="$run_reason" exit_code="$rc" \
-    dry_run="${FACTORY_DRY_RUN:-0}"
+    dry_run="${FACTORY_DRY_RUN:-0}" disclosure="$(disclosure)"
 }
 trap 'record $? || true; rm -rf "$view"; git worktree prune' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"

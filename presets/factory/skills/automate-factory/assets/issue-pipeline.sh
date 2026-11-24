@@ -277,7 +277,8 @@ release() {
   local f
   set +e
   [ -n "$outcome" ] || outcome=blocked reason=$step
-  printf '%s %s %s\n%s %s\n%s\n' "$outcome" "$reason" "$url" "$start" "${commit:-$start}" "$stat" > "$runview/outcomes/$id"
+  printf '%s %s %s\n%s %s\n%s\n%s\n' "$outcome" "$reason" "$url" "$start" "${commit:-$start}" "$stat" "$(disclosure)" \
+    > "$runview/outcomes/$id"
   [ -n "$claimed" ] || return
   if [ "$step" = publish ] && [ -n "$commit" ] &&
     [ "$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1)" = "$commit" ]; then

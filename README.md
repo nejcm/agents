@@ -100,13 +100,17 @@ ulis install --global --source . --preset react-web --yes
 
 - `setup-factory` — explores a repo, interviews only for gaps, runs the app for real, generates a
   verify skill, and writes `.factory/profile.md` in that repo
-- `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from local Claude Code,
-  Codex and Cursor transcripts
+- `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from the factory's
+  run records, then local Claude Code, Codex and Cursor transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
   catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
   you, so run them in an isolated VM or container holding only a repo-scoped token.
   `issue-pipeline` at `draft-pr` turns items from trusted sources into verified draft PRs,
-  at most 3 per run by default, never merged. Change settings, prompt guidance or flow variants
+  at most 3 per run by default, never merged. Every run past the pause and Git config checks appends one redacted line to
+  `.factory/reports/runs.jsonl`. Changed, deleted or renamed tests and new dependencies are
+  disclosed with a reason and force a draft; a run that would guess escalates instead, and a PR
+  stops getting pushes after two red CI rounds (see
+  [safety.md](./presets/factory/skills/automate-factory/references/safety.md#steps)). Change settings, prompt guidance or flow variants
   by asking setup-factory to "change my factory"; what stays locked is in
   [safety.md](./presets/factory/skills/automate-factory/references/safety.md#what-the-user-can-change)
 - `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a staged pipeline;

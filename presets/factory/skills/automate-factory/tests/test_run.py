@@ -2,11 +2,14 @@ import datetime
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUN_SH = os.path.join(HERE, "..", "assets", "run.sh")
+sys.path.insert(0, os.path.join(HERE, "..", "..", "agent-analytics", "scripts"))
+import agent_analytics  # noqa: E402
 
 CLAUDE = r"""#!/usr/bin/env bash
 echo "claude ${*//$'\n'/ }" >> "$LOG"
@@ -536,6 +539,30 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
             rows = f.read().splitlines()
         self.assertEqual(rows[:2], [f"7 {c}" for c in shas])
         self.assertEqual(rows[2], "7 " + self.git("--git-dir", self.remote, "rev-parse", "factory/e").strip())
+
+    def test_run_records_disclosures_and_ci_cap_and_analytics_counts_them(self):
+        self.second_test()
+        r, labels, _ = self.edit_run("rm tests/b_test.sh; echo '{\"dependencies\": {\"left-pad\": \"1\"}}' > package.json",
+                                     "test-change: tests/b_test.sh: covered elsewhere\\ndependency: left-pad width table")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(labels, ["factory:test-change", "factory:dependency"])
+        rec = self.records()[-1]
+        self.assertEqual((rec["outcome"], rec["test_changes"], rec["dependency_change"]), ("published", 1, True))
+        self.git("--git-dir", self.remote, "update-ref", "-d", "refs/heads/factory/e")
+        r = self.run_entry("pr")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.records()[-1]["test_changes"], self.records()[-1]["dependency_change"]), (0, False))
+        self.git("--git-dir", self.remote, "update-ref", "-d", "refs/heads/factory/e")
+        shas = self.factory_pushes(2)
+        r = self.run_entry("pr", extra={"PRS": f"7 {shas[1]}", "CI": "FAILURE"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rec = self.records()[-1]
+        self.assertEqual((rec["reason"], rec["test_changes"], rec["dependency_change"]), ("ci-cap", None, None))
+        report = "\n".join(agent_analytics.render_runs(agent_analytics.factory_runs(self.repo, None)))
+        self.assertIn("| e | 3 | escalated 1, published 2 |", report)
+        self.assertIn("Escalation reasons: ci-cap 1. Disclosed: existing tests changed in 1 (1 files), dependencies in 1.",
+                      report)
+        self.assertNotIn("left-pad", report)
 
     def test_green_human_head_resets_the_ci_cap(self):
         shas = self.capped_setup()

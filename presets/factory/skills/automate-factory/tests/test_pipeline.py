@@ -307,6 +307,16 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(item["end_commit"], self.git("--git-dir", self.remote, "rev-parse", "factory/fix-1").strip())
         self.assertEqual((rec["outcome"], rec["calls"], rec["gates"]), ("completed", 5, ["passed"]))
 
+    def test_item_records_carry_disclosures_once_gated(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "spec": "bad"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            [rec] = [json.loads(x) for x in f]
+        self.assertEqual([(i["id"], i["test_changes"], i["dependency_change"]) for i in rec["items"]],
+                         [("1", 0, False), ("2", None, None)])
+        self.assertEqual((rec["test_changes"], rec["dependency_change"]), (None, None))
+
     def test_run_record_counts_a_failed_spec_call(self):
         stub = f"{self.tmp.name}/bin/claude"
         os.rename(stub, stub + ".orig")

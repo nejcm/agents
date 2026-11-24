@@ -131,6 +131,22 @@ class ReportTest(unittest.TestCase):
         self.assertIn("| e | 1 | escalated 1 |", report)
         self.assertIn("cost by 0. Items: ? 1, escalated 1, fixed 1.", report)
 
+    def test_escalation_reasons_and_disclosures_are_counted_without_paths(self):
+        with tempfile.TemporaryDirectory() as repo:
+            write(repo, ".factory/reports/runs.jsonl", [
+                {"entry": "e", "outcome": "escalated", "reason": "ci-cap"},
+                {"entry": "e", "outcome": "published", "reason": None, "test_changes": 2, "dependency_change": True},
+                {"entry": "p", "outcome": "completed", "test_changes": None, "items": [
+                    {"outcome": "escalated", "reason": "credentials"}, {"outcome": "escalated", "reason": "SECRET path"},
+                    {"outcome": "fixed", "test_changes": 1, "dependency_change": False},
+                    {"outcome": "blocked", "reason": "gates", "test_changes": "1", "dependency_change": "yes"}]}])
+            report = run(repo=repo)
+        self.assertNotIn("SECRET", report)
+        self.assertIn("cost by 0. Escalation reasons: ci-cap 1. Disclosed: existing tests changed in 1 (2 files), "
+                      "dependencies in 1.", report)
+        self.assertIn("Escalation reasons: ? 1, credentials 1. Disclosed: existing tests changed in 1 (1 files), "
+                      "dependencies in 0.", report)
+
 
 class RobustnessTest(unittest.TestCase):
     def setUp(self):
