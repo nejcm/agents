@@ -105,8 +105,9 @@ ulis install --global --source . --preset react-web --yes
 - `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from local Claude Code,
   Codex and Cursor transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
-  catalog; report-only by default, comments and gated PRs when opted in
-- `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a jailed pipeline
+  catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
+  you, so run them in an isolated VM or container holding only a repo-scoped token
+- `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a staged pipeline
 
 Its skills only run when invoked explicitly.
 

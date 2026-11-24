@@ -20,8 +20,8 @@ Fix only when all hold, checked by the coordinator:
 ## Fix
 
 `start` is `$base_sha`, or the claimed draft's checked head. Checkout:
-`git worktree add --detach "$item/patch" "$start"`, so no local branch exists to collide on a
-retry. In the jail its `.git` is read-only and the repo is hidden, so the stage has no `git`.
+`git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree add --detach "$item/patch" "$start"`, detached so no
+local branch collides on a retry. The stage leaves its changes uncommitted; the coordinator commits them.
 
 Inputs in `$check`: `spec.md`, `repro.md`, the profile's `Run` and `Scripts` as `run.md`, the
 `debugging` skill's `SKILL.md`, and the verify skill of `$start`; per
@@ -40,12 +40,12 @@ The stage follows the target repo's `AGENTS.md` and:
 It stops when the change outgrows the budget or touches more than the spec's feature and its
 direct dependencies.
 
-On `fix: outcome=changed`, the coordinator commits with the repo's hooks off, since the stage
-could edit them:
+On `fix: outcome=changed`, the coordinator commits with hooks and fsmonitor off, since the stage
+could set them:
 
 ```bash
-git -C "$item/patch" add -A
-git -C "$item/patch" -c core.hooksPath=/dev/null commit -q -m "fix: <feature> (<#id or prefix-id>)"
+git -c core.hooksPath=/dev/null -c core.fsmonitor=false -C "$item/patch" add -A
+git -c core.hooksPath=/dev/null -c core.fsmonitor=false -C "$item/patch" commit -q -m "fix: <feature> (<#id or prefix-id>)"
 commit=$(git -C "$item/patch" rev-parse HEAD)
 ```
 

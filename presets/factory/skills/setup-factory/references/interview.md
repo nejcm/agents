@@ -31,7 +31,14 @@ the items the user selected. Skip the phase when there are no gaps.
    (default 30 and 50), plus money on API key; per week; which models are allowed.
 6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or
    ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.
-7. **Contradictions**: each conflict from phase 1, with both sources named.
+7. **Environment**: recommend running unattended and issue-driven work in an isolated VM,
+   container or devcontainer, set up as the user likes, holding only the credentials runs need:
+   the model's login and a fine-grained `gh` token scoped to this one repo; no SSH keys or other
+   personal logins. Model steps run as the user, so this is what bounds injected issue text. Ask
+   whether this environment is isolated. If not, warn once that injected issue text can reach
+   whatever this machine can, including every repo its `gh` login reaches, and that a
+   fine-grained single-repo token limits that; then go on.
+8. **Contradictions**: each conflict from phase 1, with both sources named.
 
 ## Output
 

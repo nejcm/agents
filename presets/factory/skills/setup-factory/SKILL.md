@@ -30,7 +30,8 @@ your reply.
 ## Phases
 
 1. **Explore**: [`references/explore.md`](references/explore.md). Facts from the repo, never asked.
-2. **Interview**: [`references/interview.md`](references/interview.md). One batched round, gaps only.
+2. **Interview**: [`references/interview.md`](references/interview.md). One batched round, gaps
+   only, including whether runs execute in an isolated environment.
 3. **Run**: [`references/run.md`](references/run.md). Start the whole system for real, check
    readiness, tear down.
 4. **Verification**: [`references/verification.md`](references/verification.md). Generate the

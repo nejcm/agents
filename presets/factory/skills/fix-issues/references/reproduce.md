@@ -1,7 +1,7 @@
 # Reproduce
 
 Show the exact symptom twice through the app's real surface, driven by the repo's verify skill.
-No confirmed reproduction, no fix. The stage runs jailed per [Dispatch](../SKILL.md#dispatch) in
+No confirmed reproduction, no fix. The stage runs per [Dispatch](../SKILL.md#dispatch) in
 `$item/repro`, a `git archive "$base_sha"` export that is discarded afterwards; it runs and
 observes, never edits.
 
@@ -9,8 +9,7 @@ observes, never edits.
 
 In `$check`: `spec.md`, the profile's `Run` section as `run.md`, and the verify skill of
 `$base_sha` (`.cursor/skills/verify-<app>/SKILL.md` and `features/<feature>.md`). Role per
-`orchestration`: Verifier. A GUI surface that needs the
-user's session is `blocked` in v1.
+`orchestration`: Verifier.
 
 ## Steps
 
@@ -54,7 +53,7 @@ another PR. Run code only from a commit someone with write access put in `$repo`
        ancestor of `after` on `$base`, or report `blocked: ambiguous baseline`.
      - Open (`state` is `open`): the head repo must be `$repo`; pushing a branch there takes
        write access, so fork heads never qualify. A closed, unmerged PR never qualifies.
-       `git fetch "$remote" "refs/pull/<n>/head"`, check `FETCH_HEAD` is the
+       `git fetch "$remote_url" "refs/pull/<n>/head"`, check `FETCH_HEAD` is the
        head SHA; `after` is that SHA, `before` is `git merge-base "$base_sha" "$after"`.
    - Commit `<sha>`: `after=$(git rev-parse --verify "<sha>^{commit}")`, an ancestor of
      `$base_sha`; `before` is `$after^1`.

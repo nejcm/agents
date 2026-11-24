@@ -66,7 +66,8 @@ only to entries the user names or whose smoke run failed.
 ## Rules
 
 - **Safety**: every automation follows [`references/safety.md`](references/safety.md), including
-  the lethal-trifecta rule. An entry that cannot meet it on a runner is not offered there.
+  the lethal-trifecta rule. An entry that cannot meet it on a runner is not offered there. Locally
+  a `draft-pr` or `pr` edit step runs as the user; only the isolated environment bounds it.
 - **Writes**: freely only to `.factory/`. A run writes elsewhere only through its write level's
   post or publish step. Runner config (workflow files, systemd units, crontab
   lines, scheduler settings) is shown as a proposed diff and applied only after the user confirms.

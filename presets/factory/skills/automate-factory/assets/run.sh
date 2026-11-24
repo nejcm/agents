@@ -8,6 +8,12 @@ out=.factory/reports/$entry
 mkdir -p "$out" .factory/tmp
 [ -e .factory/tmp/.gitignore ] || echo '*' > .factory/tmp/.gitignore
 view=$(mktemp -d "$PWD/.factory/tmp/$entry.XXXXXX")
+# Against mistakes only: the edit step runs as this user and can change any Git config.
+n=${GIT_CONFIG_COUNT:-0}
+[[ $n =~ ^[0-9]+$ ]] || { echo "GIT_CONFIG_COUNT is not a number" >&2; exit 1; }
+n=$((10#$n))
+export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFIG_VALUE_$n=/dev/null" \
+  "GIT_CONFIG_KEY_$((n + 1))=core.fsmonitor" "GIT_CONFIG_VALUE_$((n + 1))=false"
 trap 'rm -rf "$view"; git worktree prune' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
@@ -57,7 +63,7 @@ post_check() { :; }
 post() { :; }
 
 # draft-pr and pr only. Destination, gates and test command are fixed here at setup.
-remote="<remote>" branch="factory/$entry"
+remote="<remote url>" branch="factory/$entry"
 title="chore: $entry automation $day"
 test_cmd="<test command>" max_lines=400 summary_cap=65536
 # Patterns stay literal; expanded against the checkout they would miss new files.
@@ -69,15 +75,13 @@ deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .
   .vscode/* .devcontainer/*)
 set +f
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
-jail_tools="<confirmed jail_resolve lines>"
 pr="" start="" commit=""
 
 block() { echo "gate: $*" >&2; exit 1; }
 
 edit() {
-  local prs head tools=Bash,Read,Grep,Glob,Edit,Write
-  check=$view/check evidence=$view/evidence work=$view/work jail_auth=CLAUDE_CODE_OAUTH_TOKEN
-  [ "$auth" != api-key ] || jail_auth=ANTHROPIC_API_KEY
+  local prs head prompt tools=Bash,Read,Grep,Glob,Edit,Write
+  check=$view/check work=$view/work
   start=$(git rev-parse "$ref")
   prs=$(gh pr list --repo "$repo" --head "$branch" --state open --json number,headRefOid,isCrossRepository \
     --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefOid)"')
@@ -91,19 +95,20 @@ edit() {
   elif git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null; then
     block "$branch exists without an open PR"
   fi
-  mkdir "$check" "$evidence"
+  mkdir "$check"
   git worktree add -q --detach "$work" "$start"
   cp "$out/$day.md" "$check/report.md"
   cp .factory/profile.md "$check/"
   cp -R "$view/skills" "$check/"
-  . "<skill-path:fix-issues>/assets/jail.sh"
-  jail_probe "$work" "$PWD/.factory/profile.md"
-  jail "$work" timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
-    --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
-    --permission-mode dontAsk "$(cat ".factory/automations/$entry.edit.md")
-Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory.
+  prompt="$(cat ".factory/automations/$entry.edit.md")
+Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory; never
+commit, push or run gh.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
-edit: outcome=stopped." < /dev/null | head -c $((summary_cap + 1)) > "$view/summary.md" ||
+edit: outcome=stopped."
+  # No setting sources: tracked project settings in the checkout could switch auth or permissions.
+  (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
+    --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
+    --permission-mode dontAsk "$prompt" < /dev/null) | head -c $((summary_cap + 1)) > "$view/summary.md" ||
     [ "$(wc -c < "$view/summary.md")" -gt "$summary_cap" ]
   [ "$(wc -c < "$view/summary.md")" -le "$summary_cap" ] || block "summary over $summary_cap bytes"
   if [ "$(tail -n1 "$view/summary.md")" != "edit: outcome=changed" ]; then
@@ -111,7 +116,7 @@ edit: outcome=stopped." < /dev/null | head -c $((summary_cap + 1)) > "$view/summ
     exit 0
   fi
   git -C "$work" add -A
-  git -C "$work" -c core.hooksPath=/dev/null commit -q -m "$title"
+  git -C "$work" commit -q -m "$title"
   commit=$(git -C "$work" rev-parse HEAD)
 }
 
@@ -139,7 +144,7 @@ gates() {
       "$view/tests.diff" || block "test skipped"
     ! grep -q '^<' "$view/tests.diff" || block "existing test lines changed or removed"
   fi
-  jail_auth=- jail "$work" timeout "${minutes}m" sh -c "$test_cmd" > "$out/$day-tests.log" 2>&1 ||
+  (cd "$work" && timeout "${minutes}m" sh -c "$test_cmd") > "$out/$day-tests.log" 2>&1 ||
     block "tests failed, exit $?"
   { git diff "$start" "$commit"; cat "$view/summary.md"; } |
     { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; } || block "credential-shaped text"

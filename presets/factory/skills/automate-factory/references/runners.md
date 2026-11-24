@@ -77,26 +77,23 @@ confirms, with `crontab -e` or by editing the output of `crontab -l` and piping 
 ## Write levels
 
 `report` needs nothing more. `comment` fills `post` and `post_check` from the entry, with the
-destination approved by the user. `draft-pr` and `pr` are local only and need: Linux with `bwrap`
-and unprivileged user namespaces, `fix-issues` installed (the script sources its
-[`jail.sh`](../../fix-issues/assets/jail.sh)), the profile's `Agent PR review` allowing agent
-PRs (`pr` also allowing non-draft ones), and a test script in the profile. Fill in the run script:
+destination approved by the user. `draft-pr` and `pr` are local only and need the profile's
+`Agent PR review` allowing agent PRs (`pr` also allowing non-draft ones) and a test script in the
+profile, and Git 2.31 or later (the run script sets config through `GIT_CONFIG_COUNT`). Fill in
+the run script:
 
-- `remote` (the remote whose push URL is `repo`), `branch` left as `factory/$entry` except for
+- `<remote url>`: `git remote get-url --push <name>` of the remote whose push URL is `repo`, so
+  fetch and push use that URL, not a name Git config can repoint; `branch` left as `factory/$entry` except for
   `pr-babysitting`.
 - `test_cmd`: the profile's test script, self-contained (installs its own dependencies), run in
-  the jail with no secret; `allow`: the entry's path globs, confirmed by the user; `max_lines`.
-- `jail_tools`: `jail_resolve claude <the Run recipe's tools>` lines the user confirms, as in
-  `fix-issues` [Dispatch](../../fix-issues/SKILL.md#dispatch).
-- `<skill-path:fix-issues>` with its resolved directory.
+  the checkout; `allow`: the entry's path globs, confirmed by the user; `max_lines`.
 - The entry's `Edit prompt` to `.factory/automations/<entry>.edit.md`.
 
-The jail passes no file from `HOME`, so the edit step needs the model token in the runner's
-environment: the user runs `claude setup-token` and writes `CLAUDE_CODE_OAUTH_TOKEN=<token>`
-(or `ANTHROPIC_API_KEY` on API-key auth) to a file outside the repo, mode `0600`, e.g.
-`~/.config/factory/env`. systemd: `EnvironmentFile=%h/.config/factory/env` in `[Service]`;
-cron: `set -a; . ~/.config/factory/env; set +a;` before the script path. Never read or write it.
-`publish` uses the runner identity's own `gh` login and `git push` credentials, outside the jail.
+The edit step and the test command run as the runner identity, under its own `claude` login, and
+`publish` uses its `gh` login and `git push` credentials. So the edit step can read that login and
+change Git config, `PATH` and the run script: only the isolated environment, holding a
+fine-grained token scoped to this repo, bounds an injected model
+([safety.md](safety.md#lethal-trifecta-rule)).
 
 ## GitHub Actions (report and comment)
 

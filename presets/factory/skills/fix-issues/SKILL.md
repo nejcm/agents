@@ -36,8 +36,8 @@ stop. Writes go to GitHub only; tickets and comments back to other sources are l
 | ----- | ---- | ----- | ---------- |
 | fetch | none, or [agent fetch](references/triage.md#agent-fetch) | tracker, `git` | read-only calls into the view |
 | triage | Reviewer/Judge, `medium` | the view | file read and search only; report on stdout |
-| reproduce | Verifier | user's spec, base export | jailed shell; its directory is discarded |
-| fix | Builder | user's spec, repro record, patch checkout | jailed shell and edits; the coordinator commits them |
+| reproduce | Verifier | user's spec, base export | shell; its directory is discarded |
+| fix | Builder | user's spec, repro record, patch checkout | shell and edits; the coordinator commits them |
 | verify | Verifier, fresh session | user's spec, repro record, base and commit exports | as reproduce |
 | post | none (coordinator) | stage files, sent unchanged | one fixed destination per write |
 
@@ -52,9 +52,10 @@ results reach it only as projected enum lines, and the user reads the reports an
 1. **Freeze** before any fetch, each value checked by the regex shown and never taken from stage
    output:
    - `repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)`, `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`
-   - `remote`: the remote whose push URL is `$repo` on github.com (`git remote -v`)
+   - `remote_url`: `git remote get-url --push <name>` of the remote whose push URL is `$repo` on
+     github.com (`git remote -v`); fetches and pushes use this URL, never a remote name
    - `base=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)`, then
-     `git fetch "$remote" "$base"` and `base_sha=$(git rev-parse FETCH_HEAD)`
+     `git fetch "$remote_url" "$base"` and `base_sha=$(git rev-parse FETCH_HEAD)`
    - `me=$(gh api user --jq .login)`
    - the item IDs the user names: issue numbers, or `<prefix>-<id>` (`err-<source>-<id>` for
      error groups) as `check_items.py` named their files.
@@ -82,60 +83,46 @@ results reach it only as projected enum lines, and the user reads the reports an
 ## Dispatch
 
 Role, model and effort per `orchestration`; invocation per `model-dispatch`'s Claude CLI
-reference. v1 runs every jailed stage with Claude Code, as a standalone process inside the jail:
-a native subagent would share this session's credentials, which is why this skill shells out on
-the same host. Other CLIs are later.
+reference. v1 runs every shell stage with Claude Code as a standalone process: a native subagent
+would inherit this session's tools, permissions and context. Other CLIs are later.
 
 ```bash
-. <this skill's dir>/assets/jail.sh
-jail_tools=$(cat .factory/reports/fix-issues/jail-tools)
-item=$PWD/.factory/reports/fix-issues/tmp/fix-<id>  # absolute, for bwrap
+item=$PWD/.factory/reports/fix-issues/tmp/fix-<id>  # absolute: the stage runs in $dir
 check=$item/check/<stage> evidence=$item/evidence/<stage>
 mkdir -p "$check" "$evidence"
 git archive "<baseline sha>" .cursor/skills/verify-<app> | tar -x -C "$check"
 cp <stage inputs> "$check/"
-jail_probe "$dir" "$item/spec.md" || { echo "jail boundary failed"; exit 1; }
-jail "$dir" timeout <stage minutes>m claude -p --model <model> --effort <effort> \
-  --safe-mode --setting-sources '' --strict-mcp-config --no-session-persistence \
+prompt=$(cat <reference file> "$item/bans.md")
+(unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_PROFILE \
+  CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+[ "$auth" = api-key ] || unset ANTHROPIC_API_KEY
+cd "$dir" && check=$check evidence=$evidence timeout <stage minutes>m claude -p --model <model> \
+  --effort <effort> --safe-mode --setting-sources '' --strict-mcp-config --no-session-persistence \
   --tools "<stage tools>" --allowedTools "<stage tools>" --max-turns <stage turns> \
-  --permission-mode dontAsk "$(cat <reference file> "$item/bans.md")" < /dev/null
+  --permission-mode dontAsk "$prompt" < /dev/null)
 ```
 
-- **Boundary**: [`assets/jail.sh`](assets/jail.sh) runs the stage under `bwrap` with an empty
-  `HOME`, no inherited environment besides `LANG`, `TERM` and the model's own auth variable,
-  `/run/user`, the repo and the Docker socket hidden, `$check` read-only, and only `$dir` and
-  `$evidence` writable; a `.git` inside `$dir` is read-only. `--setting-sources ''` skips user,
-  project and local settings, so a tracked `apiKeyHelper` cannot switch auth; stages need none
-  of them. `PATH` is the system entries plus `/tmp/bin`, linking the confirmed tools. `$check` and `$evidence` are set inside the jail. The
-  probe must pass before every stage: the spec file outside the binds is invisible, `HOME` has no
-  config, `$check` and `.git` are read-only, `$evidence` is writable, and `claude` and every
-  confirmed tool start. A failed probe stops the run.
-- **Tools**: once per repo, `jail_resolve claude <the Run recipe's tools>` prints
-  `<name> <executable> <runtime root>`, symlinks followed and a mise shim resolved with
-  `mise which`. It refuses any other version-manager shim: pass `<tool>=<real path>` from the
-  manager (`asdf which <tool>`). `jail` refuses a shim too, so the probe fails on one. The user
-  confirms the lines, saved to `.factory/reports/fix-issues/jail-tools`. A resolved path pins the
-  tool's version: re-resolve after upgrading it; the probe fails until then. Only each runtime root
-  under `HOME` is mounted, read-only; `jail` refuses `HOME`, its direct children,
-  `~/.local/share`-level parents and config, SSH, GnuPG or keyring paths.
-- **Prerequisites**: Linux with `bwrap` and unprivileged user namespaces (without them `jail`
-  fails closed; macOS is later); model auth through `CLAUDE_CODE_OAUTH_TOKEN` (`claude
-  setup-token`, run by the user; subscription) or, when the profile chose API key,
-  `ANTHROPIC_API_KEY` with `jail_auth=ANTHROPIC_API_KEY`; the jail passes only that one variable,
-  never a file from `HOME`;
-  no managed hooks, confirmed as in automate-factory
-  [`runners.md`](../automate-factory/references/runners.md#analyze-command). Missing any: stop
+- **Environment**: stages run in their directory under the user's normal `claude` login, `auth`
+  from the profile's `Budgets`. Isolation is the environment's job, recorded in the profile's
+  `Environment`; see automate-factory
+  [`safety.md`](../automate-factory/references/safety.md#lethal-trifecta-rule).
+  `--setting-sources ''` skips user, project and local settings, so a tracked `apiKeyHelper` or
+  `env` cannot switch auth; stages need none of them. Stages run as the user: they can change Git
+  config and `PATH` and read the `gh` login, so bans and the coordinator split stop a wrong model,
+  not an injected one; the isolated environment with a single-repo token bounds that.
+- **Prerequisites**: `claude` logged in (or `ANTHROPIC_API_KEY` on API-key auth) and no managed
+  hooks, confirmed as in automate-factory
+  [`runners.md`](../automate-factory/references/runners.md#analyze-command). Missing either: stop
   after triage.
 - **Budget**: per stage from the profile's per-run caps (default 30 minutes, 50 turns):
   `timeout` and `--max-turns`. On API-key auth also pass `--max-budget-usd <usd>` (estimated
   spend, can overshoot); on subscription auth the dollar budget is unenforced.
-- **Limits**: the network stays shared for package installs and local ports; Docker-based run
-  recipes and GUI surfaces that need the user session are `blocked` in v1.
 - **Model tools**: reproduce and verify get `Bash,Read,Grep,Glob`; fix adds `Edit,Write`.
-- **Inputs**: the jail hides everything outside its binds, so the coordinator copies each
-  stage's inputs (its reference's Inputs list) into `$check` model-free, with the verify skill
-  from the stage's baseline commit; the stage reads journeys only from there. The prompt is the
-  reference file, then `bans.md`: no `git push`, no `gh`, no tracker or chat writes.
+- **Inputs**: the coordinator copies each stage's inputs (its reference's Inputs list) into
+  `$check` model-free, with the verify skill from the stage's baseline commit; the stage reads
+  journeys only from there. The prompt is the
+  reference file, then `bans.md`: no `git commit` or `git push`, no `gh`, no tracker or chat
+  writes, no edits outside `$dir` and `$evidence`.
 - Stage reports end with one projected line (see each reference); the coordinator reads only that
   line, and an invalid or missing one is `blocked`.
 
@@ -144,7 +131,7 @@ jail "$dir" timeout <stage minutes>m claude -p --model <model> --effort <effort>
 Work is keyed by the item ID, so a retry finds the same work:
 
 - The claim is `mkdir "$item"`, with `item=.factory/reports/fix-issues/tmp/fix-<id>` (made
-  absolute for the jail), only after the ignore check in [Rules](#rules) passes. If it exists,
+  absolute), only after the ignore check in [Rules](#rules) passes. If it exists,
   another run holds it or crashed: report the path and stop; the user releases it (below) to
   start over.
 - This work's own draft PR, projected to fields checked as data:
@@ -159,15 +146,15 @@ Work is keyed by the item ID, so a retry finds the same work:
 
   For a `<prefix>-<id>` item, drop the `closingIssuesReferences` clause; the branch name matches.
 
-  A match is resumed: the fix starts from its head (`git fetch "$remote" "refs/pull/<n>/head"`,
+  A match is resumed: the fix starts from its head (`git fetch "$remote_url" "refs/pull/<n>/head"`,
   checked against `headRefOid`) and the PR is updated, never a second one opened. Any other PR on
-  that branch name: report it and stop. `factory/fix-<id>` on `$remote` (`git ls-remote`)
+  that branch name: report it and stop. `factory/fix-<id>` on `$remote_url` (`git ls-remote`)
   without a draft: when its SHA is this item's last line in
   `.factory/reports/fix-issues/pushed.tsv`, resume at Draft PR with that commit, the body built
   from `.factory/reports/fix-issues/items/<id>/` (its `spec.md` and stage records); otherwise
   report it and stop.
-- Release: `git worktree remove --force "$item/patch"`, then remove `$item`, after the report is
-  written.
+- Release: `git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree remove --force "$item/patch"`,
+  then remove `$item`, after the report is written.
 
 ## Writes
 
@@ -187,8 +174,8 @@ built from projected fields only.
   `gh issue create --repo "$repo" --title "Error <group id>: <feature>" --body-file <body>`, and
   at once append `<group id> <number>`, the number ending the printed URL, to
   `.factory/reports/fix-issues/tickets.tsv`.
-- **Push**: `git push "$remote" "<commit>:refs/heads/factory/fix-<id>"`, never forced; a
-  rejected push is a stop. Then at once append `<id> <commit>` to
+- **Push**: `git -c core.hooksPath=/dev/null -c core.fsmonitor=false push "$remote_url" "<commit>:refs/heads/factory/fix-<id>"`,
+  never forced; a rejected push is a stop. Then at once append `<id> <commit>` to
   `.factory/reports/fix-issues/pushed.tsv`.
 - **Draft PR**: when the profile's `Agent PR review` allows agent PRs. Body model-free:
   `Fixes #<id>` (or `Source item: <prefix>-<id>`), the tested `$before` and `$commit` SHAs, then
@@ -206,7 +193,7 @@ built from projected fields only.
 - **Secrets**: never ask for, read, store or write one. A stage that prints one is stopped and its
   files are kept out of every body.
 - **Writes**: freely only to `.factory/`. Everything else is a [Writes](#writes) step. Local
-  state (claims, specs, evidence, maps, `jail-tools`) lives under `.factory/reports/fix-issues/`,
+  state (claims, specs, evidence, maps) lives under `.factory/reports/fix-issues/`,
   whose own `.gitignore` of `*` makes Git ignore it whatever the repo's rules say. Before the
   first write there, this preflight must pass; on a failure, report it and stop:
 
@@ -220,6 +207,8 @@ built from projected fields only.
   ```
 - **Loading skills**: the verify skill and `debugging` are read by path inside the stage, never
   invoked; `disable-model-invocation` blocks that.
+- **Git after a stage**: coordinator `add`, `commit`, `worktree` and `push` take
+  `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, against mistakes only.
 - **Retries**: one corrected retry per stage, then stop and report, per orchestration.
 - **Two machines** can both claim an item before its draft PR exists; the second push is
   rejected and stops. Attended v1 accepts that.
