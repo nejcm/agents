@@ -423,7 +423,7 @@ run_item() {
   publish > "$item/pr-url"
   url=$(tail -n 1 "$item/pr-url")
   printf '%s %s %s %s\n' "$id" "$commit" "$entry" "$start" >> "$fx/pushed.tsv"
-  [ "$merge_level" = draft ] || ! approved || mark_ready
+  [ "$merge_level" = draft ] || ! approved "$reviews" $(disclosure) || mark_ready
 
   step=link
   link_item "$id" "$url" "$commit" "$start"
@@ -431,14 +431,15 @@ run_item() {
 }
 
 # Model-free: every configured reviewer approved and no disclosure in needs_human.
+# $1 verdicts, $2 changed tests, $3 1 with dependencies, $4 scope.
 approved() {
   local d
-  [ "$reviews" = "$(printf '%s=approve ' "${reviewers[@]}")" ] || return 1
+  [ "$1" = "$(printf '%s=approve ' "${reviewers[@]}")" ] || return 1
   for d in ${needs_human[@]+"${needs_human[@]}"}; do
     case $d in
-      test-change) [ ${#changed[@]} = 0 ] ;;
-      dependency) [ ! -s "$item/deps.md" ] ;;
-      refactor) [ "$scope" = minimal ] ;;
+      test-change) [ "$2" = 0 ] ;;
+      dependency) [ "$3" = 0 ] ;;
+      refactor) [ "$4" = minimal ] ;;
     esac || return 1
   done
 }
@@ -446,7 +447,8 @@ approved() {
 mark_ready() {
   gh pr ready "$url" --repo "$repo" > /dev/null || { echo "publish: $url not marked ready" >&2; return 0; }
   ready=1
-  [ "$merge_level" != merge ] || printf '%s approved %s %s\n' "$id" "$url" "$commit" >> "$fx/merges.tsv"
+  [ "$merge_level" != merge ] ||
+    printf '%s approved %s %s %s %s %s\n' "$id" "$url" "$commit" "$entry" "${reviews// /,}" "$(disclosure)" >> "$fx/merges.tsv"
 }
 
 # $1 item, $2 PR, $3 commit, $4 why: the PR leaves factory merging for good.
@@ -455,9 +457,10 @@ left() {
   echo "land: $1 $2 not merged: $4; needs a human." | tee -a "$report"
 }
 
-# $1 item, $2 PR, $3 the gated commit. Pending CI or mergeability waits for a later run.
+# $1 item, $2 PR, $3 the gated commit, $4.. as approved(). Pending CI or mergeability waits for a later run.
 merge_item() {
   local v st dr h mg b hb x m
+  approved "$4" "$5" "$6" "$7" || { left "$1" "$2" "$3" "reviewers or needs_human changed since review"; return; }
   v=$(gh pr view "$2" --repo "$repo" --json state,isDraft,headRefOid,mergeable,baseRefName,headRefName,isCrossRepository \
     --jq '"\(.state) \(.isDraft) \(.headRefOid) \(.mergeable) \(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
   read -r st dr h mg b hb x <<< "$v"
@@ -497,28 +500,39 @@ revert_pr() {
 }
 
 # $1 item, $2 PR, $3 merge commit: red CI on it opens a draft revert PR and escalates.
+# An unknown merge commit (failed lookup, merge queue) is looked up on every later run; 5 failed lookups escalate.
 revert_item() {
-  local u=none
-  [[ $3 =~ ^[0-9a-f]{40}$ ]] || { left "$1" "$2" "$3" "merged, merge commit unknown: check CI on $ref"; return; }
-  case $(ci_state "$3") in
-    SUCCESS) printf '%s green %s %s\n' "$1" "$2" "$3" >> "$fx/merges.tsv"; return ;;
+  local u=none m=$3 n
+  if [[ ! $m =~ ^[0-9a-f]{40}$ ]]; then
+    if ! m=$(gh pr view "$2" --repo "$repo" --json mergeCommit --jq .mergeCommit.oid); then
+      printf '%s merged %s -\n' "$1" "$2" >> "$fx/merges.tsv"
+      n=$(grep -cxF "$1 merged $2 -" "$fx/merges.tsv") || true
+      [ "$n" != 5 ] || echo "land: $1 $2 merge commit lookup failed $n times: check CI on $ref; needs a human." | tee -a "$report"
+      return
+    fi
+    [[ $m =~ ^[0-9a-f]{40}$ ]] || return 0
+    printf '%s merged %s %s\n' "$1" "$2" "$m" >> "$fx/merges.tsv"
+  fi
+  case $(ci_state "$m") in
+    SUCCESS) printf '%s green %s %s\n' "$1" "$2" "$m" >> "$fx/merges.tsv"; return ;;
     FAILURE | ERROR) ;;
     *) return 0 ;;
   esac
-  try revert_pr "$1" "$2" "$3" < /dev/null
+  try revert_pr "$1" "$2" "$m" < /dev/null
   [ ! -s "$runview/revert-$1/pr-url" ] || u=$(tail -n 1 "$runview/revert-$1/pr-url")
-  printf '%s reverted %s %s\n' "$1" "$2" "$3" >> "$fx/merges.tsv"
-  printf 'escalated main-red %s\n%s %s\n\n\n\n' "$u" "$3" "$3" > "$runview/outcomes/revert-$1"
-  echo "escalated: main-red: CI failed on $ref for the factory merge $3 of $2; revert PR $u; needs a human." | tee -a "$report"
+  printf '%s reverted %s %s\n' "$1" "$2" "$m" >> "$fx/merges.tsv"
+  printf 'escalated main-red %s\n%s %s\n\n\n\n' "$u" "$m" "$m" > "$runview/outcomes/revert-$1"
+  echo "escalated: main-red: CI failed on $ref for the factory merge $m of $2; revert PR $u; needs a human." | tee -a "$report"
 }
 
-# merges.tsv, newest row per item wins: <id> approved|merged|left|green|reverted <PR> <commit>.
+# merges.tsv, newest row per item wins: <id> approved|merged|left|green|reverted <PR> <commit>,
+# approved rows then <entry> <verdicts> <changed tests> <dependencies> <scope> <weighted lines>.
 land() {
-  local id s u c
+  local id s u c e v t d sc
   [ -f "$fx/merges.tsv" ] || return 0
-  while read -r id s u c; do
-    if [ "$s" = approved ] && [ "$merge_level" = merge ]; then
-      try merge_item "$id" "$u" "$c" < /dev/null
+  while read -r id s u c e v t d sc _; do
+    if [ "$s" = approved ] && [ "$merge_level" = merge ] && [ "$e" = "$entry" ]; then
+      try merge_item "$id" "$u" "$c" "${v//,/ }" "$t" "$d" "$sc" < /dev/null
     elif [ "$s" = merged ]; then
       try revert_item "$id" "$u" "$c" < /dev/null
     fi
@@ -539,8 +553,9 @@ fates() {
       closed | reverted) continue ;;
       merged | factory-merged) ;;
       *)
-        v=$(gh pr view "$u" --repo "$repo" --json state,mergeCommit,title,reviews \
-          --jq '"\(.state) \([.reviews[] | select(.state == "CHANGES_REQUESTED")] | length) \(.mergeCommit.oid) \(.title)"') ||
+        # Change requests from bots or unknown authors are not human disagreement.
+        v=$(gh pr view "$u" --repo "$repo" --json state,mergeCommit,title,reviews --jq '"\(.state) \([.reviews[] |
+          select(.state == "CHANGES_REQUESTED" and (.author.login // "[bot]" | endswith("[bot]") | not))] | length) \(.mergeCommit.oid) \(.title)"') ||
           continue
         read -r f c m t <<< "$v"
         case $f in

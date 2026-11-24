@@ -409,7 +409,7 @@ scope_gate() {
   for c in ${refactors[@]+"${refactors[@]}"}; do
     while IFS= read -r p; do
       [[ ! $p =~ $tests_re ]] || block "refactor commit ${c:0:12} changes existing test $p"
-    done < <(git diff --name-only --no-renames --diff-filter=MD "$start" "$c")
+    done < <(git diff --name-only --no-renames --diff-filter=a "$start" "$c")
   done
 }
 
@@ -423,10 +423,10 @@ refactor_tests() {
   done
 }
 
-gates() {
-  local st p g ok a d r m rc quarters=0 tests=() deleted=() guarded=() seen=$'\n'
-  changed=() refactors=()
-  ! git diff --quiet "$start" "$commit" || block "empty diff"
+# $1 a pushed commit: path, mode, binary and size rules on its diff from the start.
+diff_gate() {
+  local st p g ok a d m quarters=0
+  tests=() changed=() deleted=() guarded=()
   while IFS=$'\t' read -r st p; do
     for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
     ok=0
@@ -436,21 +436,36 @@ gates() {
       [[ $p =~ $locks_re ]] || guarded+=("$p")
     fi
     if [ "$ok" = 0 ] || [[ $p =~ $locks_re ]]; then
-      m=$(git ls-tree "$start" -- "$p" | cut -c1-6; git ls-tree "$commit" -- "$p" | cut -c1-6)
+      m=$(git ls-tree "$start" -- "$p" | cut -c1-6; git ls-tree "$1" -- "$p" | cut -c1-6)
       [ -z "$(grep -vx 100644 <<< "$m")" ] || block "$p is not a regular file"
     fi
     [[ $p =~ $tests_re ]] || continue
     tests+=("$p")
     [ "$st" = A ] || changed+=("$p")
     [ "$st" != D ] || deleted+=("$p")
-  done < <(git diff --name-status --no-renames "$start" "$commit")
+  done < <(git diff --name-status --no-renames "$start" "$1")
   while read -r a d p; do
     [ "$a" != - ] || [[ $p == bun.lockb || $p == */bun.lockb ]] || block "binary change $p"
     [[ ! $p =~ $locks_re && ! $p =~ $generated_re ]] || continue
     quarters=$((quarters + 4 * a + d))
-  done < <(git diff --numstat --no-renames "$start" "$commit")
+  done < <(git diff --numstat --no-renames "$start" "$1")
   weighted=$((quarters / 4))
   [ "$weighted" -le "$ceiling" ] || block "$weighted weighted changed lines, ceiling $ceiling"
+}
+
+gates() {
+  local r m rc c tests=() deleted=() guarded=() seen=$'\n'
+  changed=() refactors=()
+  ! git diff --quiet "$start" "$commit" || block "empty diff"
+  # Pushing $commit publishes every intermediate tree too.
+  for c in $(git rev-list "$start..$commit"); do
+    [ "$c" != "$commit" ] || continue
+    diff_gate "$c"
+    git diff "$start" "$c" | no_creds || block "credential-shaped text at commit ${c:0:12}"
+    python3 -I -c "$deps_py" "$start" "$c" "$view/summary.md" "$locks_re" ${guarded[@]+"${guarded[@]}"} \
+      > /dev/null 2> "$view/deps.err" || block "$(tail -n 1 "$view/deps.err") at commit ${c:0:12}"
+  done
+  diff_gate "$commit"
   if [ ${#tests[@]} -gt 0 ]; then
     git diff -U0 --output-indicator-new='>' --output-indicator-old='<' "$start" "$commit" -- \
       "${tests[@]}" > "$view/tests.diff"

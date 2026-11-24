@@ -110,6 +110,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   line; exactly one valid `scope` line; the commits descend linearly from the start and touch no
   path the final diff leaves unchanged; the fixed test command passes in the checkout; no
   credential-shaped text (`sk-ant-`) in the diff, commit messages, summary or disclosure sections.
+  The path, mode, binary, ceiling and credential rules also hold for each intermediate commit's
+  diff from the start, as do the dependency-only manifest rule and the refactor test runs, since
+  the push publishes them.
   The test command, allowlist and ceiling are fixed at setup; `allow` must exclude the files that define the test command
   (manifests, test config); with `dep_files=1` a manifest outside `allow` may change only its
   dependency keys.
@@ -125,7 +128,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   stops the run before the push. At the default `needs_human`, a PR with this disclosure never
   merges.
 - **Scope**: the edit chooses it; size is not judged. `refactor` needs at least one refactor
-  commit before the behaviour commit; each refactor commit leaves existing test files unchanged and
+  commit before the behaviour commit; each refactor commit leaves existing test files unchanged
+(content, mode and type) and
   passes the test command (same timeout, in its own worktree), or the gate blocks. A refactor PR is
   a draft as for changed tests, gets the `factory:refactor` label, and its reason tops the body;
   the run record keeps `scope` and `weighted_lines`.
@@ -139,10 +143,12 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   never merge, and `pr` opens ready-for-review PRs as before. `merge_level` `ready`: after the
   push, a PR whose every reviewer approved and that has no disclosure in `needs_human` is marked
   ready for review. `merge` (at least two reviewers): such a PR is also recorded in
-  `fix-issues/merges.tsv`, and a later run squash-merges it with `gh pr merge --squash
+  `fix-issues/merges.tsv` with its entry, verdicts and disclosures, and a later run of that entry
+  squash-merges it with `gh pr merge --squash
   --match-head-commit <gated commit>` only when, checked model-free in that run, the PR is open,
   not draft, on `factory/fix-<id>` into `<base>` from this repo, its head is still the gated
-  commit, `mergeable` is `MERGEABLE`, the commit's CI rollup is `SUCCESS` (a commit with no CI
+  commit, the recorded verdicts and disclosures still pass the current `reviewers` and
+  `needs_human`, `mergeable` is `MERGEABLE`, the commit's CI rollup is `SUCCESS` (a commit with no CI
   never merges), `merge_level` is still `merge`, and `.factory/pause` is absent. Pending CI or
   mergeability waits for the next run; any other failure drops the PR from factory merging with a
   "needs a human" line in the report.
@@ -150,11 +156,13 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   `SUCCESS` closes it; `FAILURE` or `ERROR` opens a revert PR (`git revert` on the fetched
   `<base>`, the same gates and publish, always draft, on `factory/revert-<id>`), records the item
   `escalated` `main-red` and says "needs a human" in the report. The factory never merges a
-  revert PR: only `factory/fix-<id>` heads recorded as approved can merge.
+  revert PR: only `factory/fix-<id>` heads recorded as approved can merge. An unknown merge
+  commit (failed lookup, merge queue) is looked up again on every later run until CI on it is
+  green or red; the fifth failed lookup adds a "needs a human" line.
 - **PR fates**: each non-dry `issue-pipeline` run looks up, with `gh pr view` and `git log` on
   the fetched `<base>`, every PR in `linked.tsv`: open, merged by a human, merged by the factory,
   closed unmerged, or reverted (a later commit carrying `This reverts commit <merge commit>`,
-  `Revert "<title>` or `Reverts <repo>#<n>`), plus a count of change-request reviews. Rows go to
+  `Revert "<title>` or `Reverts <repo>#<n>`), plus a count of change-request reviews by authors not ending in `[bot]`. Rows go to
   `fix-issues/fates.tsv`; `agent-analytics` reports agreement from them. `merges.tsv` and
   `fates.tsv` must be regular files, like the push ledger.
 - **Dependencies**: disclosed, never blocked. Gates compare dependency keys of every changed

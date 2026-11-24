@@ -172,6 +172,7 @@ else:
     sys.exit("stub: " + cmd)
 """
 
+OK = " issue-pipeline sonnet=approve,opus=approve, 0 0 minimal 1"
 SPEC_HEADINGS = ["## Spec", "## Reproduction", "## Root cause and fix", "## Tests", "## Verification"]
 
 
@@ -818,7 +819,8 @@ sys.exit(1 if spec else p.returncode)
                 urls = [prs[f"factory/fix-{i}"]["url"] for i in approved]
                 self.assertEqual(self.gh()["ready"], urls)
                 heads = [self.git("--git-dir", self.remote, "rev-parse", f"factory/fix-{i}").strip() for i in approved]
-                self.assertEqual(self.rows("merges.tsv"), [f"{i} approved {u} {h}" for i, u, h in zip(approved, urls, heads)])
+                self.assertEqual(self.rows("merges.tsv"), [f"{i} approved {u} {h} issue-pipeline sonnet=approve,opus=approve, "
+                                                           f"{int(i == '3')} 0 minimal {1 + int(i == '3')}" for i, u, h in zip(approved, urls, heads)])
                 self.assertIn("then squash-merged by a later run once CI is green on", prs["factory/fix-1"]["body"])
                 self.assertEqual(self.merge_calls(), [])
                 self.tearDown()
@@ -835,6 +837,37 @@ sys.exit(1 if spec else p.returncode)
                 self.assertIn("gate: " + msg, r.stderr)
                 self.assertEqual(self.stage_calls() + self.gh_writes(), [])
                 self.assertFalse(os.path.exists(self.fx))
+
+    def test_pending_merge_rechecks_its_entry_and_current_reviewers_and_needs_human(self):
+        url, sha = "https://github.com/o/r/pull/1", "a" * 40
+        for name, row, kw, after in (
+                ("reviewer added", OK, {"reviewers": "sonnet opus haiku"}, "left"),
+                ("needs_human widened", OK.replace(" 0 0 ", " 1 0 "), {}, "left"),
+                ("needs_human narrowed", OK.replace(" 0 0 ", " 1 0 "), {"needs_human": "dependency"}, "merged"),
+                ("other entry", OK.replace("issue-pipeline", "other"), {}, "approved")):
+            with self.subTest(name):
+                self.land([f"1 approved {url} {sha}{row}"], {url: {"state": "OPEN", "head": sha}}, {sha: "SUCCESS"},
+                          **dict({"merge_level": "merge", "reviewers": "sonnet opus"}, **kw))
+                self.assertEqual(self.rows("merges.tsv")[-1].split()[1], after)
+                self.assertEqual(len(self.merge_calls()), int(after == "merged"))
+                if after == "left":
+                    self.assertIn("not merged: reviewers or needs_human changed since review", self.report())
+
+    def test_unknown_merge_commit_is_looked_up_again_then_escalated(self):
+        url = "https://github.com/o/r/pull/2"
+        m = self.main_commit("src/two", "fix: #2 b (#2)")
+        self.push_main()
+        self.land([f"2 merged {url} -"], {url: {"state": "MERGED", "merge": m}}, {m: "FAILURE"})
+        self.assertEqual(self.rows("merges.tsv")[1:], [f"2 merged {url} {m}", f"2 reverted {url} {m}"])
+        self.assertEqual([p["head"] for p in self.gh()["prs"]], ["factory/revert-2"])
+        for _ in range(6):
+            self.land([f"2 merged {url} -"], {url: {"state": "OPEN"}})
+            self.assertEqual(self.rows("merges.tsv"), [f"2 merged {url} -"])
+        self.land([f"2 merged {url} -"] * 4, {})
+        self.assertEqual(self.rows("merges.tsv")[4:], [f"2 merged {url} -"])
+        self.assertIn(f"land: 2 {url} merge commit lookup failed 5 times: check CI on main; needs a human.", self.report())
+        self.land([f"2 merged {url} -"] * 9, {url: {"state": "MERGED", "merge": m}}, {m: "FAILURE"})
+        self.assertEqual(self.rows("merges.tsv")[9:], [f"2 merged {url} {m}", f"2 reverted {url} {m}"])
 
     def land(self, merges, pulls, ci=None, fail=(), **kw):
         os.makedirs(self.fx, exist_ok=True)
@@ -865,7 +898,7 @@ sys.exit(1 if spec else p.returncode)
                 ("level lowered", {}, "SUCCESS", (), {"merge_level": "ready"}, "approved"),
                 ("merge refused", {}, "SUCCESS", ("pr merge",), {}, "left")):
             with self.subTest(name):
-                self.land([f"1 approved {url} {sha}"], {url: dict(ok, **pull)}, {sha: ci}, fail,
+                self.land([f"1 approved {url} {sha}{OK}"], {url: dict(ok, **pull)}, {sha: ci}, fail,
                           **dict({"merge_level": "merge", "reviewers": "sonnet opus"}, **kw))
                 calls = self.merge_calls()
                 self.assertEqual(calls, [f"gh pr merge {url} --repo o/r --squash --match-head-commit {sha}"]
@@ -880,10 +913,10 @@ sys.exit(1 if spec else p.returncode)
     def test_pause_stops_a_pending_merge(self):
         url, sha = "https://github.com/o/r/pull/1", "a" * 40
         self.write(".factory/pause", "")
-        self.land([f"1 approved {url} {sha}"], {url: {"state": "OPEN", "head": sha}}, {sha: "SUCCESS"},
+        self.land([f"1 approved {url} {sha}{OK}"], {url: {"state": "OPEN", "head": sha}}, {sha: "SUCCESS"},
                   merge_level="merge", reviewers="sonnet opus")
         self.assertEqual(self.calls(), [])
-        self.assertEqual(self.rows("merges.tsv"), [f"1 approved {url} {sha}"])
+        self.assertEqual(self.rows("merges.tsv"), [f"1 approved {url} {sha}{OK}"])
 
     def main_commit(self, path, msg):
         self.write(path, "x\n")

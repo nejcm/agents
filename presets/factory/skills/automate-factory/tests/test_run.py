@@ -650,6 +650,37 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
                 self.assert_blocked(r, "")
                 self.assertIn(msg, r.stderr)
 
+    def test_every_pushed_commit_passes_the_content_gates(self):
+        for do, msg in (
+                ("printf 'sk-ant-1234567890abcdef\\n' > src/w; git add -A; git commit -qm r; echo safe > src/w",
+                 "credential-shaped text at commit "),
+                ("printf '\\0' > src/w; git add -A; git commit -qm r; echo safe > src/w", "binary change src/w")):
+            with self.subTest(msg):
+                r, _, _ = self.scoped_run(do, "scope: refactor split")
+                self.assert_blocked(r, msg)
+
+    def test_intermediate_commit_keeps_guarded_manifests_dependency_only_and_regular(self):
+        start = '{"scripts": {"test": "sh tests/a_test.sh"}, "dependencies": {}}'
+        self.commit_file("package.json", start + "\n")
+        final = f"printf '%s\\n' '{start.replace('{}', '{\"left-pad\": \"1\"}')}' > package.json; echo 2 > src/w"
+        for do, msg in (
+                (f"printf '%s\\n' '{start.replace('sh tests', 'true; sh tests')}' > package.json; git commit -qam r; " + final,
+                 "package.json outside the allowlist: changes more than dependencies at commit "),
+                (f"printf '%s\\n' '{start}' > src/payload; rm package.json; ln -s src/payload package.json; git add -A; "
+                 "git commit -qm r; rm package.json; " + final, "package.json is not a regular file")):
+            with self.subTest(msg):
+                r = self.run_entry("pr", scen="do", allow='src/*" "tests/*', dep_files="1", extra={
+                    "DO": do, "SAY": "dependency: left-pad width table", "SCOPE": "scope: refactor split"})
+                self.assert_blocked(r, msg)
+
+    def test_refactor_commit_that_turns_a_test_into_a_symlink_blocks(self):
+        do = ("echo true > src/pass; rm tests/a_test.sh; ln -s ../src/pass tests/a_test.sh; echo 9 > src/v; "
+              "git add -A; git commit -qm r; rm tests/a_test.sh; git checkout -q HEAD~1 -- tests/a_test.sh; "
+              "echo true >> tests/a_test.sh; printf '1\\n\\n' > src/v; echo 2 > src/w")
+        r, _, _ = self.scoped_run(do, "test-change: tests/a_test.sh: tidy\nscope: refactor split")
+        self.assert_blocked(r, "refactor commit ")
+        self.assertIn("changes existing test tests/a_test.sh", r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
