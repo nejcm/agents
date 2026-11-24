@@ -1,12 +1,24 @@
 # Sourced from the repo root. jail <dir> <cmd...>: empty HOME, no inherited secrets, repo hidden,
 # $check read-only, only <dir> and $evidence writable, and only the $jail_tools runtimes mounted.
 
+jail_shim() {
+  case "${1##*/}" in mise | rtx | asdf | volta | volta-shim | proto) return 0 ;; esac
+  case "$1" in */shims/*) return 0 ;; *) return 1 ;; esac
+}
+
 # jail_resolve <tool | tool=path>...: prints "<name> <executable> <runtime root>" lines to confirm.
 jail_resolve() {
   local t exe top d
   for t; do
-    case "$t" in *=*) exe=${t#*=} ;; *) exe=$(command -v "$t") ;; esac
-    exe=$(readlink -f "$exe") top=$exe d=$(dirname "$exe")
+    case "$t" in *=*) exe=${t#*=} ;; *) exe=$(command -v "$t") || exe= ;; esac
+    exe=$(readlink -f "$exe") || exe=
+    if [ "${exe##*/}" = mise ]; then exe=$(readlink -f "$("$exe" which "${t%%=*}")") || exe=; fi
+    [ -f "$exe" ] && [ -x "$exe" ] || { echo "jail_resolve: ${t%%=*} not found" >&2; return 1; }
+    jail_shim "$exe" && {
+      echo "jail_resolve: ${t%%=*} is a version-manager shim ($exe); pass ${t%%=*}=<real path>" >&2
+      return 1
+    }
+    top=$exe d=$(dirname "$exe")
     while [ "$d" != / ]; do
       [ -f "$d/package.json" ] && { top=$d; break; }
       d=$(dirname "$d")
@@ -22,6 +34,7 @@ jail() {
   [ -S /run/docker.sock ] && mask=(--ro-bind /dev/null /run/docker.sock)
   while read -r name exe top; do
     [ -n "$name" ] || continue
+    jail_shim "$exe" && { echo "jail: $name resolves to a version-manager shim ($exe)" >&2; return 1; }
     case "$top" in
       "$HOME"/.config/* | "$HOME"/.ssh/* | "$HOME"/.gnupg/* | "$HOME"/.local/share/keyrings*)
         echo "jail: refusing $top" >&2; return 1 ;;

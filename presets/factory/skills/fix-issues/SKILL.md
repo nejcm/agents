@@ -111,11 +111,13 @@ jail "$dir" timeout <stage minutes>m claude -p --model <model> --effort <effort>
   config, `$check` and `.git` are read-only, `$evidence` is writable, and `claude` and every
   confirmed tool start. A failed probe stops the run.
 - **Tools**: once per repo, `jail_resolve claude <the Run recipe's tools>` prints
-  `<name> <executable> <runtime root>`, symlinks followed; pass a version-manager shim as
-  `<tool>=$(mise which <tool>)` or the manager's equivalent. The user confirms the lines, saved to
-  `.factory/reports/fix-issues/jail-tools`. Only each runtime root under `HOME` is mounted,
-  read-only; `jail` refuses `HOME`, its direct children, `~/.local/share`-level parents and
-  config, SSH, GnuPG or keyring paths.
+  `<name> <executable> <runtime root>`, symlinks followed and a mise shim resolved with
+  `mise which`. It refuses any other version-manager shim: pass `<tool>=<real path>` from the
+  manager (`asdf which <tool>`). `jail` refuses a shim too, so the probe fails on one. The user
+  confirms the lines, saved to `.factory/reports/fix-issues/jail-tools`. A resolved path pins the
+  tool's version: re-resolve after upgrading it; the probe fails until then. Only each runtime root
+  under `HOME` is mounted, read-only; `jail` refuses `HOME`, its direct children,
+  `~/.local/share`-level parents and config, SSH, GnuPG or keyring paths.
 - **Prerequisites**: Linux with `bwrap` and unprivileged user namespaces (without them `jail`
   fails closed; macOS is later); model auth through `CLAUDE_CODE_OAUTH_TOKEN` (`claude
   setup-token`, run by the user; subscription) or, when the profile chose API key,
@@ -177,6 +179,8 @@ built from projected fields only.
   already filed for the group, by the local map and by marker:
   `awk -v id="<group id>" '$1 == id' .factory/reports/fix-issues/tickets.tsv` and
   `gh issue list --repo "$repo" --state all --search "\"fix-issues-error: <group id>\" in:body" --json number --jq '.[].number'`.
+  Search splits on `-`, so `calc-zde` also finds `calc-zde-1`: a hit counts only if
+  `gh issue view <n> --repo "$repo" --json body --jq .body | tr -d '\r' | grep -qxF "fix-issues-error: <group id>"`.
   Found: continue under that number. Else build the body model-free from the triage section
   (`awk` in [`triage.md`](references/triage.md#projection)) plus the line
   `fix-issues-error: <group id>`, run

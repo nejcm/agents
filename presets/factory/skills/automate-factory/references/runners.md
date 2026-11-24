@@ -42,6 +42,8 @@ Type=oneshot
 WorkingDirectory=<repo-root>
 ExecStart=<repo-root>/.factory/automations/<entry>.sh
 TimeoutStartSec=<minutes>min
+Environment=PATH=<tool dirs>:/usr/local/bin:/usr/bin:/bin
+SyslogIdentifier=factory-<repo>-<entry>
 ```
 
 ```ini
@@ -57,10 +59,14 @@ Persistent=true
 WantedBy=timers.target
 ```
 
+`<tool dirs>`: the directories of `command -v` for `claude`, `gh`, `git`, `python3` and the
+Run recipe's tools, unresolved (a version-manager wrapper dispatches on its name). systemd and
+cron start with a minimal `PATH`, without the login shell's.
+
 User timers stop at logout unless `loginctl enable-linger "$USER"`; say so, do not run it.
 
 ```crontab
-PATH=<dirs of claude, gh, git, python3 from command -v>
+PATH=<tool dirs>:/usr/local/bin:/usr/bin:/bin
 0 7 * * 1 <repo-root>/.factory/automations/<entry>.sh >> <repo-root>/.factory/automations/<entry>.log 2>&1; echo "exit $?" >> <repo-root>/.factory/automations/<entry>.log
 ```
 
@@ -123,7 +129,9 @@ Run the entry once as the runner, in dry-run mode, before its automatic trigger 
 
 - systemd: install the units and `systemctl --user daemon-reload`, then
   `systemctl --user set-environment FACTORY_DRY_RUN=1; systemctl --user start factory-<repo>-<entry>.service; systemctl --user unset-environment FACTORY_DRY_RUN`
-  and read `journalctl --user -u factory-<repo>-<entry>.service -n 50`. Only after a pass:
+  and read `journalctl --user -u factory-<repo>-<entry>.service -n 5` for the exit status and
+  `journalctl --user -t factory-<repo>-<entry> -n 50` for the script's output (a short-lived
+  process's lines can miss the unit tag). Only after a pass:
   `systemctl --user enable --now factory-<repo>-<entry>.timer`.
 - cron: install a one-off line two minutes ahead, the real line with `FACTORY_DRY_RUN=1` before
   the script path. Wait for its `exit <n>` line in `<entry>.log`; pass needs `exit 0`. Then
