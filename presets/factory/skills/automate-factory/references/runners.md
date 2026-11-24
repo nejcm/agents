@@ -26,7 +26,9 @@ unavailable there. Record both in the profile's runner line.
 Copy [`../assets/run.sh`](../assets/run.sh) to `.factory/automations/<entry>.sh`, fill `<base>`
 with the default branch, `<level>` with the chosen write level, `<owner/repo>` with
 `gh repo view --json nameWithOwner`, `<turns>` and `<minutes>` (script, unit and cron line) with
-the profile's per-run caps (see [Budgets](../SKILL.md#rules)), `skills` with the skill dirs the
+the profile's per-run caps (see [Budgets](../SKILL.md#rules)), `<weekly usd>` with its per-week
+budget in USD (empty for none), `models=()` with its allowed models (first the one for every call;
+empty for the CLI default), `skills` with the skill dirs the
 prompt loads (a project skill as its repo-relative path, so it is read from the tracked snapshot;
 an installed one as its absolute resolved dir) and the step functions from the entry, `chmod +x`.
 These values come from the profile and the entry's choices; the profile is the source of truth,
@@ -132,7 +134,8 @@ Every run past the pause and Git config checks appends one line to
 (`sk-ant-`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
-`escalated`, `blocked`, `failed`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`; else `null`),
+`escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, or
+`weekly-budget` for a run `skipped` at its weekly budget; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
 disclosed), `scope` and `weighted_lines`, all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds

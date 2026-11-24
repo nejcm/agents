@@ -54,6 +54,40 @@ if mode == "json":
         f.write(json.dumps(dict({k: u.get(k) for k in keys}, turns=d.get("num_turns"), cost_usd=d.get("total_cost_usd"),
                             max_turns=d.get("subtype") == "error_max_turns")) + "\n")
     sys.exit()
+if mode == "spent":
+    import datetime, math
+    path = ".factory/reports/runs.jsonl"
+    if os.path.islink(path) or os.path.exists(path) and not os.path.isfile(path):
+        sys.exit("runs.jsonl is a symlink or not a regular file")
+    if not os.access(path if os.path.exists(path) else os.path.dirname(path), os.W_OK):
+        sys.exit("runs.jsonl cannot be appended to, so spend would go unrecorded")
+    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+    total = missing = 0
+    try:
+        f = open(path, encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        f = []
+    except OSError as e:
+        sys.exit(f"runs.jsonl unreadable: {e.strerror}")
+    for l in f:
+        try:
+            r = json.loads(l)
+            t = datetime.datetime.fromisoformat(r["started"].replace("Z", "+00:00"))
+            t = t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            r, t = {}, since
+        if t < since:
+            continue
+        c = r.get("cost_usd")
+        # NaN, infinite or negative costs are unknown, like missing ones: never subtracted or poisoning the sum.
+        if isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) and c >= 0:
+            total += c
+        else:
+            missing += 1
+    note = f"; {missing} runs without a cost counted as 0" if missing else ""
+    reached = total >= float(a[0])
+    print(f"weekly budget{' reached' if reached else ''}: ${total:.2f} of ${a[0]} in the last 7 days{note}")
+    sys.exit(3 if reached else 0)
 creds, calls, gates, outcomes, *kv = a
 rec = dict(x.split("=", 1) for x in kv)
 rec = {k: v or None for k, v in rec.items()}
@@ -93,17 +127,38 @@ record() {
     start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" reason="$run_reason" exit_code="$rc" \
     dry_run="${FACTORY_DRY_RUN:-0}" disclosure="$(disclosure)"
 }
-trap 'record $? || true; rm -rf "$view"; git worktree prune' EXIT
+# With a weekly budget, a run whose spend was not recorded must not look clean.
+trap 'rc_=$?; record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
+block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
 max_turns="<turns>" minutes="<minutes>"
 level="<level>"
+# Empty: no weekly limit.
+weekly_usd="<weekly usd>"
+# Allowed models; the first runs every call but the reviewers, which must be among them. Empty: the CLI default.
+models=()
 # Credentials, providers and endpoints that would override the subscription login.
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
   ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
   CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
   CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
-caps=(--max-turns "$max_turns")
+caps=(--max-turns "$max_turns") model=()
+[[ $weekly_usd =~ ^([0-9]+(\.[0-9]+)?)?$ ]] || block "weekly budget $weekly_usd is not empty or a number of USD"
+model_re='^[A-Za-z0-9][][A-Za-z0-9._:-]*$'
+for m in ${models[@]+"${models[@]}"}; do [[ $m =~ $model_re ]] || block "model $m is not a model name"; done
+[ ${#models[@]} = 0 ] || model=(--model "${models[0]}")
+if [ -n "$weekly_usd" ]; then
+  rc=0
+  python3 -I -c "$record_py" spent "$weekly_usd" > "$view/spent" 2> "$view/spent.err" || rc=$?
+  if [ "$rc" = 3 ]; then
+    tee -a "$out/$day.md" < "$view/spent"
+    run_outcome=skipped run_reason=weekly-budget
+    exit 0
+  fi
+  [ "$rc" = 0 ] || block "weekly budget: $(tail -n 1 "$view/spent.err")"
+  cat "$view/spent"
+fi
 git archive "$ref" | tar -x -C "$view/repo"
 
 # Project skills are repo-relative, read from the tracked snapshot and must resolve inside it;
@@ -136,7 +191,7 @@ analyze() {
 Date: $day
 Snapshot: $ref at $(git rev-parse --short "$ref")"
   (cd "$view" && claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk "${caps[@]}" --output-format json \
+    --no-session-persistence --permission-mode dontAsk "${caps[@]}" ${model[@]+"${model[@]}"} --output-format json \
     "$prompt" < /dev/null) > "$view/analyze.json" || rc=$?
   python3 -I -c "$record_py" json "$view/analyze.json" "$calls" > "$view/report.md"
   [ "$rc" = 0 ] || exit "$rc"
@@ -275,8 +330,6 @@ clip() {
   if [ "$n" -gt "$1" ]; then echo "[$((n - $1)) more lines]"; fi
 }
 
-block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
-
 no_creds() { ! grep -qE "$creds_re"; }
 
 # Final body of every external write; returns 1 in dry run so the caller writes nothing.
@@ -362,7 +415,7 @@ library; add a package only for substantial functionality, with one line per new
 dependency: <name> <why not in-house>."
   # No setting sources: tracked project settings in the checkout could switch auth or permissions.
   (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
-    --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
+    --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" ${model[@]+"${model[@]}"} \
     --permission-mode dontAsk --output-format json "$prompt" < /dev/null) | head -c $((8 * summary_cap + 1)) \
     > "$view/edit.json" || rc=$?
   python3 -I -c "$record_py" json "$view/edit.json" "$calls" > "$view/summary.md"
@@ -415,6 +468,7 @@ scope_gate() {
 
 refactor_tests() {
   local c
+  [ ${#refactors[@]} = 0 ] || ! declare -F reserve > /dev/null || reserve ${#refactors[@]}
   for c in ${refactors[@]+"${refactors[@]}"}; do
     git worktree add -q --detach "$view/at" "$c"
     (cd "$view/at" && timeout "${minutes}m" sh -c "$test_cmd") > "$view/at.log" 2>&1 ||
@@ -435,9 +489,11 @@ diff_gate() {
       [ "$dep_files" = 1 ] && [[ $p =~ $locks_re || $p =~ $manifests_re ]] || block "$p outside the allowlist"
       [[ $p =~ $locks_re ]] || guarded+=("$p")
     fi
+    m=$(git ls-tree "$start" -- "$p" | cut -c1-6; git ls-tree "$1" -- "$p" | cut -c1-6)
     if [ "$ok" = 0 ] || [[ $p =~ $locks_re ]]; then
-      m=$(git ls-tree "$start" -- "$p" | cut -c1-6; git ls-tree "$1" -- "$p" | cut -c1-6)
       [ -z "$(grep -vx 100644 <<< "$m")" ] || block "$p is not a regular file"
+    else
+      [ -z "$(grep -vxE '100(644|755)' <<< "$m")" ] || block "$p is a symlink or submodule"
     fi
     [[ $p =~ $tests_re ]] || continue
     tests+=("$p")

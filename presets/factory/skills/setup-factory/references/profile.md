@@ -44,7 +44,8 @@ Updated: <YYYY-MM-DD> (interview)
 - Issue sources: <answer>
 - Results and escalations: <destination>
 - Deploy targets: <environments; agent access>
-- Budgets: <per run: <minutes> min, <turns> turns; pipeline run <minutes> min, <n> items; per week; allowed models>
+- Budgets: <per run: <minutes> min, <turns> turns; pipeline run <minutes> min, <n> items; per week
+  <USD / none>; allowed models <first used for every call, ... / CLI default>>
 - Agent PR review: <who; PRs allowed or not; drafts only or ready ones too>
 - Environment: <isolated | not isolated>
 - Resolved gaps and contradictions: <gap>: <decision>

@@ -5,6 +5,12 @@ flow="<flow>" verify_fixed="<verify-fixed>"
 reviewers=(sonnet) merge_level="<merge level>"
 # Disclosures that keep a PR draft and unmerged at any merge_level: test-change, dependency, refactor.
 needs_human=(test-change dependency refactor)
+for m in "${reviewers[@]}"; do
+  [[ $m =~ $model_re ]] || block "reviewer $m is not a model name"
+  ok=${#models[@]}
+  for a in ${models[@]+"${models[@]}"}; do [ "$a" != "$m" ] || ok=0; done
+  [ "$ok" = 0 ] || block "reviewer $m is not in models"
+done
 fx=$PWD/.factory/reports/fix-issues
 items=$fx/items
 
@@ -13,6 +19,9 @@ tag() { case $1 in *[!0-9]*) echo "$1" ;; *) echo "#$1" ;; esac; }
 row() { [ ! -f "$1" ] || awk -v k="$2" '$1 == k {v = $2} END {print v}' "$1"; }
 finish() { outcome=$1 reason=$2; exit 0; }
 ran() { [ "$1" = 124 ] || { outcome=deferred reason=runner-error; exit 1; }; }
+time_for() { [ $((run_minutes * 60 - SECONDS)) -ge $(($1 * 60)) ]; }
+# Refactor test runs are known only after the fix; verify and the reviewers are still ahead.
+reserve() { time_for $((($1 + 1 + ${#reviewers[@]}) * minutes)) || finish deferred run-time; }
 
 take() {
   [ -f "$1" ] && [ ! -L "$1" ] && [ "$(wc -c < "$1")" -le "$summary_cap" ] || exit 1
@@ -39,7 +48,7 @@ stage() {
   prompt="$(cat "$runview/skills/fix-issues/references/$3" && overlay "$1" && cat "$item/bans.md")
 Stage: $1."
   (cd "$2" && check=$check evidence=$evidence timeout "${minutes}m" claude -p --safe-mode --setting-sources '' \
-    --strict-mcp-config --no-session-persistence --tools "$4" --allowedTools "$4" "${caps[@]}" \
+    --strict-mcp-config --no-session-persistence --tools "$4" --allowedTools "$4" "${caps[@]}" ${model[@]+"${model[@]}"} \
     --permission-mode dontAsk --output-format json "$prompt" < /dev/null) > "$item/$1.json" 2> "$evidence/stdout.txt" ||
     rc=$?
   python3 -I -c "$record_py" json "$item/$1.json" "$calls" >> "$evidence/stdout.txt"
@@ -53,7 +62,7 @@ spec_item() {
     awk -v h="## $id" '$0 == h {p = 1} p {print} p && /^fix-issues: / {exit}' "$report"; echo
     cat "$features/$feature.md"; } > "$item/spec-input.md"
   (cd "$runview" && timeout 5m claude -p --restricted --safe-mode --tools "" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk --max-turns 3 --output-format json \
+    --no-session-persistence --permission-mode dontAsk --max-turns 3 ${model[@]+"${model[@]}"} --output-format json \
     "$prompt" < "$item/spec-input.md") > "$item/spec.json" || rc=$?
   python3 -I -c "$record_py" json "$item/spec.json" "$calls" > "$item/spec-draft.md"
   [ "$rc" = 0 ] || ran "$rc"
@@ -502,12 +511,19 @@ revert_pr() {
 # $1 item, $2 PR, $3 merge commit: red CI on it opens a draft revert PR and escalates.
 # An unknown merge commit (failed lookup, merge queue) is looked up on every later run; 5 failed lookups escalate.
 revert_item() {
-  local u=none m=$3 n
+  local u=none m=$3 n s
   if [[ ! $m =~ ^[0-9a-f]{40}$ ]]; then
-    if ! m=$(gh pr view "$2" --repo "$repo" --json mergeCommit --jq .mergeCommit.oid); then
+    if ! s=$(gh pr view "$2" --repo "$repo" --json state,mergeCommit --jq '"\(.state) \(.mergeCommit.oid)"'); then
       printf '%s merged %s -\n' "$1" "$2" >> "$fx/merges.tsv"
-      n=$(grep -cxF "$1 merged $2 -" "$fx/merges.tsv") || true
+      # The first such row is the merge itself, not a failed lookup.
+      n=$(($(grep -cxF "$1 merged $2 -" "$fx/merges.tsv") - 1))
       [ "$n" != 5 ] || echo "land: $1 $2 merge commit lookup failed $n times: check CI on $ref; needs a human." | tee -a "$report"
+      return
+    fi
+    read -r s m <<< "$s"
+    if [ "$s" = CLOSED ]; then
+      printf '%s closed %s -\n' "$1" "$2" >> "$fx/merges.tsv"
+      echo "land: $1 $2 closed without merging; no longer watched." | tee -a "$report"
       return
     fi
     [[ $m =~ ^[0-9a-f]{40}$ ]] || return 0
@@ -518,6 +534,8 @@ revert_item() {
     FAILURE | ERROR) ;;
     *) return 0 ;;
   esac
+  # The revert's gates run the test command twice at most: the fix and, for reverted tests, the old ones.
+  time_for $((2 * minutes)) || { echo "land: $1 $2 revert waits for a run with time for its tests." | tee -a "$report"; return; }
   try revert_pr "$1" "$2" "$m" < /dev/null
   [ ! -s "$runview/revert-$1/pr-url" ] || u=$(tail -n 1 "$runview/revert-$1/pr-url")
   printf '%s reverted %s %s\n' "$1" "$2" "$m" >> "$fx/merges.tsv"
@@ -525,7 +543,7 @@ revert_item() {
   echo "escalated: main-red: CI failed on $ref for the factory merge $m of $2; revert PR $u; needs a human." | tee -a "$report"
 }
 
-# merges.tsv, newest row per item wins: <id> approved|merged|left|green|reverted <PR> <commit>,
+# merges.tsv, newest row per item wins: <id> approved|merged|left|closed|green|reverted <PR> <commit>,
 # approved rows then <entry> <verdicts> <changed tests> <dependencies> <scope> <weighted lines>.
 land() {
   local id s u c e v t d sc
@@ -605,7 +623,7 @@ pipeline() {
         if [ -n "$halt" ]; then o=deferred r=$halt
         elif [ -e .factory/pause ]; then o=deferred r=paused
         # Three stages, the test command, the reviewers and the spec-writer, each at its timeout.
-        elif [ $((run_minutes * 60 - SECONDS)) -lt $((((4 + ${#reviewers[@]}) * minutes + 5) * 60)) ]; then o=deferred r=run-time
+        elif ! time_for $(((4 + ${#reviewers[@]}) * minutes + 5)); then o=deferred r=run-time
         elif [ -n "$started" ] && [ "${FACTORY_DRY_RUN:-0}" = 1 ]; then o=deferred r=dry-run
         else
           started=1 o=blocked r=error

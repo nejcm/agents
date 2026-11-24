@@ -86,14 +86,15 @@ class RunShTest(unittest.TestCase):
         with open(p, "w") as f:
             f.write(text)
 
-    def run_entry(self, level, scen="plain", dry=False, skills="", post="", main="", extra=None, allow="*", dep_files="0"):
+    def run_entry(self, level, scen="plain", dry=False, skills="", post="", main="", extra=None, allow="*", dep_files="0",
+                  weekly="", models=""):
         with open(RUN_SH) as f:
             script = f.read()
         for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": "1",
                      "<level>": level, "<remote url>": self.remote, "<test command>": "sh tests/a_test.sh",
-                     "<path glob>": allow}.items():
+                     "<path glob>": allow, "<weekly usd>": weekly}.items():
             script = script.replace(k, v)
-        for old, new in (("skills=()", f"skills=({skills})"), ("post() { :; }", post),
+        for old, new in (("skills=()", f"skills=({skills})"), ("models=()", f"models=({models})" if models else ""), ("post() { :; }", post),
                          ("      edit\n      publish\n", main),
                          ("dep_files=0", "dep_files=1" if dep_files == "1" else "")):
             if new:
@@ -678,8 +679,114 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
               "git add -A; git commit -qm r; rm tests/a_test.sh; git checkout -q HEAD~1 -- tests/a_test.sh; "
               "echo true >> tests/a_test.sh; printf '1\\n\\n' > src/v; echo 2 > src/w")
         r, _, _ = self.scoped_run(do, "test-change: tests/a_test.sh: tidy\nscope: refactor split")
-        self.assert_blocked(r, "refactor commit ")
-        self.assertIn("changes existing test tests/a_test.sh", r.stderr)
+        self.assert_blocked(r, "tests/a_test.sh is a symlink or submodule")
+
+    def test_allowlisted_symlink_or_submodule_blocks_and_executable_passes(self):
+        for do, msg in (("ln -s ../tests/a_test.sh src/link", "src/link is a symlink or submodule"),
+                        ("git init -q src/sub; git -C src/sub commit -q --allow-empty -m x", "src/sub is a symlink or submodule")):
+            with self.subTest(msg):
+                r, _, _ = self.edit_run(do)
+                self.assert_blocked(r, msg)
+        r, _, creates = self.edit_run("printf '#!/bin/sh\\n' > src/run; chmod +x src/run")
+        self.assertEqual((r.returncode, len(creates)), (0, 1), r.stderr)
+
+    def runs(self, *recs):
+        os.makedirs(f"{self.repo}/.factory/reports", exist_ok=True)
+        with open(f"{self.repo}/.factory/reports/runs.jsonl", "w") as f:
+            f.write("".join(json.dumps(x) + "\n" for x in recs))
+
+    def last_record(self):
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            return json.loads(f.read().splitlines()[-1])
+
+    def test_weekly_budget_reached_stops_before_any_call(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ago = lambda d: (now - datetime.timedelta(days=d)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.runs({"entry": "e", "started": ago(8), "cost_usd": 50}, {"entry": "e", "started": ago(1), "cost_usd": 3},
+                  {"entry": "x", "started": ago(2), "cost_usd": 2}, {"entry": "x", "started": ago(1), "cost_usd": None})
+        r = self.run_entry("draft-pr", weekly="5")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = "weekly budget reached: $5.00 of $5 in the last 7 days; 1 runs without a cost counted as 0\n"
+        self.assertEqual(r.stdout, line)
+        with open(f"{self.repo}/.factory/reports/e/{datetime.date.today()}.md") as f:
+            self.assertEqual(f.read(), line)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual((self.last_record()["outcome"], self.last_record()["reason"]), ("skipped", "weekly-budget"))
+        r = self.run_entry("draft-pr", weekly="5.01")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("weekly budget: $5.00 of $5.01 in the last 7 days; 1 runs without a cost counted as 0\n", r.stdout)
+        self.assertEqual(len([c for c in self.calls() if c.startswith("claude ")]), 2)
+
+    def test_weekly_budget_counts_only_finite_nonnegative_costs(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        recs = [{"started": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cost_usd": 3},
+                {"started": now.isoformat(), "cost_usd": 2}]
+        with open(f"{self.tmp.name}/bad", "w") as f:
+            f.write("".join(f'{{"started": "{recs[0]["started"]}", "cost_usd": {c}}}\n' for c in ("NaN", "-5", "Infinity")))
+        self.runs(*recs)
+        with open(f"{self.tmp.name}/bad") as src, open(f"{self.repo}/.factory/reports/runs.jsonl", "a") as f:
+            f.write(src.read())
+        r = self.run_entry("report", weekly="5")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "weekly budget reached: $5.00 of $5 in the last 7 days; 3 runs without a cost counted as 0\n")
+        self.assertEqual(self.calls(), [])
+
+    def test_weekly_budget_fails_closed_on_an_unusable_ledger(self):
+        for kind in ("symlink", "directory", "unreadable"):
+            with self.subTest(kind):
+                self.setUp()
+                p = f"{self.repo}/.factory/reports/runs.jsonl"
+                os.makedirs(p if kind == "directory" else os.path.dirname(p))
+                if kind == "symlink":
+                    open(f"{self.tmp.name}/empty", "w").close()
+                    os.symlink(f"{self.tmp.name}/empty", p)
+                elif kind == "unreadable":
+                    open(p, "w").close()
+                    os.chmod(p, 0)
+                r = self.run_entry("report", weekly="5")
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("gate: weekly budget: runs.jsonl ", r.stderr)
+                self.assertEqual(self.calls(), [])
+                self.tearDown()
+        self.setUp()
+        r = self.run_entry("report", weekly="5")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("weekly budget: $0.00 of $5", r.stdout)
+
+    def test_weekly_budget_needs_an_appendable_ledger(self):
+        self.runs({"started": "2000-01-01T00:00:00Z", "cost_usd": 1})
+        p = f"{self.repo}/.factory/reports/runs.jsonl"
+        os.chmod(p, 0o444)
+        r = self.run_entry("report", weekly="5")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: weekly budget: runs.jsonl cannot be appended to", r.stderr)
+        self.assertEqual(self.calls(), [])
+        os.chmod(p, 0o644)
+        r = self.run_entry("pr", scen="do", weekly="5", extra={"DO": f"echo 2 > src/w; chmod 444 {p}"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("record: ", r.stderr)
+
+    def test_unfilled_or_invalid_budget_or_model_fails_before_any_call(self):
+        for kw, msg in (({"weekly": "<weekly usd>"}, "weekly budget <weekly usd> is not empty or a number of USD"),
+                        ({"weekly": "-1"}, "weekly budget -1 is not empty or a number of USD"),
+                        ({"models": '"<models>"'}, "model <models> is not a model name")):
+            with self.subTest(msg):
+                r = self.run_entry("draft-pr", **kw)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("gate: " + msg, r.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_allowed_models_put_the_first_on_every_call(self):
+        r = self.run_entry("draft-pr")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(any("--model" in c for c in self.calls()))
+        os.remove(self.log)
+        self.git("--git-dir", self.remote, "update-ref", "-d", "refs/heads/factory/e")
+        r = self.run_entry("draft-pr", models="opus sonnet")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        claude = [c for c in self.calls() if c.startswith("claude ")]
+        self.assertEqual(len(claude), 2)
+        self.assertTrue(all(" --model opus " in c for c in claude), claude)
 
 
 if __name__ == "__main__":

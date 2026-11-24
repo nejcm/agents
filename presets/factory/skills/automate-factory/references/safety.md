@@ -26,7 +26,7 @@ in its environment.
 
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
-  `run_minutes`, `cap`, budgets, `ceiling`, `issue-pipeline` `reviewers`, `merge_level` and
+  `run_minutes`, `cap`, budgets (`weekly_usd`, `models`), `ceiling`, `issue-pipeline` `reviewers`, `merge_level` and
   `needs_human`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
 - `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
@@ -110,6 +110,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   line; exactly one valid `scope` line; the commits descend linearly from the start and touch no
   path the final diff leaves unchanged; the fixed test command passes in the checkout; no
   credential-shaped text (`sk-ant-`) in the diff, commit messages, summary or disclosure sections.
+  Inside `allow`, a changed path must stay a regular or executable file at the start and the
+  commit: a symlink could point a test, CI or reviewer at a path outside `allow`, and a
+  submodule at code no gate saw.
   The path, mode, binary, ceiling and credential rules also hold for each intermediate commit's
   diff from the start, as do the dependency-only manifest rule and the refactor test runs, since
   the push publishes them.
@@ -130,7 +133,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
 - **Scope**: the edit chooses it; size is not judged. `refactor` needs at least one refactor
   commit before the behaviour commit; each refactor commit leaves existing test files unchanged
 (content, mode and type) and
-  passes the test command (same timeout, in its own worktree), or the gate blocks. A refactor PR is
+  passes the test command (same timeout, in its own worktree), or the gate blocks. In
+  `issue-pipeline` those runs start only with time left in `run_minutes` for them, verify and the
+  reviewers; else the item is `deferred` `run-time`. A refactor PR is
   a draft as for changed tests, gets the `factory:refactor` label, and its reason tops the body;
   the run record keeps `scope` and `weighted_lines`.
 - **Shadow review**: `issue-pipeline` only, after verify: each model in the entry's `reviewers`
@@ -155,12 +160,15 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
 - **Revert**: each later run checks the CI rollup of every factory merge commit on `<base>`.
   `SUCCESS` closes it; `FAILURE` or `ERROR` opens a revert PR (`git revert` on the fetched
   `<base>`, the same gates and publish, always draft, on `factory/revert-<id>`), records the item
-  `escalated` `main-red` and says "needs a human" in the report. The factory never merges a
+  `escalated` `main-red` and says "needs a human" in the report. A revert starts only with time
+  left in `run_minutes` for two test runs; else it waits for a later run. The factory never merges a
   revert PR: only `factory/fix-<id>` heads recorded as approved can merge. An unknown merge
   commit (failed lookup, merge queue) is looked up again on every later run until CI on it is
-  green or red; the fifth failed lookup adds a "needs a human" line.
+  green or red; the fifth failed lookup adds a "needs a human" line. A PR found closed unmerged
+  leaves monitoring with one report line (`closed` in `merges.tsv`).
 - **PR fates**: each non-dry `issue-pipeline` run looks up, with `gh pr view` and `git log` on
-  the fetched `<base>`, every PR in `linked.tsv`: open, merged by a human, merged by the factory,
+  the fetched `<base>`, every PR in `linked.tsv`: open, merged by the factory (a `merged` row in
+  `merges.tsv`), merged by a human (any other merge),
   closed unmerged, or reverted (a later commit carrying `This reverts commit <merge commit>`,
   `Revert "<title>` or `Reverts <repo>#<n>`), plus a count of change-request reviews by authors not ending in `[bot]`. Rows go to
   `fix-issues/fates.tsv`; `agent-analytics` reports agreement from them. `merges.tsv` and

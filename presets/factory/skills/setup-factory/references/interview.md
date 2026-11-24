@@ -36,7 +36,10 @@ the items the user selected. Skip the phase when there are no gaps.
 4. **Deploy targets**: environments and how they deploy (CI on merge, manual, platform name),
    and which ones an agent may touch (default: none).
 5. **Budgets**: per run in minutes and turns (default 30 and 200); per scheduled `issue-pipeline`
-   run that opens PRs, in minutes (default 240) and items (default 3); per week; which models are allowed. Runs use
+   run that opens PRs, in minutes (default 240) and items (default 3); per week in USD of the
+   CLI's cost estimate (default none; a run at or over it stops before any model call); which
+   models are allowed (default: the CLI default; the first listed runs every call, reviewers must
+   be listed). Runs use
    the user's `claude` subscription login, never an API key.
 6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or
    ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.

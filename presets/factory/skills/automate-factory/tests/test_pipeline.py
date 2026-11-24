@@ -29,7 +29,7 @@ if fmt == "stream-json":
     result = "".join(json.dumps(o) + "\n" for o in scen.get("agent", {}).get(prefix, []))
     print(json.dumps({"type": "system", "subtype": "init", "mcp_servers": []}))
     print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": result}))
-elif "--model" in args:
+elif os.getcwd().endswith("/review"):
     seen = [os.path.join(d, n) for d, _, ns in os.walk(".") for n in ns]
     raw = any("RAW-ISSUE-TEXT" in open(p, errors="replace").read() for p in seen) or "RAW-ISSUE-TEXT" in args[-1]
     with open(os.environ["LOG"] + ".review", "a") as f:
@@ -145,6 +145,8 @@ elif cmd == "pr view":
         print(p["state"])
     elif opt.get("json") == "mergeCommit":
         print(p.get("merge", "null"))
+    elif opt.get("json") == "state,mergeCommit":
+        print(p["state"], p.get("merge", "null"))
     elif opt.get("json") == "state,mergeCommit,title,reviews":
         print(p["state"], p.get("changes", 0), p.get("merge", "null"), p.get("title", "t"))
     elif opt.get("json", "").startswith("state,isDraft,"):
@@ -231,7 +233,7 @@ class PipelineTest(unittest.TestCase):
 
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
                      report_extra="", cap="3", flow="fix", verify_fixed="on", merge_level="draft",
-                     reviewers="sonnet", needs_human=None):
+                     reviewers="sonnet", needs_human=None, run_minutes="240", models=""):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -242,18 +244,19 @@ class PipelineTest(unittest.TestCase):
             script = f.read()
         for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": "1",
                      "<level>": "draft-pr", "<remote url>": self.remote, "<test command>": "sh tests/run_all.sh",
-                     "<path glob>": "*"}.items():
+                     "<path glob>": "*", "<weekly usd>": ""}.items():
             script = script.replace(k, v)
         with open(PIPELINE_SH) as f:
             pipeline = f.read()
         pipeline = pipeline.replace('("<trust prefix>")', "(" + " ".join(f'"{p}"' for p in trust) + ")")
-        for k, v in {"<label>": label, "<run minutes>": "240", "<app>": "app", "<cap>": cap, "<flow>": flow,
+        for k, v in {"<label>": label, "<run minutes>": run_minutes, "<app>": "app", "<cap>": cap, "<flow>": flow,
                      "<verify-fixed>": verify_fixed, "<merge level>": merge_level,
                      "reviewers=(sonnet)": f"reviewers=({reviewers})"}.items():
             pipeline = pipeline.replace(k, v)
         if needs_human is not None:
             pipeline = pipeline.replace("needs_human=(test-change dependency refactor)", f"needs_human=({needs_human})")
         fetch = "fetch_new; fetch_deferred; " + (f"fetch_labeled {label}; " if label else "") + extra_fetch + "fetch_context"
+        script = script.replace("models=()", f"models=({models})")
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
         script = script.replace("\nfetch\nanalyze\n", "\n" + pipeline + "\nfetch\nanalyze\n")
@@ -863,11 +866,58 @@ sys.exit(1 if spec else p.returncode)
         for _ in range(6):
             self.land([f"2 merged {url} -"], {url: {"state": "OPEN"}})
             self.assertEqual(self.rows("merges.tsv"), [f"2 merged {url} -"])
-        self.land([f"2 merged {url} -"] * 4, {})
-        self.assertEqual(self.rows("merges.tsv")[4:], [f"2 merged {url} -"])
+        self.land([f"2 merged {url} -"] * 5, {})
+        self.assertEqual(self.rows("merges.tsv")[5:], [f"2 merged {url} -"])
         self.assertIn(f"land: 2 {url} merge commit lookup failed 5 times: check CI on main; needs a human.", self.report())
         self.land([f"2 merged {url} -"] * 9, {url: {"state": "MERGED", "merge": m}}, {m: "FAILURE"})
         self.assertEqual(self.rows("merges.tsv")[9:], [f"2 merged {url} {m}", f"2 reverted {url} {m}"])
+
+    def test_merge_commit_lookup_escalates_at_the_fifth_failed_lookup_not_before(self):
+        url = "https://github.com/o/r/pull/2"
+        for earlier, says in ((4, False), (5, True)):
+            with self.subTest(earlier=earlier):
+                self.land([f"2 merged {url} -"] * earlier, {})
+                self.assertEqual("merge commit lookup failed 5 times" in self.report(), says)
+
+    def test_pending_merge_closed_unmerged_leaves_polling_with_one_line(self):
+        url = "https://github.com/o/r/pull/2"
+        self.land([f"2 merged {url} -"], {url: {"state": "CLOSED"}})
+        self.assertEqual(self.rows("merges.tsv"), [f"2 merged {url} -", f"2 closed {url} -"])
+        self.assertEqual(self.report().count(f"land: 2 {url} closed without merging; no longer watched.\n"), 1)
+        self.land(self.rows("merges.tsv"), {url: {"state": "CLOSED"}})
+        self.assertEqual([c for c in self.calls() if c.startswith("gh pr view")], [])
+        self.assertNotIn("closed without merging", self.report())
+
+    def test_revert_waits_for_a_run_with_time_for_its_tests(self):
+        url = "https://github.com/o/r/pull/2"
+        m = self.main_commit("src/two", "fix: #2 b (#2)")
+        self.push_main()
+        self.land([f"2 merged {url} {m}"], {}, {m: "FAILURE"}, run_minutes="1")
+        self.assertEqual((self.gh()["prs"], self.rows("merges.tsv")), ([], [f"2 merged {url} {m}"]))
+        self.assertIn(f"land: 2 {url} revert waits for a run with time for its tests.", self.report())
+
+    def test_refactor_test_runs_wait_for_run_time(self):
+        r = self.run_pipeline({}, main="run_minutes=1 refactors=(abc); refactor_tests; echo ran\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("ran", r.stdout)
+
+    def test_reviewers_must_be_allowed_models_and_every_call_names_one(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}}, models="haiku", reviewers="sonnet")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: reviewer sonnet is not in models", r.stderr)
+        self.assertEqual(self.calls(), [])
+        for reviewers, msg in (('"haiku sonnet"', "reviewer haiku sonnet is not a model name"),
+                               ("haik", "reviewer haik is not in models")):
+            r = self.run_pipeline({"1": {}}, models="haiku sonnet", reviewers=reviewers)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("gate: " + msg, r.stderr)
+            self.assertEqual(self.calls(), [])
+        r = self.run_pipeline({"1": {}}, models="haiku sonnet", reviewers="sonnet")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        claude = [c for c in self.calls() if c.startswith("claude ")]
+        models = sorted(tuple(re.findall(r"--model (\S+)", c)) for c in claude)
+        self.assertEqual(models, [("haiku",)] * 5 + [("sonnet",)])
 
     def land(self, merges, pulls, ci=None, fail=(), **kw):
         os.makedirs(self.fx, exist_ok=True)

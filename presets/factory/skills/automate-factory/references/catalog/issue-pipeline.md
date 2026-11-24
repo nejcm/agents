@@ -66,7 +66,7 @@
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
   name of the `gh` line, or empty; `allow` globs; `reviewers`, Claude model aliases or names
   other than the runner's default model (default `sonnet`), recorded as same family, at least two
-  for `merge`; `merge_level`, `draft` (default), `ready` or `merge`, offered per
+  for `merge` and each in `models` when that is set; `merge_level`, `draft` (default), `ready` or `merge`, offered per
   [interview](../../../setup-factory/references/interview.md) only with the entry's agreement
   numbers shown; `needs_human`, the disclosures that keep a PR draft and unmerged, any of
   `test-change`, `dependency`, `refactor` (default all three). Any other value fails the run

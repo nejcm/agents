@@ -67,7 +67,7 @@ entries the user names or whose smoke run failed. To change an entry:
    writing `*.local.md`: the before copy.
 2. Write the change where it lives: a setting (schedule, write level, destination, trust,
    `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`, `merge_level`, `needs_human`,
-   budgets) to the profile, or guidance to the entry's
+   budgets, `weekly_usd`, `models`) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the
    deny list are not settings.
 3. Regenerate only that entry's files again from the changed profile. A file in
@@ -103,6 +103,13 @@ entries the user names or whose smoke run failed. To change an entry:
   minutes as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
   unit or cron timeout is `run_minutes` plus 10; and an item cap, `cap` (default 3).
+  Refactor test runs and a revert's test runs also wait for time left in `run_minutes`. The
+  profile's per-week budget is `weekly_usd` (empty: no limit): before any model call, a run sums
+  `cost_usd` over every `runs.jsonl` record started in the last 7 days (a missing cost counts as 0
+  and is noted) and, at or over it, exits 0 with one `weekly budget reached` report line and no
+  other write. Allowed models are `models` (empty: no `--model`, the CLI default): the first goes
+  to every `claude` call but the reviewers', which must be among them. An unfilled or invalid
+  value fails the run before any call.
 - **Pause**: `.factory/pause` in the target repo makes every run exit 0 before any work, and
   stops `issue-pipeline` before its next item; delete it to resume.
 - **Loading skills**: the run script copies the skills a prompt needs into the run's view, and
