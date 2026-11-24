@@ -29,15 +29,16 @@ caps=(--max-turns "$max_turns")
 git archive "$ref" | tar -x -C "$view/repo"
 
 # Project skills are repo-relative, read from the tracked snapshot and must resolve inside it;
-# only regular, non-hidden .md and .py files are copied.
-skills=()
+# only regular, non-hidden .md and .py files are copied. Their paths, link and target, join deny.
+skills=() consumed=()
 snap=$(cd -P "$view/repo" && pwd)
 for s in ${skills[@]+"${skills[@]}"}; do
   case "$s" in /*) src=$s ;; *) src=$view/repo/$s ;; esac
   real=$(cd -P "$src" && pwd)
   case "$s" in
     /*) ;;
-    *) case "$real/" in "$snap"/*) ;; *) echo "skill $s resolves outside the snapshot" >&2; exit 1 ;; esac ;;
+    *) case "$real/" in "$snap"/*) ;; *) echo "skill $s resolves outside the snapshot" >&2; exit 1 ;; esac
+      consumed+=("$s" "$s/*" "${real#"$snap"/}" "${real#"$snap"/}/*") ;;
   esac
   d="$view/skills/$(basename "$s")"
   mkdir "$d"
@@ -75,8 +76,9 @@ deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .
   *.claude/settings* *.claude/hooks/* .cursor/*.json .cursor/hooks/* .codex/* .gemini/* .mcp.json
   .vscode/* .devcontainer/*)
 set +f
+deny+=(${consumed[@]+"${consumed[@]}"})
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
-pr="" start="" commit="" changed=()
+pr="" start="" commit="" gated="" changed=()
 
 clip() {
   local l n=0
@@ -90,6 +92,13 @@ clip() {
 block() { echo "gate: $*" >&2; exit 1; }
 
 no_creds() { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; }
+
+# Final body of every external write; returns 1 in dry run so the caller writes nothing.
+sendable() {
+  [ "$(wc -c < "$1")" -le 65536 ] || block "body over GitHub's 65536 characters"
+  no_creds < "$1" || block "credential-shaped text"
+  [ "${FACTORY_DRY_RUN:-0}" != 1 ]
+}
 
 edit() {
   local prs head prompt tools=Bash,Read,Grep,Glob,Edit,Write
@@ -135,6 +144,7 @@ test-change: <path from the repo root>: <one-line reason>. Never delete or renam
 
 gates() {
   local st p g ok a d r m rc lines=0 tests=() seen=$'\n'
+  changed=()
   ! git diff --quiet "$start" "$commit" || block "empty diff"
   while IFS=$'\t' read -r st p; do
     for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
@@ -195,16 +205,18 @@ gates() {
   { git diff "$start" "$commit"; cat "$view/summary.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
     no_creds || block "credential-shaped text"
   [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
+  gated=$start:$commit
 }
 
 publish() {
   local draft=() url label=factory:test-change
+  if [ -z "$commit" ] || [ "$gated" != "$start:$commit" ]; then gates; fi
   [ "$level" != draft-pr ] && [ ${#changed[@]} = 0 ] || draft=(--draft)
   { [ ${#changed[@]} = 0 ] || cat "$view/section.md"
     printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed.\n\n' \
     "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit"
     cat "$view/summary.md"; } > "$view/body.md"
-  [ "$(wc -c < "$view/body.md")" -le 65536 ] || block "PR body over GitHub's 65536 characters"
+  sendable "$view/body.md" || return 0
   if [ -n "$pr" ] && [ ${#changed[@]} -gt 0 ]; then
     gh pr ready "$pr" --repo "$repo" --undo || block "could not return PR $pr to draft"
   fi
@@ -227,14 +239,13 @@ fetch
 analyze
 post_check
 case "$level" in
-  comment) [ "${FACTORY_DRY_RUN:-0}" = 1 ] || post ;;
+  comment) if sendable "$out/$day.md"; then post; fi ;;
   draft-pr | pr)
     if declare -F pipeline > /dev/null; then
       pipeline
     else
       edit
-      gates
-      [ "${FACTORY_DRY_RUN:-0}" = 1 ] || publish
+      publish
     fi
     ;;
 esac

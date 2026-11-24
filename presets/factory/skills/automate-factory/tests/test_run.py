@@ -8,10 +8,14 @@ RUN_SH = os.path.join(HERE, "..", "assets", "run.sh")
 
 CLAUDE = r"""#!/usr/bin/env bash
 echo "claude ${*//$'\n'/ }" >> "$LOG"
-case " $* " in *" --restricted "*) echo report; exit 0 ;; esac
+case " $* " in *" --restricted "*) [ "$SCEN" != cred ] || echo sk-ant-1234567890abcdef; echo report; exit 0 ;; esac
 case "$SCEN" in
   plain) echo 2 > src/w ;;
   deny) mkdir -p .github; echo x > .github/ci.yml ;;
+  skill) echo x >> skills/own/SKILL.md ;;
+  relink) ln -sfn ../../skills/other .claude/skills/linked ;;
+  target) echo x >> skills/linked/SKILL.md ;;
+  other) echo x >> skills/other/SKILL.md ;;
 esac
 echo "edit: outcome=changed"
 """
@@ -65,13 +69,18 @@ class RunShTest(unittest.TestCase):
         with open(p, "w") as f:
             f.write(text)
 
-    def run_entry(self, level, scen="plain", dry=False):
+    def run_entry(self, level, scen="plain", dry=False, skills="", post="", main=""):
         with open(RUN_SH) as f:
             script = f.read()
         for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": "1",
                      "<level>": level, "<remote url>": self.remote, "<test command>": "sh tests/a_test.sh",
                      "<path glob>": "*"}.items():
             script = script.replace(k, v)
+        for old, new in (("skills=()", f"skills=({skills})"), ("post() { :; }", post),
+                         ("      edit\n      publish\n", main)):
+            if new:
+                self.assertIn(old, script)
+                script = script.replace(old, new)
         path = f"{self.repo}/.factory/automations/e.sh"
         with open(path, "w") as f:
             f.write(script)
@@ -134,6 +143,54 @@ class RunShTest(unittest.TestCase):
         self.assertEqual(r.stdout, "paused\n")
         self.assertEqual(self.calls(), [])
         self.assertFalse(os.path.exists(f"{self.repo}/.factory/reports"))
+
+    def test_publish_regates_a_commit_changed_after_gates(self):
+        main = ('      edit\n      gates\n      mkdir "$work/.github"; echo x > "$work/.github/ci.yml"\n'
+                '      git -C "$work" add -A; git -C "$work" commit -qm late\n'
+                '      commit=$(git -C "$work" rev-parse HEAD)\n      publish\n')
+        r = self.run_entry("draft-pr", main=main)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: CI, hook or policy path .github/ci.yml", r.stderr)
+        self.assertEqual(self.remote_heads(), "")
+        self.assertEqual(self.gh_writes(), [])
+
+    def skill_repo(self):
+        for name in ("own", "linked", "other"):
+            self.write(f"skills/{name}/SKILL.md", f"{name}\n")
+        os.makedirs(f"{self.repo}/.claude/skills")
+        os.symlink("../../skills/linked", f"{self.repo}/.claude/skills/linked")
+        self.git("-C", self.repo, "add", "-A")
+        self.git("-C", self.repo, "commit", "-qm", "skills")
+
+    def test_consumed_skill_edit_blocked(self):
+        self.skill_repo()
+        for scen, path in (("skill", "skills/own/SKILL.md"), ("relink", ".claude/skills/linked"),
+                           ("target", "skills/linked/SKILL.md")):
+            with self.subTest(scen):
+                r = self.run_entry("draft-pr", scen=scen, skills='"skills/own" ".claude/skills/linked"')
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn(f"gate: CI, hook or policy path {path}", r.stderr)
+                self.assertEqual(self.remote_heads(), "")
+                self.assertEqual(self.gh_writes(), [])
+
+    def test_unrelated_skill_edit_publishes(self):
+        self.skill_repo()
+        r = self.run_entry("draft-pr", scen="other", skills='"skills/own" ".claude/skills/linked"')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.remote_heads().split(), ["refs/heads/factory/e"])
+
+    def test_post_refuses_credential_and_dry_run_writes_nothing(self):
+        post = 'post() { gh issue comment 1 --repo o/r --body-file "$out/$day.md"; }'
+        r = self.run_entry("comment", scen="cred", post=post)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: credential-shaped text", r.stderr)
+        self.assertEqual(self.gh_writes(), [])
+        r = self.run_entry("comment", post=post, dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.gh_writes(), [])
+        r = self.run_entry("comment", post=post)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.gh_writes()), 1)
 
 
 if __name__ == "__main__":

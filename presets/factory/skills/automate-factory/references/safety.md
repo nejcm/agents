@@ -79,9 +79,10 @@ in its environment.
 - **Gates**, model-free, all must pass or nothing is published: a non-empty diff of at most
   `max_lines` changed lines, no binary files; every path in the entry's `allow` globs and none in
   `deny` (CI, hooks, agent harness and editor settings, `.factory/`, `CODEOWNERS`,
-  `.gitattributes`, the verify skill); no test file deleted or renamed; every changed existing
-  test file, and only those, has exactly one `test-change` line whose path matches it exactly and
-  whose reason is not blank; added test lines carry no skip or focus
+  `.gitattributes`, the verify skill, the in-repo skills the run reads, link and target); no test
+  file deleted or renamed; every changed existing test file, and only those, has exactly one
+  `test-change` line whose path matches it exactly and whose reason is not blank; added test
+  lines carry no skip or focus
   marker; the fixed test command passes in the checkout; no credential-shaped text (`sk-ant-`)
   in the diff, summary or test-change section. The test command, allowlist
   and cap are fixed at setup; `allow` must exclude the files that define the test command

@@ -78,6 +78,7 @@ ticket_item() {
     done
     if [ -z "$n" ]; then
       { cat "$item/spec.md"; printf '\nfix-issues-error: %s\n' "$g"; } > "$item/ticket.md"
+      sendable "$item/ticket.md" || finish deferred dry-run
       n=$(gh issue create --repo "$repo" --title "Error $g: $feature" --body-file "$item/ticket.md")
       n=${n##*/}
     fi
@@ -112,6 +113,7 @@ link_item() {
 # $1 item, $2 comment file, $3 linked.tsv value. Sets linked to the report reason.
 send() {
   local n="" p=${1%%-*} st
+  sendable "$2" || return 0
   linked=linked
   case $1 in
     err-*) n=$(row "$fx/tickets.tsv" "${1#err-}"); [ -n "$n" ] || linked=no-ticket ;;
@@ -186,8 +188,7 @@ verify_item() {
     printf '\n## Spec\n\n'; cat "$item/spec.md"
     printf '\n## Verification\n\n'; clip 60 < "$item/verify.md"
     printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
-  no_creds < "$item/body.md" || block "credential-shaped text"
-  [ "${FACTORY_DRY_RUN:-0}" != 1 ] || finish deferred dry-run
+  sendable "$item/body.md" || finish deferred dry-run
 
   step=link
   send "$id" "$item/body.md" "$after"
@@ -216,6 +217,7 @@ recover_item() {
   if [ -z "$urls" ]; then
     [ "$(git ls-remote "$remote" "refs/heads/factory/fix-$1" | cut -f1)" = "$2" ] ||
       { echo "recover: factory/fix-$1 is not at $2" >&2; exit 1; }
+    sendable "$items/$1/body.md" || return 0
     feature=$(sed -n '1s/^feature: //p' "$items/$1/spec.md")
     urls=$(gh pr create --repo "$repo" --draft --base "$ref" --head "factory/fix-$1" \
       --title "fix: $(tag "$1") $feature" --body-file "$items/$1/body.md")
@@ -319,7 +321,6 @@ run_item() {
 
   step=publish
   body > "$item/summary.md"
-  no_creds < "$item/summary.md" || block "credential-shaped text"
   publish > "$item/pr-url"
   url=$(tail -n 1 "$item/pr-url")
   printf '%s %s %s %s\n' "$id" "$commit" "$entry" "$start" >> "$fx/pushed.tsv"
@@ -362,6 +363,5 @@ pipeline() {
     esac
     echo "pipeline: id=$id outcome=$o reason=$r pr=$u" | tee -a "$report"
   done < "$view/select.tsv"
-  [ "${FACTORY_DRY_RUN:-0}" = 1 ] || post
   [ -z "$halt" ] || { echo "pipeline: stopped on a runner error" >&2; exit 1; }
 }

@@ -195,11 +195,12 @@ class PipelineTest(unittest.TestCase):
         with open(self.state) as f:
             return json.load(f)
 
-    def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch=""):
+    def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
+                     report_extra=""):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
-            f.write(report)
+            f.write(report + report_extra)
         with open(self.env["SCEN"], "w") as f:
             json.dump({"items": items, "agent": agent or {}}, f)
         with open(test_run.RUN_SH) as f:
@@ -217,6 +218,8 @@ class PipelineTest(unittest.TestCase):
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
         script = script.replace("\nfetch\nanalyze\n", "\n" + pipeline + "\nfetch\nanalyze\n")
+        if main:
+            script = script[:script.index("\nfetch\nanalyze\npost_check\n")] + "\npreflight\n" + main
         path = f"{self.repo}/.factory/automations/issue-pipeline.sh"
         with open(path, "w") as f:
             f.write(script)
@@ -680,6 +683,43 @@ class PipelineTest(unittest.TestCase):
         for name in ("pushed.tsv", "linked.tsv", "tickets.tsv"):
             self.assertEqual(self.rows(name), [])
         self.assertEqual(self.outcome("1")[:2], ("deferred", "dry-run"))
+
+    def test_unposted_report_with_credential_or_oversize_passes(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        items = {"1": {"feature": "a"}, "2": {"feature": "b", "verdict": "not-a-bug"}}
+        extra = "sk-ant-1234567890abcdef\n" + "y" * 66000 + "\n"
+        for dry in (True, False):
+            with self.subTest(dry=dry):
+                r = self.run_pipeline(items, dry=dry, report_extra=extra)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertNotIn("gate:", r.stderr)
+
+    def assert_write_refused(self, setup, call, writes):
+        for dry, text in ((False, "sk-ant-1234567890abcdef"), (True, "clean")):
+            with self.subTest(dry=dry):
+                r = self.run_pipeline({}, dry=dry, main=setup.replace("BODY", text) + "\n" + call + "\n")
+                if dry:
+                    self.assertEqual(r.returncode, 0, r.stderr)
+                else:
+                    self.assertNotEqual(r.returncode, 0)
+                    self.assertIn("gate: credential-shaped text", r.stderr)
+                self.assertEqual([c for c in self.calls() if c.startswith(writes)], [])
+                for name in ("pushed.tsv", "linked.tsv", "tickets.tsv"):
+                    self.assertEqual(self.rows(name), [])
+
+    def test_ticket_write_refused(self):
+        self.assert_write_refused('id=err-sentry-C1 feature=a item=$fx/tmp/t; mkdir -p "$item"\n'
+                                  'printf "BODY\\n" > "$item/spec.md"', "ticket_item", "gh issue create")
+
+    def test_comment_write_refused(self):
+        self.gh_state({1: {}}, [])
+        self.assert_write_refused('printf "BODY\\n" > "$view/c.md"', 'send 1 "$view/c.md" x', "gh issue comment")
+
+    def test_recovery_write_refused(self):
+        setup = ('mkdir -p "$items/1"; echo "feature: a" > "$items/1/spec.md"; printf "BODY\\n" > "$items/1/body.md"\n'
+                 'c=$(git rev-parse main); git push -q "$remote" "$c:refs/heads/factory/fix-1"')
+        self.assert_write_refused(setup, 'recover_item 1 "$c" "$c"', ("gh pr create", "gh issue comment"))
+        self.assertEqual(self.gh()["prs"], [])
 
 
 if __name__ == "__main__":
