@@ -50,6 +50,10 @@
   `new-bug` item needs a comment destination as above (an `err-` item has no ticket, so it is
   skipped), runs the spec and reproduce only, and a reproduced one gets one comment with the spec
   and repro record, recorded in `linked.tsv` so a rerun skips it; no fix stage, branch, PR or
+  ticket. A stage that cannot go on without guessing ends its record `escalated: <reason>`
+  (fix-issues [escalate](../../../fix-issues/references/reproduce.md#escalate)): the item ends
+  `outcome=escalated reason=<reason>`, final, never deferred, and its record goes once as the
+  comment, through the same destination and `linked.tsv` dedupe as a link; no branch, PR or
   ticket. `fixed` items follow `verify_fixed` either way. With `verify_fixed` `off`, a `fixed` item
   is skipped with reason `verdict` and uses no cap or feature slot. Any other value of either fails
   the run before any stage.

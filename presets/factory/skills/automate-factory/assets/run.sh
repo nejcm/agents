@@ -16,7 +16,7 @@ n=$((10#$n))
 export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFIG_VALUE_$n=/dev/null" \
   "GIT_CONFIG_KEY_$((n + 1))=core.fsmonitor" "GIT_CONFIG_VALUE_$((n + 1))=false"
 creds_re='sk-ant-[A-Za-z0-9_-]{16}'
-calls=$view/calls.jsonl gates_log=$view/gates.log began=$(date -u +%FT%TZ) run_outcome="" gate_block=""
+calls=$view/calls.jsonl gates_log=$view/gates.log began=$(date -u +%FT%TZ) run_outcome="" run_reason="" gate_block=""
 record_py=$(cat <<'PY'
 import json, os, re, sys
 mode, *a = sys.argv[1:]
@@ -77,7 +77,7 @@ record() {
   [ -z "${commit:-}" ] || stat=$(git diff --shortstat "$start" "$commit" 2> /dev/null | sed 's/^ //') || true
   python3 -I -c "$record_py" record "$creds_re" "$calls" "$gates_log" "$view/outcomes" entry="$entry" \
     started="$began" ended="$(date -u +%FT%TZ)" base="$base" \
-    start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" exit_code="$rc" \
+    start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" reason="$run_reason" exit_code="$rc" \
     dry_run="${FACTORY_DRY_RUN:-0}"
 }
 trap 'record $? || true; rm -rf "$view"; git worktree prune' EXIT
@@ -270,8 +270,39 @@ sendable() {
   [ "${FACTORY_DRY_RUN:-0}" != 1 ]
 }
 
+# Rollup of check runs and statuses: FAILURE or ERROR is red; PENDING, EXPECTED or none is not.
+ci_state() {
+  gh api graphql -f o="${repo%/*}" -f r="${repo#*/}" -f s="$1" --jq '.data.repository.object.statusCheckRollup.state' \
+    -f query='query($o:String!,$r:String!,$s:GitObjectID!){repository(owner:$o,name:$r){object(oid:$s){... on Commit{statusCheckRollup{state}}}}}'
+}
+
+ledger_ok() {
+  [ ! -L "$out/pushed.tsv" ] && { [ ! -e "$out/pushed.tsv" ] || [ -f "$out/pushed.tsv" ]; } ||
+    block "$out/pushed.tsv is a symlink or not a regular file"
+}
+
+# Prints red after two red factory pushes on the PR, unknown on a failed lookup.
+# Reset: a head nobody in the ledger pushed, with green CI.
+ci_cap() {
+  local c s red=0
+  [ -f "$out/pushed.tsv" ] || return 0
+  for c in $(awk -v p="$pr" '$1 == p {print $2}' "$out/pushed.tsv" | tail -n 2); do
+    s=$(ci_state "$c") || { echo unknown; return; }
+    case $s in FAILURE | ERROR) red=$((red + 1)) ;; esac
+  done
+  [ "$red" = 2 ] || return 0
+  if ! awk -v p="$pr" -v h="$head" '$1 == p && $2 == h {f = 1} END {exit !f}' "$out/pushed.tsv"; then
+    s=$(ci_state "$head") || { echo unknown; return; }
+    [ "$s" != SUCCESS ] || return 0
+  fi
+  echo red
+}
+
+# issue-pipeline keeps its own pushed.tsv and never re-pushes.
+ledger() { declare -F pipeline > /dev/null || printf '%s %s\n' "$1" "$commit" >> "$out/pushed.tsv"; }
+
 edit() {
-  local prs head prompt tools=Bash,Read,Grep,Glob,Edit,Write rc=0
+  local prs head prompt why tools=Bash,Read,Grep,Glob,Edit,Write rc=0
   check=$view/check work=$view/work
   start=$(git rev-parse "$ref")
   prs=$(gh pr list --repo "$repo" --head "$branch" --state open --json number,headRefOid,isCrossRepository \
@@ -281,6 +312,16 @@ edit() {
     git fetch -q "$remote" "refs/heads/$branch"
     [ "$(git rev-parse FETCH_HEAD)" = "$head" ] || block "$branch moved during the run"
     start=$head
+    ledger_ok
+    case $(ci_cap) in
+      red) run_reason=ci-cap why="the last two factory pushes failed CI" ;;
+      unknown) run_reason=ci-unknown why="CI status unknown" ;;
+    esac
+    if [ -n "$run_reason" ]; then
+      printf '\nescalated: %s: PR %s, %s; needs a human.\n' "$run_reason" "$pr" "$why" | tee -a "$out/$day.md"
+      run_outcome=escalated
+      exit 0
+    fi
   elif [ "$branch" != "factory/$entry" ]; then
     block "no open PR on $branch"
   elif git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null; then
@@ -295,9 +336,12 @@ edit() {
 Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory; never
 commit, push or run gh.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
-edit: outcome=stopped. Before that, one line per existing test file you changed, deleted or renamed
-(old path): test-change: <path from the repo root>: <one-line reason>. Prefer existing code and the
-standard library; add a package only for substantial functionality, with one line per new package:
+edit: outcome=stopped. When the fix needs credentials, production access, a decision the report
+leaves open, or work outside this automation, do not guess: say what is missing and make the last
+line escalated: <credentials|prod-access|ambiguous|out-of-scope>. Before that, one line per
+existing test file you changed, deleted or renamed (old path):
+test-change: <path from the repo root>: <one-line reason>. Prefer existing code and the standard
+library; add a package only for substantial functionality, with one line per new package:
 dependency: <name> <why not in-house>."
   # No setting sources: tracked project settings in the checkout could switch auth or permissions.
   (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
@@ -307,6 +351,11 @@ dependency: <name> <why not in-house>."
   python3 -I -c "$record_py" json "$view/edit.json" "$calls" > "$view/summary.md"
   [ "$rc" = 0 ] || [ "$(wc -c < "$view/edit.json")" -gt $((8 * summary_cap)) ]
   [ "$(wc -c < "$view/summary.md")" -le "$summary_cap" ] || block "summary over $summary_cap bytes"
+  if [[ $(tail -n1 "$view/summary.md") =~ ^escalated:\ (credentials|prod-access|ambiguous|out-of-scope)$ ]]; then
+    printf '\nescalated: %s: the edit stopped; needs a human.\n' "${BASH_REMATCH[1]}" | tee -a "$out/$day.md"
+    run_outcome=escalated run_reason=${BASH_REMATCH[1]}
+    exit 0
+  fi
   if [ "$(tail -n1 "$view/summary.md")" != "edit: outcome=changed" ]; then
     echo "edit: no change"
     run_outcome=no-change
@@ -412,17 +461,20 @@ publish() {
     "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit"
     cat "$view/summary.md"; } > "$view/body.md"
   sendable "$view/body.md" || return 0
+  ledger_ok
   if [ -n "$pr" ] && [ -n "$disclosed" ]; then
     gh pr ready "$pr" --repo "$repo" --undo || block "could not return PR $pr to draft"
   fi
   git push -q "$remote" "$commit:refs/heads/$branch"
   if [ -n "$pr" ]; then
+    ledger "$pr"
     gh pr comment "$pr" --repo "$repo" --body-file "$view/body.md"
     url=$pr
   else
     url=$(gh pr create --repo "$repo" ${draft[@]+"${draft[@]}"} --base "$ref" --head "$branch" --title "$title" \
       --body-file "$view/body.md")
     echo "$url"
+    ledger "${url##*/}"
   fi
   [ ${#changed[@]} = 0 ] || add_label factory:test-change "Factory edit changes existing tests"
   [ ! -s "$view/deps.md" ] || add_label factory:dependency "Factory edit adds dependencies"

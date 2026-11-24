@@ -147,6 +147,20 @@ commentable() {
   esac
 }
 
+# $1 a stage record ending escalated: <reason>: one comment saying what is missing, then a final outcome.
+escalate() {
+  local why
+  [[ $(tail -n 1 "$1") =~ ^escalated:\ (credentials|prod-access|ambiguous|out-of-scope)$ ]] || return 0
+  why=${BASH_REMATCH[1]}
+  echo "$id escalated: $why"
+  { printf 'Needs a human: a scheduled run stopped at %s on %s (escalated: %s) instead of guessing.\n' "$step" "$start" "$why"
+    printf '\n## What is missing\n\n'; clip 60 < "$1"
+    printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
+  step=link
+  [ -n "$(row "$fx/linked.tsv" "$id")" ] || send "$id" "$item/body.md" escalated
+  finish escalated "$why"
+}
+
 # repro-only: one comment with the spec and repro record, then stop.
 repro_item() {
   step=link
@@ -196,6 +210,7 @@ verify_item() {
   git archive "$after" | tar -x -C "$item/verify/patch"
   stage verify "$item/verify" reproduce.md Bash,Read,Grep,Glob "$before" "$item/spec.md" "$item/run.md"
   take "$item/evidence/verify/verify.md" "$item/verify.md"
+  escalate "$item/verify.md"
   v=$(tail -n 1 "$item/verify.md")
   case $v in
     "verify: outcome=confirmed" | "verify: outcome=insufficient" | "verify: outcome=inconclusive") echo "$id $v" ;;
@@ -295,6 +310,7 @@ run_item() {
   ! git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null || finish skipped branch-exists
   printf '%s\n' 'No git commit or git push, no gh, no tracker or chat writes, no edits outside the working directory and $evidence.' \
     'Unattended run: never ask a question; nobody answers.' \
+    'When the stage needs credentials, production access, a decision the spec leaves open, or work outside its feature, do not guess: say what is missing and end your record with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line.' \
     'In fix.md, before its last line, one line per existing test file you changed, deleted or renamed (old path): test-change: <path from the repo root>: <one-line reason>.' \
     'Prefer existing code and the standard library; add a package only for substantial functionality, with one line in fix.md per new package: dependency: <name> <why not in-house>.' > "$item/bans.md"
   { awk '/^## /{p = $0 == "## Run"} p' .factory/profile.md; grep '^- Scripts: ' .factory/profile.md || true; } > "$item/run.md"
@@ -309,6 +325,7 @@ run_item() {
   git archive "$start" | tar -x -C "$item/repro"
   stage reproduce "$item/repro" reproduce.md Bash,Read,Grep,Glob "$start" "$item/spec.md" "$item/run.md"
   take "$item/evidence/reproduce/repro.md" "$item/repro.md"
+  escalate "$item/repro.md"
   r=$(tail -n 1 "$item/repro.md")
   case $r in "repro: outcome=reproduced" | "repro: outcome=not-reproduced") echo "$id $r" ;; *) exit 1 ;; esac
   [ "$r" = "repro: outcome=reproduced" ] || finish not-reproduced reproduce
@@ -320,6 +337,7 @@ run_item() {
   stage fix "$item/patch" fix.md Bash,Read,Grep,Glob,Edit,Write "$start" \
     "$item/spec.md" "$item/repro.md" "$item/run.md" "$runview/skills/debugging"
   take "$item/evidence/fix/fix.md" "$item/fix.md"
+  escalate "$item/fix.md"
   [ "$(tail -n 1 "$item/fix.md")" = "fix: outcome=changed" ] || exit 1
   cp "$item/fix.md" "$item/summary.md"
   git -C "$item/patch" add -A
@@ -337,6 +355,7 @@ run_item() {
   git archive "$commit" | tar -x -C "$item/verify/patch"
   stage verify "$item/verify" fix.md Bash,Read,Grep,Glob "$start" "$item/spec.md" "$item/repro.md" "$item/run.md"
   take "$item/evidence/verify/verify.md" "$item/verify.md"
+  escalate "$item/verify.md"
   [ "$(tail -n 1 "$item/verify.md")" = "verify: outcome=confirmed" ] || exit 1
   echo "$id verify: outcome=confirmed"
   cat "$item/spec.md" "$item/repro.md" "$item/verify.md" | no_creds || block "credential-shaped text"

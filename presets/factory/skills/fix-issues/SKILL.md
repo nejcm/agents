@@ -132,7 +132,9 @@ cd "$dir" && check=$check evidence=$evidence timeout <stage minutes>m claude -p 
   reference file, then `bans.md`: no `git commit` or `git push`, no `gh`, no tracker or chat
   writes, no edits outside `$dir` and `$evidence`.
 - Stage reports end with one projected line (see each reference); the coordinator reads only that
-  line, and an invalid or missing one is `blocked`.
+  line, and an invalid or missing one is `blocked`. An `escalated: <reason>` line
+  ([escalate](references/reproduce.md#escalate)) ends the item: show the user the record; posting
+  it is a Comment step.
 
 ## Claims
 
@@ -208,7 +210,7 @@ on stdin; titles are built from projected fields only.
   source's `comment` write with the native ID. Triage-only outcomes (duplicate, not a bug, needs
   info) are posted only when the user picks them. Unattended, the link step then appends
   `<id> <PR url>` (verify mode: `<id> <fix commit>`; `repro-only`: `<id> <start>`, the run's base
-  commit) to `.factory/reports/fix-issues/linked.tsv`,
+  commit; an escalation: `<id> escalated`) to `.factory/reports/fix-issues/linked.tsv`,
   sent or not; a row stops any later comment for that item.
 - **Status**: `<prefix>-<id>` items only, after the draft PR is opened, through the source's
   `status` write: the one state recorded at setup, never a closing one.

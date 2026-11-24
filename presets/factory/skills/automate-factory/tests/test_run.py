@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import subprocess
@@ -27,7 +28,14 @@ echo "edit: outcome=changed"
 GH = r"""#!/usr/bin/env bash
 echo "gh ${*//$'\n'/ }" >> "$LOG"
 for a; do [ "${prev:-}" != --body-file ] || cp "$a" "$LOG.body"; prev=$a; done
-case "$1 $2" in "pr create") echo https://example.invalid/pr/1 ;; esac
+case "$1 $2" in
+  "pr create") echo https://example.invalid/pr/1 ;;
+  "pr list") [ -z "${PRS:-}" ] || echo "$PRS" ;;
+  "api graphql")
+    for a; do case $a in s=*) s=${a#s=} ;; esac; done
+    [ "${CI:-}" != error ] || { echo "lookup failed" >&2; exit 1; }
+    case " ${CI_GREEN:-} " in *" $s "*) echo SUCCESS ;; *) echo "${CI:-SUCCESS}" ;; esac ;;
+esac
 """
 
 
@@ -464,6 +472,95 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
                 r, _, _ = self.edit_run(do, allow='src/*" "tests/*', dep_files="1")
                 self.assert_blocked(r, f"{p} is not a regular file")
 
+    def test_edit_escalation_stops_without_a_push(self):
+        self.json_claude("needs the staging API key\nescalated: credentials\n")
+        r = self.run_entry("pr")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.remote_heads() + "".join(self.gh_writes()), "")
+        with open(f"{self.repo}/.factory/reports/e/{self.today()}.md") as f:
+            self.assertIn("escalated: credentials: the edit stopped; needs a human.", f.read())
+        [rec] = self.records()
+        self.assertEqual((rec["outcome"], rec["reason"]), ("escalated", "credentials"))
+
+    def today(self):
+        return datetime.date.today().isoformat()
+
+    def factory_pushes(self, n):
+        shas = []
+        for i in range(n):
+            self.write("src/v", f"{i}\n")
+            self.git("-C", self.repo, "commit", "-qam", f"push {i}")
+            shas.append(self.git("-C", self.repo, "rev-parse", "HEAD").strip())
+        self.git("-C", self.repo, "push", "-q", self.remote, "HEAD:refs/heads/factory/e")
+        self.git("-C", self.repo, "reset", "-q", "--hard", "HEAD~" + str(n))
+        self.write(".factory/reports/e/pushed.tsv", "".join(f"7 {c}\n" for c in shas))
+        return shas
+
+    def capped_setup(self):
+        self.write("tests/a_test.sh", "true\n")
+        self.git("-C", self.repo, "commit", "-qam", "t")
+        return self.factory_pushes(2)
+
+    def assert_refused(self, r, reason, why, head):
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(f"escalated: {reason}: PR 7, {why}; needs a human.", r.stdout)
+        self.assertEqual([c for c in self.calls() if c.startswith("claude") and "--restricted" not in c], [])
+        self.assertEqual(self.git("--git-dir", self.remote, "rev-parse", "factory/e").strip(), head)
+        self.assertEqual([c for c in self.gh_writes() if not c.startswith("gh api graphql")], [])
+        self.assertEqual((self.records()[-1]["outcome"], self.records()[-1]["reason"]), ("escalated", reason))
+
+    def human_commit(self, on):
+        self.git("-C", self.repo, "checkout", "-q", "--detach", on)
+        self.write("src/human", "h\n")
+        self.git("-C", self.repo, "add", "src/human")
+        self.git("-C", self.repo, "commit", "-qm", "human")
+        sha = self.git("-C", self.repo, "rev-parse", "HEAD").strip()
+        self.git("-C", self.repo, "push", "-q", self.remote, "HEAD:refs/heads/factory/e")
+        self.git("-C", self.repo, "checkout", "-q", "main")
+        return sha
+
+    def test_third_push_after_two_red_ci_rounds_is_refused(self):
+        shas = self.capped_setup()
+        r = self.run_entry("pr", extra={"PRS": f"7 {shas[1]}", "CI": "FAILURE"})
+        self.assert_refused(r, "ci-cap", "the last two factory pushes failed CI", shas[1])
+        self.git("--git-dir", self.remote, "update-ref", "refs/heads/factory/e", shas[0])
+        r = self.run_entry("pr", extra={"PRS": f"7 {shas[0]}", "CI": "FAILURE"})
+        self.assert_refused(r, "ci-cap", "the last two factory pushes failed CI", shas[0])
+        human = self.human_commit(shas[0])
+        r = self.run_entry("pr", extra={"PRS": f"7 {human}", "CI": "FAILURE"})
+        self.assert_refused(r, "ci-cap", "the last two factory pushes failed CI", human)
+        r = self.run_entry("pr", extra={"PRS": f"7 {human}", "CI": "PENDING"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any(c.startswith("gh pr comment 7") for c in self.gh_writes()))
+        with open(f"{self.repo}/.factory/reports/e/pushed.tsv") as f:
+            rows = f.read().splitlines()
+        self.assertEqual(rows[:2], [f"7 {c}" for c in shas])
+        self.assertEqual(rows[2], "7 " + self.git("--git-dir", self.remote, "rev-parse", "factory/e").strip())
+
+    def test_green_human_head_resets_the_ci_cap(self):
+        shas = self.capped_setup()
+        human = self.human_commit(shas[1])
+        r = self.run_entry("pr", extra={"PRS": f"7 {human}", "CI": "FAILURE", "CI_GREEN": human})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any(c.startswith("gh pr comment 7") for c in self.gh_writes()))
+
+    def test_ci_lookup_error_refuses_the_push(self):
+        shas = self.capped_setup()
+        r = self.run_entry("pr", extra={"PRS": f"7 {shas[1]}", "CI": "error"})
+        self.assert_refused(r, "ci-unknown", "CI status unknown", shas[1])
+
+    def test_symlinked_push_ledger_is_refused(self):
+        shas = self.capped_setup()
+        ledger = f"{self.repo}/.factory/reports/e/pushed.tsv"
+        os.rename(ledger, f"{self.tmp.name}/elsewhere")
+        os.symlink(f"{self.tmp.name}/elsewhere", ledger)
+        r = self.run_entry("pr", extra={"PRS": f"7 {shas[1]}", "CI": "PENDING"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: .factory/reports/e/pushed.tsv is a symlink or not a regular file", r.stderr)
+        self.assertEqual(self.git("--git-dir", self.remote, "rev-parse", "factory/e").strip(), shas[1])
+        self.assertEqual([c for c in self.gh_writes() if not c.startswith("gh api graphql")], [])
+        with open(f"{self.tmp.name}/elsewhere") as f:
+            self.assertEqual(len(f.read().splitlines()), 2)
 
 
 if __name__ == "__main__":

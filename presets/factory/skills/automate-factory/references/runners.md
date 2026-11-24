@@ -131,8 +131,9 @@ Every run past the pause and Git config checks appends one line to
 (`sk-ant-`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
-`blocked`, `failed`), `exit_code`, `dry_run`, `calls`, and the summed `turns`, `input_tokens`,
-`cache_write_tokens`, `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
+`escalated`, `blocked`, `failed`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`; else `null`),
+`exit_code`, `dry_run`, `calls`, and the summed `turns`, `input_tokens`, `cache_write_tokens`,
+`cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
 commit verified), `diff_stat` (fixes only)). Usage comes from `claude -p --output-format json`
 (`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer and the `fix-issues` stages; a total is

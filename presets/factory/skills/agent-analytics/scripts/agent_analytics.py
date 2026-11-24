@@ -266,10 +266,13 @@ def factory_runs(repo, since):
         entry = rec.get("entry") if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", str(rec.get("entry"))) else "?"
         outcome = rec.get("outcome") if re.fullmatch(r"[a-z-]{1,20}", str(rec.get("outcome"))) else "?"
         r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
-                                    **{k: 0 for k in RUN_METRICS}})
+                                    "items": collections.Counter(), **{k: 0 for k in RUN_METRICS}})
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
         r["outcomes"][outcome] += 1
+        for i in rec.get("items") if isinstance(rec.get("items"), list) else ():
+            o = i.get("outcome") if isinstance(i, dict) else None
+            r["items"][o if re.fullmatch(r"[a-z-]{1,20}", str(o)) else "?"] += 1
         for k in RUN_METRICS:
             r["seen"][k] += is_num(rec.get(k))
             r[k] += num(rec.get(k))
@@ -291,8 +294,10 @@ def render_runs(runs):
         out.append(f"| {entry} | {r['runs']} | {outcomes} | " + " | ".join(cells) + " |")
     out.append("")
     for entry, r in runs.items():
+        items = ", ".join(f"{o} {n}" for o, n in sorted(r["items"].items()))
         out.append(f"- {entry}: {r['dry']} of {r['runs']} runs dry. Turns reported by {r['seen']['turns']}, "
-                   f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}.")
+                   f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}."
+                   + (f" Items: {items}." if items else ""))
     return out + [""]
 
 

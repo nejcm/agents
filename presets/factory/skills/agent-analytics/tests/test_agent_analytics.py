@@ -121,6 +121,16 @@ class ReportTest(unittest.TestCase):
                           run(repo=repo))
         self.assertIn("No run records (`.factory/reports/runs.jsonl` not found).", run())
 
+    def test_escalations_are_scored_for_runs_and_items(self):
+        with tempfile.TemporaryDirectory() as repo:
+            write(repo, ".factory/reports/runs.jsonl", [
+                {"entry": "e", "outcome": "escalated", "reason": "ci-cap"},
+                {"entry": "p", "outcome": "completed", "items": [{"outcome": "escalated"}, {"outcome": "fixed"},
+                                                                {"outcome": "BAD"}]}])
+            report = run(repo=repo)
+        self.assertIn("| e | 1 | escalated 1 |", report)
+        self.assertIn("cost by 0. Items: ? 1, escalated 1, fixed 1.", report)
+
 
 class RobustnessTest(unittest.TestCase):
     def setUp(self):

@@ -242,6 +242,17 @@ class CheckItems(unittest.TestCase):
         out = run([ITEM, dict(ITEM, id=7)], extra=["--skip-judged", reports, "2026-11-24.md"])
         self.assertEqual(os.listdir(out), ["lin-ENG-12.json"])
 
+    def test_escalated_after_deferred_is_final(self):
+        reports = tempfile.mkdtemp()
+        with open(os.path.join(reports, "2026-11-20.md"), "w") as f:
+            f.write("## Pipeline\npipeline: id=lin-7 outcome=deferred reason=cap pr=none\n")
+        with open(os.path.join(reports, "2026-11-21.md"), "w") as f:
+            f.write("## Pipeline\npipeline: id=lin-7 outcome=escalated reason=prod-access pr=none\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ci.main(["--deferred", reports, "2026-11-24.md"])
+        self.assertEqual(buf.getvalue(), "")
+
     def test_item_already_fetched_this_run_is_kept(self):
         out = run([ITEM])
         with contextlib.redirect_stdout(io.StringIO()):

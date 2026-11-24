@@ -36,7 +36,9 @@ paths, and last the line `repro: outcome=<outcome>`:
 - `blocked`: the feature map, launch, data or a precondition was missing; say which above the
   line. Never substitute a unit test, source reading or a forced state for the surface.
 
-The coordinator reads only `tail -n 1 "$evidence/repro.md" | grep -xE 'repro: outcome=(reproduced|not-reproduced|blocked)'`.
+[Escalate](#escalate) instead when a human must supply something.
+
+The coordinator reads only `tail -n 1 "$evidence/repro.md" | grep -xE 'repro: outcome=(reproduced|not-reproduced|blocked)|escalated: (credentials|prod-access|ambiguous|out-of-scope)'`.
 The user reads the report and evidence; a correction they give reruns the stage once.
 
 ## Verify an existing fix
@@ -75,3 +77,12 @@ The stage writes `$evidence/verify.md` ending with `verify: outcome=<outcome>`, 
   show the discriminating state. It names the half that could not be measured and claims nothing.
 
 The outcome, both SHAs and the artifact link may become the run's one comment on the issue. No PR.
+
+## Escalate
+
+Any stage, when going on would mean guessing: say what is missing above the last line, and make
+the last line `escalated: <reason>` in place of the outcome line. Reasons: `credentials` (a secret
+or account), `prod-access` (production data or systems), `ambiguous` (the spec leaves the right
+behaviour open), `out-of-scope` (the fix reaches past the spec's feature). The item stops there.
+Attended, the coordinator shows the user the record; unattended, `issue-pipeline` ends it
+`escalated` (final, never deferred) and posts the record once as the ticket comment.

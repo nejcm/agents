@@ -10,7 +10,8 @@
   branch, which must be in this repo, and `gh pr list` in fetch takes only that PR. Comment:
   `post() { gh pr comment <n> --repo <owner/repo> --body-file "$out/$day.md"; }` with
   `post_check() { gh pr view <n> --repo <owner/repo> > /dev/null; }`. `allow`: the source and
-  test dirs the user picks.
+  test dirs the user picks. CI cap at `pr`: per [safety.md](../safety.md#steps) Loop caps, no
+  third push after two red factory pushes.
 - **Steps**: `skills=("<skill-path:babysit-pr>")`. Fetch takes every snapshot `check` mode needs
   with read-only calls; analyze never calls GitHub, reruns or adds reviewers:
 

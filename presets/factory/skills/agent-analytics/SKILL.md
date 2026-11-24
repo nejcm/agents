@@ -48,8 +48,8 @@ report. No transcript or record text enters the report or your context. Run from
 
 **Factory runs** come from `.factory/reports/runs.jsonl`, one line per scheduled run, written by
 the run script ([runners.md](../automate-factory/references/runners.md#run-record)). Per entry:
-runs, dry runs, outcomes, turns, tokens and cost (the CLI's own estimate); a run whose record has
-no usage or cost is counted as a run and listed under coverage. `--since` filters by the record's
+runs, dry runs, outcomes (`escalated` among them), item outcomes for `issue-pipeline`, turns,
+tokens and cost (the CLI's own estimate); a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the record's
 start date. Factory runs keep no transcript, so they are not counted again below. Gate messages,
 items and commits stay in the file, never in the report.
 

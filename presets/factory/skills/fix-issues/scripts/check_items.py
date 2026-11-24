@@ -20,7 +20,7 @@ VERDICT = re.compile(
 # A fixed line with any ref, so a malformed one is still rejected with a reason.
 FIXED_ANY_REF = re.compile(r"fix-issues: id=[A-Za-z0-9._-]{1,96} verdict=fixed feature=[a-z0-9_-]{1,64} ref=.*")
 PIPELINE = re.compile(
-    r"pipeline: id=([A-Za-z0-9._-]{1,96}) outcome=(fixed|reproduced|not-reproduced|blocked|skipped|deferred)"
+    r"pipeline: id=([A-Za-z0-9._-]{1,96}) outcome=(fixed|reproduced|not-reproduced|blocked|escalated|skipped|deferred)"
     r" reason=[a-z-]{1,32} pr=(https?://\S+|none)"
 )
 SPEC_HEADINGS = ["## Preconditions and data", "## Steps", "## Expected final state", "## Broken final state"]

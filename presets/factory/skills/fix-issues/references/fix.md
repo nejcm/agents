@@ -43,7 +43,10 @@ The stage follows the target repo's `AGENTS.md` and:
    change, tests, what it skipped, and last `fix: outcome=changed` or `fix: outcome=stopped`.
 
 It stops when the change outgrows the budget or touches more than the spec's feature and its
-direct dependencies.
+direct dependencies. When going on would mean guessing (credentials, production access, a
+requirement the spec leaves open, work past its feature), the stage, fix or verify, says what is
+missing and ends with `escalated: <credentials|prod-access|ambiguous|out-of-scope>` in place of
+the outcome line, per [escalate](reproduce.md#escalate).
 
 On `fix: outcome=changed`, the coordinator commits with hooks and fsmonitor off, since the stage
 could set them:

@@ -48,7 +48,9 @@ else:
     def put(path, text):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         open(path, "w").write(text)
-    if stage == "reproduce":
+    if s.get("escalate") == stage:
+        put(f"{ev}/{dict(reproduce='repro').get(stage, stage)}.md", "needs the prod database\nescalated: prod-access\n")
+    elif stage == "reproduce":
         put(ev + "/repro.md", "steps\nrepro: outcome=" + s.get("repro", "reproduced") + "\n")
     elif stage == "fix":
         put(".github/ci.yml" if s.get("deny") else "src/" + i, "fixed\n")
@@ -507,6 +509,38 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(self.stage_calls("1"), [])
         self.assertEqual([c["issue"] for c in self.gh()["comments"]], ["2"])
         self.assertEqual(self.outcome("2")[0], "fixed")
+
+    def test_escalation_is_final_with_one_deduped_comment(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"escalate": "reproduce"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("escalated", "prod-access", "none"))
+        self.assertEqual(self.stage_calls("1", "fix") + self.pr_creates(), [])
+        [c] = self.gh()["comments"]
+        self.assertEqual(c["issue"], "1")
+        self.assertTrue(c["body"].startswith("Needs a human: a scheduled run stopped at reproduce on "))
+        self.assertIn("## What is missing\n\nneeds the prod database\nescalated: prod-access\n", c["body"])
+        self.assertEqual(self.rows("linked.tsv"), ["1 escalated"])
+        r = self.run_pipeline({"1": {"escalate": "fix"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("escalated", "prod-access", "none"))
+        self.assertEqual(len(self.gh()["comments"]), 1)
+        self.assertEqual(self.remote_heads(), "")
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        os.rename(f"{self.out}/{datetime.date.today()}.md", f"{self.out}/{yesterday}.md")
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse([c for c in self.calls() if c.startswith("gh issue view 1 ") and "--json number," in c])
+        self.assertEqual(self.stage_calls() + self.gh_writes(), [])
+
+    def test_escalation_in_dry_run_writes_nothing(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"escalate": "fix"}}, dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("dry run: 1 escalated prod-access", r.stdout)
+        self.assertEqual(self.outcome("1")[:2], ("deferred", "dry-run"))
+        self.assertEqual(self.gh_writes() + self.rows("linked.tsv"), [])
+        self.assertEqual(self.remote_heads(), "")
 
     def test_pause_during_item_defers_the_next(self):
         self.gh_state({1: {}, 2: {}}, [])

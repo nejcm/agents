@@ -8,7 +8,8 @@
 - **Writes**: report to `.factory/reports/failed-ci-triage/<date>.md`; at `draft-pr`, a fix for
   one regression as a draft PR.
 - **Write levels**: report, draft-pr. `allow`: the source and test dirs the user
-  picks, never CI config or manifests.
+  picks, never CI config or manifests. A reused PR gets the CI cap in
+  [safety.md](../safety.md#steps) Loop caps.
 - **Steps**: fetch, for each failed default-branch run `RUN_ID` of the last day
   (`gh run list --branch <base> --status failure --created ">=<date>" --json databaseId`):
 

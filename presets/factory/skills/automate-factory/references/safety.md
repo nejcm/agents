@@ -87,7 +87,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   settings cannot change auth, hooks or permissions. Its summary is its stdout, capped at
   `summary_cap` bytes, with one `test-change: <path>: <reason>` line per existing
   test file it changed, deleted or renamed (old path), one `dependency: <name> <why>` line per new
-  package, ending `edit: outcome=changed` or `edit: outcome=stopped`; the script
+  package, ending `edit: outcome=changed`, `edit: outcome=stopped` or `escalated: <reason>`
+  (`credentials`, `prod-access`, `ambiguous`, `out-of-scope`: the run ends `escalated`, the
+  report says "needs a human", nothing is pushed); the script
   never opens a file the step wrote. On `changed` it commits with hooks off (Git stores symlinks
   as links and skips FIFOs). Residual risk: its input derives from untrusted text, so injected
   text can use whatever the environment holds; keep write credentials there to the one repo and
@@ -129,8 +131,15 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   `pr-babysitting`, the opted-in PR's branch); while that branch has an open same-repo PR, the
   run starts from the PR's head, pushes on top, never forced, and comments instead of opening
   another. `factory/<entry>` without an open PR, or a fixed PR branch without one, stops the run.
+  CI cap: each push appends `<PR number> <commit>` to `.factory/reports/<entry>/pushed.tsv` (a
+  symlink or non-regular file stops the run before any push); when the last two factory pushes'
+  CI rollups (`gh api graphql` `statusCheckRollup`, check runs and statuses) are both `FAILURE` or
+  `ERROR`, the run ends `escalated` `ci-cap` before the edit, "needs a human" in the report. A
+  failed lookup ends it `ci-unknown`, "CI status unknown". Running or absent CI is not a failure.
+  The cap lifts when a recorded push turns green on a rerun, or the PR head is a commit not in
+  the ledger whose own CI is `SUCCESS`.
   Exception: `issue-pipeline` opens one draft PR per item on `factory/fix-<id>`, at most `cap` items
-  per run (default 3), and skips an item whose branch or PR exists.
+  per run (default 3), and skips an item whose branch or PR exists, so it never pushes twice.
 - **Pause**: `.factory/pause` makes every run exit 0 before any work; `issue-pipeline` also checks
   it before each item and defers the rest.
 - **Dry run**: no post or publish. Writes go to `.factory/reports/`, the run's temp view under
