@@ -95,7 +95,7 @@ text reaches no command, path or destination.
 | `reproduce`, `fix`, `verify` | `issue-pipeline` stages of that name, verify mode included |
 
 No `body` overlay: PR, ticket and link bodies are assembled model-free from the stage records;
-steer their wording through `edit`, `fix` or `verify`.
+steer their wording through `edit`, `reproduce`, `fix` or `verify`.
 
 ## Write levels
 
