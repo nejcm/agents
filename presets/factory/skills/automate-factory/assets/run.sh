@@ -2,6 +2,7 @@
 # Factory automation; step rules in automate-factory references/safety.md.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+[ ! -e .factory/pause ] || { echo paused; exit 0; }
 entry=$(basename "$0" .sh)
 day=$(date +%F)
 out=.factory/reports/$entry
