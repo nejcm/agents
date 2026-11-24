@@ -102,6 +102,26 @@ class ReportTest(unittest.TestCase):
         self.assertIn("Cursor: no transcripts found for this repo.", out.getvalue())
 
 
+    def test_reads_factory_run_records_before_transcripts(self):
+        with tempfile.TemporaryDirectory() as repo:
+            write(repo, ".factory/reports/runs.jsonl", [
+                {"entry": "e", "started": "2026-11-02T07:00:00Z", "outcome": "published", "dry_run": False,
+                 "gates": ["SECRET path"], "turns": 4, "input_tokens": 6, "cache_write_tokens": 10,
+                 "cache_read_tokens": 14, "output_tokens": 22, "cost_usd": 0.5},
+                {"entry": "e", "started": "2026-11-03T07:00:00Z", "outcome": "blocked", "dry_run": True,
+                 "turns": None, "cost_usd": None},
+                {"entry": "e", "started": "2026-10-01T07:00:00Z", "outcome": "failed", "turns": 9}], raw="not json\n")
+            report = run("--since", "2026-11-01", repo=repo)
+            self.assertNotIn("SECRET", report)
+            self.assertLess(report.index("## Factory runs"), report.index("| Sessions |"))
+            self.assertIn("| e | 2 | blocked 1, published 1 | 4 | 6 | 10 | 14 | 22 | 0.50 |", report)
+            self.assertIn("- e: 1 of 2 runs dry. Turns reported by 1, tokens by 1, cost by 1.", report)
+            write(repo, ".factory/reports/runs.jsonl", [{"entry": "e", "outcome": "failed", "turns": 5, "cost_usd": 0.1}])
+            self.assertIn("| e | 1 | failed 1 | 5 | unavailable | unavailable | unavailable | unavailable | 0.10 |",
+                          run(repo=repo))
+        self.assertIn("No run records (`.factory/reports/runs.jsonl` not found).", run())
+
+
 class RobustnessTest(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()

@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tempfile
@@ -213,6 +214,75 @@ class RunShTest(unittest.TestCase):
         r = self.run_entry("comment", post=post)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(len(self.gh_writes()), 1)
+
+    def records(self):
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            return [json.loads(x) for x in f]
+
+    def json_claude(self, summary):
+        stub = (r"""#!/usr/bin/env python3
+import json, os, sys
+open(os.environ["LOG"], "a").write("claude\n")
+r = "report\n" if "--restricted" in sys.argv else SUMMARY
+if os.path.isdir("src"):
+    open("src/w", "w").write("2\n")
+print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turns": 2, "total_cost_usd": 0.25,
+                  "usage": {"input_tokens": 3, "cache_creation_input_tokens": 5, "cache_read_input_tokens": 7,
+                            "output_tokens": 11}}))
+""").replace("SUMMARY", repr(summary))
+        with open(f"{self.tmp.name}/bin/claude", "w") as f:
+            f.write(stub)
+
+    def test_run_record_has_usage_and_run_fields(self):
+        self.json_claude("did it\nedit: outcome=changed\n")
+        r = self.run_entry("draft-pr")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.git("--git-dir", self.remote, "show", "factory/e:src/w"), "2\n")
+        [rec] = self.records()
+        base = self.git("-C", self.repo, "rev-parse", "main").strip()
+        self.assertEqual({k: rec[k] for k in ("entry", "base", "start_commit", "outcome", "exit_code", "dry_run",
+                                              "gates", "calls", "turns", "input_tokens", "cache_write_tokens",
+                                              "cache_read_tokens", "output_tokens", "cost_usd")},
+                         {"entry": "e", "base": base, "start_commit": base, "outcome": "published", "exit_code": 0,
+                          "dry_run": False, "gates": ["passed"], "calls": 2, "turns": 4, "input_tokens": 6,
+                          "cache_write_tokens": 10, "cache_read_tokens": 14, "output_tokens": 22, "cost_usd": 0.5})
+        self.assertRegex(rec["end_commit"], "^[0-9a-f]{40}$")
+        self.assertEqual(rec["diff_stat"], "1 file changed, 1 insertion(+)")
+        self.assertLessEqual(rec["started"], rec["ended"])
+
+    def test_run_record_without_usage_keeps_the_run(self):
+        r = self.run_entry("report")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        [rec] = self.records()
+        base = self.git("-C", self.repo, "rev-parse", "main").strip()
+        self.assertEqual((rec["outcome"], rec["calls"], rec["turns"], rec["cost_usd"], rec["start_commit"],
+                          rec["end_commit"], rec["diff_stat"]), ("completed", 1, None, None, base, base, None))
+        r = self.run_entry("draft-pr", dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.records()[1]["dry_run"])
+
+    def test_max_turns_stop_writes_no_report_and_records_its_cost(self):
+        with open(f"{self.tmp.name}/bin/claude", "w") as f:
+            f.write('#!/bin/sh\necho \'{"type": "result", "subtype": "error_max_turns", "num_turns": 5, '
+                    '"total_cost_usd": 0.1, "usage": {}}\'\nexit 1\n')
+        r = self.run_entry("report")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.report_written())
+        [rec] = self.records()
+        self.assertEqual((rec["outcome"], rec["exit_code"], rec["turns"], rec["cost_usd"], rec["output_tokens"]),
+                         ("failed", 1, 5, 0.1, None))
+
+    def test_run_record_redacts_a_credential_from_the_summary(self):
+        self.json_claude("test-change: sk-ant-1234567890abcdefXYZ: why\nedit: outcome=changed")
+        r = self.run_entry("draft-pr")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: test-change line names no changed existing test", r.stderr)
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            line = f.read()
+        self.assertNotIn("sk-ant-", line)
+        rec = json.loads(line)
+        self.assertEqual((rec["outcome"], rec["exit_code"], rec["cost_usd"]), ("blocked", 1, 0.5))
+        self.assertEqual(rec["gates"], ["test-change line names no changed existing test: - [redacted]: why"])
 
 
 if __name__ == "__main__":

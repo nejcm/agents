@@ -31,6 +31,7 @@ EXPECTED = {
               ("tool call records", "tool_calls", {"tool_calls", "escalations"})),
     "Cursor": (("tool_use blocks", "tool_calls", {"tool_calls"}),),
 }
+RUN_METRICS = ("turns", "input_tokens", "cache_write_tokens", "cache_read_tokens", "output_tokens", "cost_usd")
 DRIFT_MIN_SESSIONS = 5
 DRIFT_EXIT = 3
 KNOWN_TYPES = {"assistant", "user", "system", "cost-state", "pr-link", "tool_use", "tool_result", "text",
@@ -253,6 +254,48 @@ def cursor(home, repo, since):
     return s
 
 
+def factory_runs(repo, since):
+    path = os.path.join(repo, ".factory", "reports", "runs.jsonl")
+    if not os.path.isfile(path):
+        return None
+    runs = collections.OrderedDict()
+    for rec in load(path, new_stats()) or []:
+        started = text(rec.get("started")) or ""
+        if since and started[:10] < since:
+            continue
+        entry = rec.get("entry") if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", str(rec.get("entry"))) else "?"
+        outcome = rec.get("outcome") if re.fullmatch(r"[a-z-]{1,20}", str(rec.get("outcome"))) else "?"
+        r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
+                                    **{k: 0 for k in RUN_METRICS}})
+        r["runs"] += 1
+        r["dry"] += rec.get("dry_run") is True
+        r["outcomes"][outcome] += 1
+        for k in RUN_METRICS:
+            r["seen"][k] += is_num(rec.get(k))
+            r[k] += num(rec.get(k))
+    return runs
+
+
+def render_runs(runs):
+    out = ["## Factory runs", ""]
+    if runs is None:
+        return out + ["- No run records (`.factory/reports/runs.jsonl` not found).", ""]
+    if not runs:
+        return out + ["- No run records in the period.", ""]
+    out += ["| Entry | Runs | Outcomes | Turns | Input tokens | Cache write tokens | Cache read tokens | "
+            "Output tokens | Cost, USD |", "| --- | ---: | --- |" + " ---: |" * 6]
+    for entry, r in runs.items():
+        outcomes = ", ".join(f"{o} {n}" for o, n in sorted(r["outcomes"].items()))
+        cells = [f"{r[k]:,}" if r["seen"][k] else "unavailable" for k in RUN_METRICS[:-1]]
+        cells.append(f"{r['cost_usd']:.2f}" if r["seen"]["cost_usd"] else "unavailable")
+        out.append(f"| {entry} | {r['runs']} | {outcomes} | " + " | ".join(cells) + " |")
+    out.append("")
+    for entry, r in runs.items():
+        out.append(f"- {entry}: {r['dry']} of {r['runs']} runs dry. Turns reported by {r['seen']['turns']}, "
+                   f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}.")
+    return out + [""]
+
+
 def shape(value, key=None, parent=None):
     if key == "type" and isinstance(value, str):
         return value if value in KNOWN_TYPES else "?"
@@ -309,7 +352,7 @@ def merged_links(stats, merged):
     return linked_sessions, len(linked_prs)
 
 
-def render(repo, since_label, stats, merged):
+def render(repo, since_label, stats, merged, runs=None):
     rows = [
         ("Sessions", None, "sessions"),
         ("Subagent transcripts", None, "subagents"),
@@ -330,7 +373,12 @@ def render(repo, since_label, stats, merged):
         f"# Agent analytics: {os.path.basename(repo.rstrip('/'))}",
         "",
         f"Generated {datetime.date.today().isoformat()} by agent-analytics. Period: {since_label}.",
-        "Totals only, from transcript counter fields. Totals sum the harnesses where a metric is available.",
+        "Totals only. Factory runs come from their run records; they keep no transcript.",
+        "",
+        *render_runs(runs),
+        "## Sessions",
+        "",
+        "From transcript counter fields. Totals sum the harnesses where a metric is available.",
         "",
         "| Metric | " + " | ".join(HARNESSES) + " | Total |",
         "| --- |" + " ---: |" * (len(HARNESSES) + 1),
@@ -424,7 +472,8 @@ def main(argv=None):
         "Cursor": cursor(args.home, args.repo, since),
     }
     since_label = f"transcripts modified since {args.since}" if args.since else "all local transcripts"
-    sys.stdout.write(render(os.path.realpath(args.repo), since_label, stats, merged))
+    runs = factory_runs(args.repo, args.since)
+    sys.stdout.write(render(os.path.realpath(args.repo), since_label, stats, merged, runs))
     if any(drift(name, stats[name]) for name in HARNESSES):
         sys.stderr.write("agent_analytics: format drift detected; see the report's Format drift section\n")
         return DRIFT_EXIT

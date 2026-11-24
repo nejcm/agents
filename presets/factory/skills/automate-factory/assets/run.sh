@@ -15,7 +15,72 @@ n=${GIT_CONFIG_COUNT:-0}
 n=$((10#$n))
 export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFIG_VALUE_$n=/dev/null" \
   "GIT_CONFIG_KEY_$((n + 1))=core.fsmonitor" "GIT_CONFIG_VALUE_$((n + 1))=false"
-trap 'rm -rf "$view"; git worktree prune' EXIT
+creds_re='sk-ant-[A-Za-z0-9_-]{16}'
+calls=$view/calls.jsonl gates_log=$view/gates.log began=$(date -u +%FT%TZ) run_outcome="" gate_block=""
+record_py=$(cat <<'PY'
+import json, os, re, sys
+mode, *a = sys.argv[1:]
+def read(p):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+def lines(p):
+    return read(p).splitlines()
+if mode == "json":
+    raw = read(a[0])
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        d = None
+    if not isinstance(d, dict):
+        print(raw, end="")
+        d = {}
+    elif isinstance(d.get("result"), str):
+        r = d["result"]
+        print(r, end="" if r.endswith("\n") else "\n")
+    u = d.get("usage") if isinstance(d.get("usage"), dict) else {}
+    keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+    with open(a[1], "a") as f:
+        f.write(json.dumps(dict({k: u.get(k) for k in keys}, turns=d.get("num_turns"), cost_usd=d.get("total_cost_usd"))) + "\n")
+    sys.exit()
+creds, calls, gates, outcomes, *kv = a
+rec = dict(x.split("=", 1) for x in kv)
+rec = {k: v or None for k, v in rec.items()}
+rec["exit_code"], rec["dry_run"] = int(rec["exit_code"]), rec["dry_run"] == "1"
+rec["gates"] = lines(gates)
+use = [json.loads(x) for x in lines(calls)]
+rec["calls"] = len(use)
+for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write_tokens", "cache_creation_input_tokens"),
+             ("cache_read_tokens", "cache_read_input_tokens"), ("output_tokens", "output_tokens"), ("cost_usd", "cost_usd")):
+    v = [u.get(n) for u in use]
+    rec[k] = sum(v) if all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v) else None
+if os.path.isdir(outcomes):
+    rec["items"] = []
+    for i in sorted(os.listdir(outcomes)):
+        o = lines(os.path.join(outcomes, i)) + ["", "", ""]
+        rec["items"].append(dict(zip(("outcome", "reason", "pr", "start_commit", "end_commit"), (o[0] + " " + o[1]).split()),
+                                 id=i, diff_stat=o[2] or None))
+path = ".factory/reports/runs.jsonl"
+if os.path.islink(path):
+    sys.exit("record: runs.jsonl is a symlink")
+with open(path, "a") as f:
+    f.write(re.sub(creds + "[A-Za-z0-9_-]*", "[redacted]", json.dumps(rec)) + "\n")
+PY
+)
+record() {
+  local rc=$1 o=$run_outcome stat=""
+  [ "$rc" = 0 ] || { o=failed; [ -z "$gate_block" ] || o=blocked; }
+  local base
+  base=$(git rev-parse -q --verify "${ref:-}^{commit}" 2> /dev/null) || true
+  [ -z "${commit:-}" ] || stat=$(git diff --shortstat "$start" "$commit" 2> /dev/null | sed 's/^ //') || true
+  python3 -I -c "$record_py" record "$creds_re" "$calls" "$gates_log" "$view/outcomes" entry="$entry" \
+    started="$began" ended="$(date -u +%FT%TZ)" base="$base" \
+    start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" exit_code="$rc" \
+    dry_run="${FACTORY_DRY_RUN:-0}"
+}
+trap 'record $? || true; rm -rf "$view"; git worktree prune' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
 max_turns="<turns>" minutes="<minutes>"
@@ -52,14 +117,16 @@ overlay() { local f=.factory/automations/$entry.$1.local.md; [ ! -f "$f" ] || { 
 fetch() { :; }
 
 analyze() {
+  local rc=0
   prompt="$(cat ".factory/automations/$entry.md" && overlay judge)"
   prompt+="
 Date: $day
 Snapshot: $ref at $(git rev-parse --short "$ref")"
   (cd "$view" && claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk "${caps[@]}" --output-format text \
-    "$prompt" < /dev/null) \
-    > "$view/report.md"
+    --no-session-persistence --permission-mode dontAsk "${caps[@]}" --output-format json \
+    "$prompt" < /dev/null) > "$view/analyze.json" || rc=$?
+  python3 -I -c "$record_py" json "$view/analyze.json" "$calls" > "$view/report.md"
+  [ "$rc" = 0 ] || exit "$rc"
   test -s "$view/report.md"
   mv "$view/report.md" "$out/$day.md"
 }
@@ -93,9 +160,9 @@ clip() {
   if [ "$n" -gt "$1" ]; then echo "[$((n - $1)) more lines]"; fi
 }
 
-block() { echo "gate: $*" >&2; exit 1; }
+block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
 
-no_creds() { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; }
+no_creds() { ! grep -qE "$creds_re"; }
 
 # Final body of every external write; returns 1 in dry run so the caller writes nothing.
 sendable() {
@@ -105,7 +172,7 @@ sendable() {
 }
 
 edit() {
-  local prs head prompt tools=Bash,Read,Grep,Glob,Edit,Write
+  local prs head prompt tools=Bash,Read,Grep,Glob,Edit,Write rc=0
   check=$view/check work=$view/work
   start=$(git rev-parse "$ref")
   prs=$(gh pr list --repo "$repo" --head "$branch" --state open --json number,headRefOid,isCrossRepository \
@@ -134,11 +201,14 @@ test-change: <path from the repo root>: <one-line reason>. Never delete or renam
   # No setting sources: tracked project settings in the checkout could switch auth or permissions.
   (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
     --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
-    --permission-mode dontAsk "$prompt" < /dev/null) | head -c $((summary_cap + 1)) > "$view/summary.md" ||
-    [ "$(wc -c < "$view/summary.md")" -gt "$summary_cap" ]
+    --permission-mode dontAsk --output-format json "$prompt" < /dev/null) | head -c $((8 * summary_cap + 1)) \
+    > "$view/edit.json" || rc=$?
+  python3 -I -c "$record_py" json "$view/edit.json" "$calls" > "$view/summary.md"
+  [ "$rc" = 0 ] || [ "$(wc -c < "$view/edit.json")" -gt $((8 * summary_cap)) ]
   [ "$(wc -c < "$view/summary.md")" -le "$summary_cap" ] || block "summary over $summary_cap bytes"
   if [ "$(tail -n1 "$view/summary.md")" != "edit: outcome=changed" ]; then
     echo "edit: no change"
+    run_outcome=no-change
     exit 0
   fi
   git -C "$work" add -A
@@ -210,6 +280,7 @@ gates() {
     no_creds || block "credential-shaped text"
   [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
   gated=$start:$commit
+  echo passed >> "$gates_log"
 }
 
 publish() {
@@ -237,6 +308,7 @@ publish() {
     gh label create "$label" --repo "$repo" --description "Factory edit changes existing tests" > /dev/null 2>&1 || true
     gh pr edit "$url" --repo "$repo" --add-label "$label" > /dev/null || echo "publish: label $label not added" >&2
   fi
+  run_outcome=published
 }
 
 fetch

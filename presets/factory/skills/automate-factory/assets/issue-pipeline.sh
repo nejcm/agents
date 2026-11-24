@@ -27,7 +27,7 @@ preflight() {
 
 # $1 stage, $2 its directory, $3 reference, $4 tools, $5 commit of the verify skill, then inputs.
 stage() {
-  local check=$item/check/$1 evidence=$item/evidence/$1 prompt
+  local check=$item/check/$1 evidence=$item/evidence/$1 prompt rc=0
   mkdir -p "$check" "$evidence"
   git archive "$5" ".cursor/skills/verify-$app" | tar -x -C "$check"
   cp -R "${@:6}" "$check/"
@@ -35,18 +35,23 @@ stage() {
 Stage: $1."
   (cd "$2" && check=$check evidence=$evidence timeout "${minutes}m" claude -p --safe-mode --setting-sources '' \
     --strict-mcp-config --no-session-persistence --tools "$4" --allowedTools "$4" "${caps[@]}" \
-    --permission-mode dontAsk "$prompt" < /dev/null) > "$evidence/stdout.txt" 2>&1 || ran $?
+    --permission-mode dontAsk --output-format json "$prompt" < /dev/null) > "$item/$1.json" 2> "$evidence/stdout.txt" ||
+    rc=$?
+  python3 -I -c "$record_py" json "$item/$1.json" "$calls" >> "$evidence/stdout.txt"
+  [ "$rc" = 0 ] || ran "$rc"
 }
 
 spec_item() {
-  local features=$runview/repo/.cursor/skills/verify-$app/features prompt
+  local features=$runview/repo/.cursor/skills/verify-$app/features prompt rc=0
   prompt=$(cat ".factory/automations/$entry.spec.md" && overlay spec)
   { cat "$runview/input/items/$id.json"; echo
     awk -v h="## $id" '$0 == h {p = 1} p {print} p && /^fix-issues: / {exit}' "$report"; echo
     cat "$features/$feature.md"; } > "$item/spec-input.md"
   (cd "$runview" && timeout 5m claude -p --restricted --safe-mode --tools "" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk --max-turns 3 --output-format text \
-    "$prompt" < "$item/spec-input.md") > "$item/spec-draft.md" || ran $?
+    --no-session-persistence --permission-mode dontAsk --max-turns 3 --output-format json \
+    "$prompt" < "$item/spec-input.md") > "$item/spec.json" || rc=$?
+  python3 -I -c "$record_py" json "$item/spec.json" "$calls" > "$item/spec-draft.md"
+  [ "$rc" = 0 ] || ran "$rc"
   python3 -I "$runview/skills/fix-issues/scripts/check_items.py" --spec "$features" "$feature" \
     < "$item/spec-draft.md" > "$item/spec.md"
 }
@@ -257,7 +262,7 @@ release() {
   local f
   set +e
   [ -n "$outcome" ] || outcome=blocked reason=$step
-  printf '%s %s %s\n' "$outcome" "$reason" "$url" > "$runview/outcomes/$id"
+  printf '%s %s %s\n%s %s\n%s\n' "$outcome" "$reason" "$url" "$start" "${commit:-$start}" "$stat" > "$runview/outcomes/$id"
   [ -n "$claimed" ] || return
   if [ "$step" = publish ] && [ -n "$commit" ] &&
     [ "$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1)" = "$commit" ]; then
@@ -279,7 +284,7 @@ run_item() {
   local r prs
   id=$1 feature=$2 item=$fx/tmp/fix-$1
   view=$item out=$items/$1 branch=factory/fix-$1 title="fix: $(tag "$1") $2"
-  outcome="" reason="" url=none step=claim claimed="" ticket="" red=""
+  outcome="" reason="" url=none step=claim claimed="" ticket="" red="" stat=""
   trap release EXIT
   mkdir "$item" 2> /dev/null || finish skipped claimed
   claimed=1
@@ -320,6 +325,7 @@ run_item() {
   git -C "$item/patch" add -A
   git -C "$item/patch" commit -q -m "fix: $feature ($(tag "$id"))"
   commit=$(git -C "$item/patch" rev-parse HEAD) work=$item/patch
+  stat=$(git diff --shortstat "$start" "$commit" | sed 's/^ //')
 
   step=gates
   gates

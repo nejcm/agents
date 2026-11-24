@@ -1,16 +1,16 @@
 ---
 name: agent-analytics
-description: Use when the user asks for agent usage numbers for a repo — sessions, tokens, cost, failed tool calls, retries, escalations, sessions per merged PR — from local Claude Code, Codex and Cursor transcripts
+description: Use when the user asks for agent usage numbers for a repo — sessions, tokens, cost, failed tool calls, retries, escalations, sessions per merged PR — from factory run records and local Claude Code, Codex and Cursor transcripts
 category: workflow
 disable-model-invocation: true
 ---
 
 # Agent analytics
 
-Totals for this repo's agent sessions, counted from local transcripts by
-[`scripts/agent_analytics.py`](scripts/agent_analytics.py). The script reads only counter and
-structural fields and prints a Markdown report. No transcript text enters the report or your
-context. Run from the repo root.
+Totals for this repo's agent work, counted by
+[`scripts/agent_analytics.py`](scripts/agent_analytics.py): factory run records first, local
+transcripts second. The script reads only counter and structural fields and prints a Markdown
+report. No transcript or record text enters the report or your context. Run from the repo root.
 
 ## Run
 
@@ -46,7 +46,14 @@ context. Run from the repo root.
 
 ## What is counted
 
-Scope is this repo: transcripts whose recorded cwd is the repo root or a path under it
+**Factory runs** come from `.factory/reports/runs.jsonl`, one line per scheduled run, written by
+the run script ([runners.md](../automate-factory/references/runners.md#run-record)). Per entry:
+runs, dry runs, outcomes, turns, tokens and cost (the CLI's own estimate); a run whose record has
+no usage or cost is counted as a run and listed under coverage. `--since` filters by the record's
+start date. Factory runs keep no transcript, so they are not counted again below. Gate messages,
+items and commits stay in the file, never in the report.
+
+**Sessions**: scope is this repo: transcripts whose recorded cwd is the repo root or a path under it
 (worktrees inside the repo included).
 
 | Harness | Source | Counted | Unavailable |

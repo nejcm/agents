@@ -250,7 +250,7 @@ class PipelineTest(unittest.TestCase):
                 and (i is None or f"/fix-{i}/" in c) and (stage is None or c.endswith("/" + stage))]
 
     def spec_calls(self):
-        return [c for c in self.calls() if c.startswith("claude ") and "--output-format text" in c
+        return [c for c in self.calls() if c.startswith("claude ") and "--output-format json" in c
                 and "--tools  " in c + " "]
 
     def pr_creates(self):
@@ -290,6 +290,41 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(self.outcome("1"), ("fixed", "linked", prs[0]["url"]))
         self.assertFalse(os.path.exists(f"{self.fx}/tmp/fix-1"))
         self.assertTrue(os.path.exists(f"{self.fx}/items/1/evidence/reproduce/repro.md"))
+
+    def test_run_record_lists_items_and_counts_stage_calls(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            [rec] = [json.loads(x) for x in f]
+        url = self.gh()["prs"][0]["url"]
+        [item] = rec["items"]
+        self.assertEqual({k: item[k] for k in ("id", "outcome", "reason", "pr", "start_commit", "diff_stat")},
+                         {"id": "1", "outcome": "fixed", "reason": "linked", "pr": url, "start_commit": rec["base"],
+                          "diff_stat": "1 file changed, 1 insertion(+)"})
+        self.assertEqual(item["end_commit"], self.git("--git-dir", self.remote, "rev-parse", "factory/fix-1").strip())
+        self.assertEqual((rec["outcome"], rec["calls"], rec["gates"]), ("completed", 5, ["passed"]))
+
+    def test_run_record_counts_a_failed_spec_call(self):
+        stub = f"{self.tmp.name}/bin/claude"
+        os.rename(stub, stub + ".orig")
+        with open(stub, "w") as f:
+            f.write(f"""#!/usr/bin/env python3
+import json, subprocess, sys
+p = subprocess.run([{stub + ".orig"!r}, *sys.argv[1:]], stdout=subprocess.PIPE, text=True)
+spec = sys.argv[sys.argv.index("--tools") + 1] == ""
+print(json.dumps({{"type": "result", "subtype": "error_max_turns" if spec else "success", "result": p.stdout,
+                  "num_turns": 1, "total_cost_usd": 0.1, "usage": {{"output_tokens": 5}}}}))
+sys.exit(1 if spec else p.returncode)
+""")
+        os.chmod(stub, 0o755)
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}})
+        self.assertNotEqual(r.returncode, 0)
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            [rec] = [json.loads(x) for x in f]
+        self.assertEqual((rec["calls"], rec["turns"], rec["cost_usd"], rec["outcome"]), (2, 2, 0.2, "failed"))
+        self.assertEqual(rec["items"][0]["reason"], "runner-error")
 
     def test_untrusted_assigned_closed_start_no_stage(self):
         self.gh_state({1: {}, 2: {"labels": [{"name": "factory"}], "assignees": [{"login": "x"}]},
