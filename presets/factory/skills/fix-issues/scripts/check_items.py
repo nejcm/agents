@@ -320,8 +320,11 @@ def main(argv, stdin=sys.stdin.buffer):
     os.makedirs(out, exist_ok=True)
     for name, obj in items.items():
         if name not in skip:
-            with open(os.path.join(out, name + ".json"), "x") as f:
-                json.dump(obj, f)
+            try:
+                with open(os.path.join(out, name + ".json"), "x") as f:
+                    json.dump(obj, f)
+            except FileExistsError:
+                pass  # an earlier fetch this run wrote it
     print(len(items))
 
 

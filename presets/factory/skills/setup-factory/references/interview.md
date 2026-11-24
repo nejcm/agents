@@ -21,6 +21,10 @@ the items the user selected. Skip the phase when there are no gaps.
    query and filters (project, labels, states, lookback), the field holding the item's immutable
    ID, and a short prefix (`err-<source>` for an error tracker). Pre-fill from the server's tool list or
    the CLI's help; the user confirms.
+   For each one, its trust for unattended fixes: `trusted` (any item may get a draft PR),
+   `label <name>` (only open issues carrying that maintainer-applied label; `gh` only, since
+   agent-fetched labels are model output over issue text), or `none` (default). For an error
+   tracker marked `trusted`, warn once that its events carry strings any app user can set.
    For each one runs should write back to (other than GitHub), its writes: which of `ticket`,
    `comment`, `status`, `post`; for each, a CLI or API command (preferred) or one MCP write tool
    with its body and item (or title) arguments; the fixed destination (team, channel, status

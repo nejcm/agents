@@ -30,7 +30,8 @@ Updated: <YYYY-MM-DD> (interview)
 | <GitHub> | <issues, PRs> | <`gh` logged in> | <available / unavailable: reason> |
 
 - Fetch <tool>: prefix `<prefix>`; <`gh` | mcp `<server>` tools `<tool>`, ... | cli `<command>`>;
-  query <project, labels, states, lookback>; id `<field>`; extras <fields>; confirmed <date>
+  query <project, labels, states, lookback>; id `<field>`; extras <fields>;
+  trust <trusted | label `<name>` (`gh` only) | none (default)>; confirmed <date>
 - Write <tool>: prefix `<prefix>`; <ticket | comment | status | post>: <cli `<command>` | mcp
   `<server>` tool `<tool>` body `<argument / none>` item `<argument / none>` args `<fixed JSON>`>;
   destination <team, channel, state, or the item>; confirmed <date>

@@ -18,14 +18,17 @@ base SHA. Items are the issue numbers the user named (`fetch_items`), or the sch
 `fetch_new`: open issues created since the newest earlier day's report in `$out` minus a day of
 overlap (7 days back on a first run, never more than 30), skipping IDs an earlier day's report
 already judged. Today's report is ignored, so a same-day rerun rebuilds it whole.
-Other sources use [agent fetch](#agent-fetch).
+`issue-pipeline` at `draft-pr` also runs `fetch_deferred` (IDs whose newest `pipeline:` line in an
+earlier report is `outcome=deferred`, per `check_items.py --deferred`) and, for a `label` trust,
+`fetch_labeled <name>` (open issues with that label, unless
+`.factory/reports/fix-issues/items/<id>/summary.md` exists); both fetch judged IDs too. Other sources use [agent fetch](#agent-fetch).
 
 ```bash
 fetch_items() {
   local n
   mkdir -p "$view/input/items"
   for n in "$@"; do
-    gh issue view "$n" --repo "$repo" --json number,title,body,author,createdAt,labels,comments,url \
+    gh issue view "$n" --repo "$repo" --json number,title,body,author,createdAt,labels,comments,url,state,assignees \
       > "$view/input/items/$n.json"
   done
 }
@@ -47,6 +50,28 @@ fetch_new() {
   [ "$(printf '%s' "$ids" | grep -c .)" -lt 100 ] || echo "new issues: first 100 only" >> "$view/input/truncated"
   for n in $ids; do
     grep -qrs --exclude="$day.md" "^fix-issues: id=$n " "$out" || fetch_items "$n"
+  done
+}
+
+fetch_labeled() {
+  local ids n
+  mkdir -p "$view/input/items"
+  ids=$(gh issue list --repo "$repo" --state open --label "$1" --limit 100 --json number --jq '.[].number')
+  [ "$(printf '%s' "$ids" | grep -c .)" -lt 100 ] || echo "label $1: first 100 only" >> "$view/input/truncated"
+  for n in $ids; do
+    [ -f ".factory/reports/fix-issues/items/$n/summary.md" ] || fetch_items "$n"
+  done
+}
+
+deferred_ids() {
+  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --deferred "$out" "$day.md"
+}
+
+fetch_deferred() {
+  local ids n
+  ids=$(deferred_ids) || return
+  for n in $ids; do
+    case $n in *[!0-9]*) ;; *) fetch_items "$n" ;; esac
   done
 }
 
@@ -131,11 +156,23 @@ agent_fetch_context() {
     "Fetch: items in any state updated in the last 90 days, at most 500." "${2:-}") || return
   [ "$n" -lt 500 ] || echo "$1 context: first 500 only" >> "$view/input/truncated"
 }
+
+agent_fetch_deferred() {
+  local ids n only=
+  ids=$(deferred_ids) || return
+  for n in $ids; do
+    [ -e "$view/input/items/$n.json" ] || case $n in "$1"-*) only+="${only:+, }${n#"$1"-}" ;; esac
+  done
+  # Drain a piped CLI command, or it dies of SIGPIPE under pipefail.
+  [ -n "$only" ] || { cat > /dev/null; return 0; }
+  agent_fetch "$1" "$view/input/items" "Fetch: only items $only." "${2:-}" > /dev/null
+}
 ```
 
 MCP: `agent_fetch_new lin "mcp__linear__list_issues,mcp__linear__get_issue" < /dev/null`. CLI:
 the recorded command, with `$since` from `since_last`, piped into `agent_fetch_new err-<source>`.
-The attended run sets `max_turns` from the profile and uses
+`issue-pipeline` at `draft-pr` also runs `agent_fetch_deferred <prefix> [tools]` per source, after
+`agent_fetch_new`, the CLI command piped in the same way; it skips IDs already fetched. The attended run sets `max_turns` from the profile and uses
 `agent_fetch <prefix> "$view/input/items" "Fetch: only items <ids>." ...`.
 `fetch_context` still runs for PRs and commits. Missing fetch files: write and confirm them as
 automate-factory's step 5 does, before the first fetch.

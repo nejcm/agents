@@ -242,6 +242,13 @@ class CheckItems(unittest.TestCase):
         out = run([ITEM, dict(ITEM, id=7)], extra=["--skip-judged", reports, "2026-11-24.md"])
         self.assertEqual(os.listdir(out), ["lin-ENG-12.json"])
 
+    def test_item_already_fetched_this_run_is_kept(self):
+        out = run([ITEM])
+        with contextlib.redirect_stdout(io.StringIO()):
+            ci.main(["lin", out], stream(json.dumps(dict(ITEM, title="Other")) + "\n"))
+        with open(os.path.join(out, "lin-ENG-12.json")) as f:
+            self.assertEqual(json.load(f), ITEM)
+
 
 SPEC = ("feature: save\n\n## Preconditions and data\nA saved draft.\n\n## Steps\n1. Click Save.\n\n"
         "## Expected final state\nSaved.\n\n## Broken final state\nThe app crashes.\n")
