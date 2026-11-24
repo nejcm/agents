@@ -81,7 +81,8 @@ confirms, with `crontab -e` or by editing the output of `crontab -l` and piping 
 destination approved by the user: GitHub through `gh`, or a source's `Write` line per `fix-issues`
 [write back](../../fix-issues/references/triage.md#write-back) (an MCP write needs
 `skills=("<skill-path:fix-issues>")`). `draft-pr` and `pr` need the profile's
-`Agent PR review` allowing agent PRs (`pr` also allowing non-draft ones) and a test script in the
+`Agent PR review` allowing agent PRs (`pr` also allowing non-draft ones; an edit that changes
+existing tests still makes the PR a draft, per [safety.md](safety.md#steps)) and a test script in the
 profile, and Git 2.31 or later (the run script sets config through `GIT_CONFIG_COUNT`). Fill in
 the run script:
 

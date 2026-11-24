@@ -75,7 +75,16 @@ deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .
   .vscode/* .devcontainer/*)
 set +f
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
-pr="" start="" commit=""
+pr="" start="" commit="" changed=()
+
+clip() {
+  local l n=0
+  while IFS= read -r l; do
+    if [ "$n" -lt "$1" ]; then printf '%s\n' "${l:0:200}"; fi
+    n=$((n + 1))
+  done
+  if [ "$n" -gt "$1" ]; then echo "[$((n - $1)) more lines]"; fi
+}
 
 block() { echo "gate: $*" >&2; exit 1; }
 
@@ -104,7 +113,8 @@ edit() {
 Inputs, read-only: $check (report.md, profile.md, skills/). Edit only the working directory; never
 commit, push or run gh.
 End your reply with a summary of what changed and why, last line edit: outcome=changed or
-edit: outcome=stopped."
+edit: outcome=stopped. Before that, one line per existing test file you changed:
+test-change: <path from the repo root>: <one-line reason>. Never delete or rename a test file."
   # No setting sources: tracked project settings in the checkout could switch auth or permissions.
   (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
     --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" \
@@ -121,7 +131,7 @@ edit: outcome=stopped."
 }
 
 gates() {
-  local st p g ok a d lines=0 tests=()
+  local st p g ok a d r m rc lines=0 tests=() seen=$'\n'
   ! git diff --quiet "$start" "$commit" || block "empty diff"
   while IFS=$'\t' read -r st p; do
     for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
@@ -131,6 +141,7 @@ gates() {
     [[ $p =~ $tests_re ]] || continue
     [ "$st" != D ] || block "test $p deleted or renamed"
     tests+=("$p")
+    [ "$st" = A ] || changed+=("$p")
   done < <(git diff --name-status --no-renames "$start" "$commit")
   while read -r a d p; do
     [ "$a" != - ] || block "binary change $p"
@@ -142,26 +153,70 @@ gates() {
       "${tests[@]}" > "$view/tests.diff"
     ! grep -qE '^>.*(\.skip\(|\.only\(|\bx(it|describe|test)\(|@pytest\.mark\.(skip|xfail)|@unittest\.skip|\bt\.Skip|#\[ignore\]|@Disabled|@Ignore)' \
       "$view/tests.diff" || block "test skipped"
-    ! grep -q '^<' "$view/tests.diff" || block "existing test lines changed or removed"
   fi
+  sed -n 's/^test-change: /- /p' "$view/summary.md" > "$view/reasons.md"
+  while IFS= read -r r; do
+    m=""
+    for p in ${changed[@]+"${changed[@]}"}; do
+      [[ $r != "- $p: "* || ${#p} -le ${#m} ]] || m=$p
+    done
+    [ -n "$m" ] || block "test-change line names no changed existing test: $r"
+    [[ ${r#"- $m: "} = *[![:space:]]* ]] || block "blank test-change reason for $m"
+    [[ $seen != *$'\n'"$m"$'\n'* ]] || block "duplicate test-change for $m"
+    seen+="$m"$'\n'
+  done < "$view/reasons.md"
+  for p in ${changed[@]+"${changed[@]}"}; do
+    [[ $seen == *$'\n'"$p"$'\n'* ]] || block "no test-change reason for $p"
+  done
   (cd "$work" && timeout "${minutes}m" sh -c "$test_cmd") > "$out/$day-tests.log" 2>&1 ||
     block "tests failed, exit $?"
-  { git diff "$start" "$commit"; cat "$view/summary.md"; } |
+  if [ ${#changed[@]} -gt 0 ]; then
+    git worktree add -q --detach "$view/old" "$commit"
+    git -C "$view/old" checkout -q "$start" -- "${changed[@]}"
+    rc=0
+    (cd "$view/old" && timeout "${minutes}m" sh -c "$test_cmd") > "$view/old.log" 2>&1 || rc=$?
+    { printf '## Modifies existing tests\n\nNeeds human approval; the factory never merges.\n\n'
+      clip 50 < "$view/reasons.md"
+      if [ "$rc" = 124 ]; then
+        printf '\nOld tests timed out after %s minutes: no evidence.\n' "$minutes"
+      elif [ "$rc" = 0 ]; then
+        printf '\nOld tests still pass on the new code: test edit not needed for this fix, review closely.\n'
+      else
+        printf '\nOld tests fail on the new code (exit %s): change needed.\n\n' "$rc"
+        tail -n 20 "$view/old.log" | clip 20 | sed 's/^/    /'
+      fi
+      printf '\nChanged test lines:\n\n'
+      git diff "$start" "$commit" -- "${changed[@]}" | clip 80 | sed 's/^/    /'
+      echo; } > "$view/section.md"
+  fi
+  { git diff "$start" "$commit"; cat "$view/summary.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
     { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; } || block "credential-shaped text"
+  [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
 }
 
 publish() {
-  local draft=()
-  [ "$level" != draft-pr ] || draft=(--draft)
-  { printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed.\n\n' \
+  local draft=() url label=factory:test-change
+  [ "$level" != draft-pr ] && [ ${#changed[@]} = 0 ] || draft=(--draft)
+  { [ ${#changed[@]} = 0 ] || cat "$view/section.md"
+    printf 'Automation `%s`, %s. Base %s, start %s, commit %s. Gates passed.\n\n' \
     "$entry" "$day" "$(git rev-parse "$ref")" "$start" "$commit"
     cat "$view/summary.md"; } > "$view/body.md"
+  [ "$(wc -c < "$view/body.md")" -le 65536 ] || block "PR body over GitHub's 65536 characters"
+  if [ -n "$pr" ] && [ ${#changed[@]} -gt 0 ]; then
+    gh pr ready "$pr" --repo "$repo" --undo || block "could not return PR $pr to draft"
+  fi
   git push -q "$remote" "$commit:refs/heads/$branch"
   if [ -n "$pr" ]; then
     gh pr comment "$pr" --repo "$repo" --body-file "$view/body.md"
+    url=$pr
   else
-    gh pr create --repo "$repo" ${draft[@]+"${draft[@]}"} --base "$ref" --head "$branch" --title "$title" \
-      --body-file "$view/body.md"
+    url=$(gh pr create --repo "$repo" ${draft[@]+"${draft[@]}"} --base "$ref" --head "$branch" --title "$title" \
+      --body-file "$view/body.md")
+    echo "$url"
+  fi
+  if [ ${#changed[@]} -gt 0 ]; then
+    gh label create "$label" --repo "$repo" --description "Factory edit changes existing tests" > /dev/null 2>&1 || true
+    gh pr edit "$url" --repo "$repo" --add-label "$label" > /dev/null || echo "publish: label $label not added" >&2
   fi
 }
 

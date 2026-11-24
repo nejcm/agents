@@ -62,7 +62,8 @@ in its environment.
 - **Edit**: per [runners.md](runners.md#write-levels), `claude` runs on a detached worktree under
   the runner's own login, with `--safe-mode --setting-sources ''` so the checkout's tracked
   settings cannot change auth, hooks or permissions. Its summary is its stdout, capped at
-  `summary_cap` bytes, ending `edit: outcome=changed` or `edit: outcome=stopped`; the script
+  `summary_cap` bytes, with one `test-change: <path>: <reason>` line per existing
+  test file it changed, ending `edit: outcome=changed` or `edit: outcome=stopped`; the script
   never opens a file the step wrote. On `changed` it commits with hooks off (Git stores symlinks
   as links and skips FIFOs). Residual risk: its input derives from untrusted text, so injected
   text can use whatever the environment holds; keep write credentials there to the one repo and
@@ -70,12 +71,22 @@ in its environment.
 - **Gates**, model-free, all must pass or nothing is published: a non-empty diff of at most
   `max_lines` changed lines, no binary files; every path in the entry's `allow` globs and none in
   `deny` (CI, hooks, agent harness and editor settings, `.factory/`, `CODEOWNERS`,
-  `.gitattributes`, the verify skill); existing test files take additions only (no changed,
-  removed or renamed line), new test files are allowed, and
-  added lines carry no skip or focus marker; no credential-shaped text (`sk-ant-`) in the diff or
-  summary; the fixed test command passes in the checkout. The test command, allowlist
+  `.gitattributes`, the verify skill); no test file deleted or renamed; every changed existing
+  test file, and only those, has exactly one `test-change` line whose path matches it exactly and
+  whose reason is not blank; added test lines carry no skip or focus
+  marker; the fixed test command passes in the checkout; no credential-shaped text (`sk-ant-`)
+  in the diff, summary or test-change section. The test command, allowlist
   and cap are fixed at setup; `allow` must exclude the files that define the test command
   (manifests, test config).
+- **Changed tests**: when the edit changed existing test files, gates run the start versions of
+  those files against the new code (same test command and timeout, in a second worktree) and
+  record whether they fail (change needed), still pass (edit not needed, review closely) or time
+  out (no evidence); none blocks. The section (reasons, that outcome with a capped output tail, the capped test
+  diff, "needs human approval") goes to `.factory/reports/<entry>/<date>-test-change.md` and
+  tops the PR body or comment. The PR is a draft at any level: a new one opens as a draft, a reused
+  one is returned to draft before the push or the run stops. It gets the `factory:test-change`
+  label, created if missing (a label failure only warns). A body over GitHub's 65536 characters
+  stops the run before the push. The factory never merges.
 - **Loop caps**: at most one PR per automation per run. Its branch is `factory/<entry>` (for
   `pr-babysitting`, the opted-in PR's branch); while that branch has an open same-repo PR, the
   run starts from the PR's head, pushes on top, never forced, and comments instead of opening
