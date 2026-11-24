@@ -58,7 +58,9 @@ another PR. Run code only from a commit someone with write access put in `$repo`
    - Commit `<sha>`: `after=$(git rev-parse --verify "<sha>^{commit}")`, an ancestor of
      `$base_sha`; `before` is `$after^1`.
 
-   Anything else, or a failed check: `blocked: untrusted fix artifact`.
+   Anything else, or a failed check: `blocked: untrusted fix artifact`. Unattended
+   (`issue-pipeline`), the coordinator does this step with merged PRs and commits only, and the
+   stage, prompted `Stage: verify.`, does step 2 alone.
 2. **Measure** in one fresh Verifier stage, `$dir=$item/verify` holding `base/` and `patch/`
    exports of `before` and `after`, same data and environment. Inputs as above, with the verify
    skill of `before`: the reproduce steps, run twice on `base/` first, then twice on `patch/`,

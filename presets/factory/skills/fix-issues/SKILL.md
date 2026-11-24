@@ -52,7 +52,7 @@ results reach it only as projected enum lines, and the user reads the reports an
 Unattended, automate-factory's `assets/issue-pipeline.sh` is the coordinator: a tool-less
 spec-writer replaces the user's spec, `check_items.py --spec` checks it, reproduce, fix and verify
 run as above with `run.sh` gates after fix, and every post is model-free (`gh`,
-`<prefix>.comment.sh`).
+`<prefix>.comment.sh`). Verdict `fixed` runs only verify mode, for a merged fix, and comments.
 
 ## Steps
 
@@ -207,7 +207,8 @@ on stdin; titles are built from projected fields only.
   `gh issue comment <id> --repo "$repo" --body-file <file>`. A `<prefix>-<id>` item, through its
   source's `comment` write with the native ID. Triage-only outcomes (duplicate, not a bug, needs
   info) are posted only when the user picks them. Unattended, the link step then appends
-  `<id> <PR url>` to `.factory/reports/fix-issues/linked.tsv`, sent or not.
+  `<id> <PR url>` (verify mode: `<id> <fix commit>`) to `.factory/reports/fix-issues/linked.tsv`,
+  sent or not; a row stops any later comment for that item.
 - **Status**: `<prefix>-<id>` items only, after the draft PR is opened, through the source's
   `status` write: the one state recorded at setup, never a closing one.
 

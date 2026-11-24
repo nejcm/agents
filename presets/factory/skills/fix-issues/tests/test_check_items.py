@@ -359,7 +359,7 @@ class Select(unittest.TestCase):
         self.assertEqual(got, [
             ["1", "one", "untrusted"],
             ["2", "two", "fix"],
-            ["3", "three", "verdict"],
+            ["3", "three", "untrusted"],
             ["4", "four", "closed"],
             ["5", "five", "assigned"],
             ["lin-A", "none", "no-feature"],
@@ -383,6 +383,22 @@ class Select(unittest.TestCase):
         self.assertEqual(self.select(verdicts, items, cap=0, extra=["--trust", "#"])[0][2], "cap")
         with self.assertRaises(SystemExit):
             self.select(verdicts, items, extra=["--trust", "../x"])
+
+    def test_fixed_needs_a_pr_or_sha_ref_and_counts_toward_the_cap(self):
+        day = "2026-11-0%dT08:00:00Z"
+        items = {str(n): gh_item(n, day % n) for n in range(1, 8)}
+        refs = ["#12", "abc1234", "none", "lin-A", "1234567", "#3", "a" * 40]
+        verdicts = [(str(n), "fixed", f"f{n}", r) for n, r in zip(range(1, 8), refs)]
+        got = self.select(verdicts, items, extra=["--trust", "#"])
+        self.assertEqual(got, [["1", "f1", "verify", "#12"], ["2", "f2", "verify", "abc1234"],
+                               ["3", "f3", "fixed-ref"], ["4", "f4", "fixed-ref"], ["5", "f5", "verify", "1234567"],
+                               ["6", "f6", "cap"], ["7", "f7", "cap"]])
+        bad = [("1", "fixed", "f1", "$(touch x)"), ("2", "fixed", "f2", "#1 abc"), ("3", "new-bug", "f3", "$(x)")]
+        self.assertEqual(self.select(bad, items, extra=["--trust", "#"]),
+                         [["1", "f1", "fixed-ref"], ["2", "f2", "fixed-ref"]])
+        mixed = [("1", "new-bug", "f1", "none"), ("2", "fixed", "f1", "#9"), ("3", "fixed", "f3", "#9")]
+        self.assertEqual(self.select(mixed, items, extra=["--trust", "#"]),
+                         [["1", "f1", "fix"], ["2", "f1", "same-feature"], ["3", "f3", "verify", "#9"]])
 
     def test_self_duplicate_and_bad_items(self):
         day = "2026-11-0%dT08:00:00Z"

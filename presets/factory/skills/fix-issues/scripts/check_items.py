@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check a fetch agent's stream-json run and write one <prefix>-<id>.json per item; check a write agent's
-run; project a report; check a written spec; select fix candidates; or list deferred items."""
+run; project a report; check a written spec; select fix and verify candidates; or list deferred items."""
 import argparse
 import datetime
 import json
@@ -17,6 +17,8 @@ VERDICT = re.compile(
     r"fix-issues: id=[A-Za-z0-9._-]{1,96} verdict=(new-bug|fixed|duplicate|related|owned|not-a-bug|needs-info)"
     r" feature=[a-z0-9_-]{1,64} ref=(#[0-9]+|[0-9a-f]{7,40}|[a-z][a-z0-9-]{0,18}-[A-Za-z0-9._-]{1,64}|none)"
 )
+# A fixed line with any ref, so a malformed one is still rejected with a reason.
+FIXED_ANY_REF = re.compile(r"fix-issues: id=[A-Za-z0-9._-]{1,96} verdict=fixed feature=[a-z0-9_-]{1,64} ref=.*")
 PIPELINE = re.compile(
     r"pipeline: id=([A-Za-z0-9._-]{1,96}) outcome=(fixed|not-reproduced|blocked|skipped|deferred)"
     r" reason=[a-z-]{1,32} pr=(https?://\S+|none)"
@@ -173,15 +175,16 @@ def check_spec(features, feature, stdin):
     sys.stdout.write("\n".join(lines) + "\n")
 
 
-def select(projected, items, cap, trust, label):
+def select(report, items, cap, trust, label):
     if not all(p == "#" or PREFIX.fullmatch(p) for p in trust):
         sys.exit("bad --trust prefix")
     never = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
     run = {}
-    with open(projected, errors="replace") as f:
+    with open(report, errors="replace") as f:
         for line in f:
-            if VERDICT.fullmatch(line.rstrip("\n")):
-                i, verdict, feature, ref = (x.split("=", 1)[1] for x in line.split()[1:])
+            line = line.rstrip("\n")
+            if VERDICT.fullmatch(line) or FIXED_ANY_REF.fullmatch(line):
+                i, verdict, feature, ref = (x.split("=", 1)[1] for x in line.split(" ", 4)[1:])
                 path = os.path.join(items, i + ".json")
                 if i not in run and os.path.isfile(path):
                     try:
@@ -192,16 +195,16 @@ def select(projected, items, cap, trust, label):
                         created = parse_time(obj.get("createdAt", obj.get("created"))) or never
                     except (OSError, ValueError, AttributeError, TypeError):
                         obj, labels, created = None, set(), never
-                    run[i] = created, verdict, feature, ref.lstrip("#"), obj, labels
+                    run[i] = created, verdict, feature, ref.lstrip("#"), obj, labels, ref
     taken, fixes = set(), 0
     for i in sorted(run, key=lambda i: (run[i][0], i)):
-        _, verdict, feature, ref, obj, labels = run[i]
+        _, verdict, feature, ref, obj, labels, raw = run[i]
         gh = i.isdigit()
         if obj is None:
             why = "bad-item"
         elif verdict == "duplicate" and ref != i and ref in run and run[ref][1] == "duplicate" and run[ref][3] == i:
             why = "mutual-duplicate"
-        elif verdict != "new-bug":
+        elif verdict not in ("new-bug", "fixed"):
             why = "verdict"
         elif feature == "none":
             why = "no-feature"
@@ -211,14 +214,17 @@ def select(projected, items, cap, trust, label):
             why = "closed"
         elif gh and obj.get("assignees") != []:
             why = "assigned"
+        elif verdict == "fixed" and not re.fullmatch(r"#[0-9]{1,9}|[0-9a-f]{7,40}", raw):
+            why = "fixed-ref"
         elif feature in taken:
             why = "same-feature"
         elif fixes >= cap:
             why = "cap"
         else:
-            why, fixes = "fix", fixes + 1
+            why, fixes = "verify" if verdict == "fixed" else "fix", fixes + 1
             taken.add(feature)
-        print(f"{i}\t{feature}\t{why}")
+        # A verify row also carries the triage ref, a PR #<n> or a SHA the coordinator qualifies.
+        print(f"{i}\t{feature}\t{why}" + (f"\t{raw}" if why == "verify" else ""))
 
 
 def project(report):
@@ -266,9 +272,9 @@ def main(argv, stdin=sys.stdin.buffer):
     if len(argv) == 3 and argv[0] == "--deferred":
         return sys.stdout.write("".join(i + "\n" for i in sorted(deferred(*argv[1:]))))
     if argv[:1] == ["--select"]:
-        sp = argparse.ArgumentParser(usage="check_items.py --select <projected lines> <items dir> <cap> "
+        sp = argparse.ArgumentParser(usage="check_items.py --select <report> <items dir> <cap> "
                                      "[--trust <prefix or '#' for GitHub>]... [--label <name>]")
-        sp.add_argument("projected")
+        sp.add_argument("report")
         sp.add_argument("items")
         sp.add_argument("cap", type=int)
         sp.add_argument("--trust", action="append", default=[])

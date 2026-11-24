@@ -101,17 +101,23 @@ body() {
   printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"
 }
 
-# $1 item, $2 PR URL, $3 commit, $4 base. Sets linked to the report reason.
+# $1 item, $2 PR URL, $3 commit, $4 base.
 link_item() {
-  local f=$runview/link-$1.md n="" p=${1%%-*} st
+  local f=$runview/link-$1.md
   printf 'Draft PR %s: reproduced on %s, and the fix %s passed the same check. Nothing merges without review.\n' \
     "$2" "$4" "$3" > "$f"
+  send "$1" "$f" "$2"
+}
+
+# $1 item, $2 comment file, $3 linked.tsv value. Sets linked to the report reason.
+send() {
+  local n="" p=${1%%-*} st
   linked=linked
   case $1 in
     err-*) n=$(row "$fx/tickets.tsv" "${1#err-}"); [ -n "$n" ] || linked=no-ticket ;;
     *[!0-9]*)
       if [ -f ".factory/automations/$p.comment.sh" ]; then
-        bash ".factory/automations/$p.comment.sh" "${1#"$p"-}" < "$f"
+        bash ".factory/automations/$p.comment.sh" "${1#"$p"-}" < "$2"
       else
         linked=no-comment-write
       fi ;;
@@ -119,9 +125,88 @@ link_item() {
   esac
   if [ -n "$n" ]; then
     st=$(gh issue view "$n" --repo "$repo" --json state --jq .state)
-    if [ "$st" = OPEN ]; then gh issue comment "$n" --repo "$repo" --body-file "$f" > /dev/null; else linked=closed; fi
+    if [ "$st" = OPEN ]; then gh issue comment "$n" --repo "$repo" --body-file "$2" > /dev/null; else linked=closed; fi
   fi
-  printf '%s %s\n' "$1" "$2" >> "$fx/linked.tsv"
+  printf '%s %s\n' "$1" "$3" >> "$fx/linked.tsv"
+}
+
+# $1 the triage ref, #<n> or a SHA: qualified model-free per fix-issues reproduce.md, verify mode.
+verify_item() {
+  local tip v s x b k before after
+  [ -z "$(row "$fx/linked.tsv" "$id")" ] || finish skipped linked
+  linked_pr merged
+  case $id in
+    err-*) [ -n "$(row "$fx/tickets.tsv" "${id#err-}")" ] || finish skipped no-ticket ;;
+    *[!0-9]*) [ -f ".factory/automations/${id%%-*}.comment.sh" ] || finish skipped no-comment-write ;;
+  esac
+  step=qualify
+  git fetch -q "$remote" "refs/heads/$ref"
+  tip=$(git rev-parse FETCH_HEAD)
+  if [[ $1 =~ ^#([0-9]{1,9})$ ]]; then
+    v=$(gh pr view "${BASH_REMATCH[1]}" --repo "$repo" --json state,isCrossRepository,baseRefName,mergeCommit,commits \
+      --jq '"\(.state) \(.isCrossRepository) \(.baseRefName) \(.mergeCommit.oid) \(.commits | length)"') ||
+      finish skipped unknown-ref
+    read -r s x b after k <<< "$v"
+    [ "$s" = MERGED ] || finish skipped not-merged
+    [ "$x" = false ] || finish skipped fork-pr
+    [ "$b" = "$ref" ] || finish skipped other-base
+    [[ $after =~ ^[0-9a-f]{40}$ ]] || finish skipped unknown-ref
+  elif [[ $1 =~ ^[0-9a-f]{7,40}$ ]]; then
+    after=$(git rev-parse -q --verify "$1^{commit}") || finish skipped unknown-ref
+    k=1
+  else
+    finish skipped fixed-ref
+  fi
+  git merge-base --is-ancestor "$after" "$tip" || finish skipped not-ancestor
+  [ "$k" = 1 ] || [ "$(git rev-list --parents -n 1 "$after" | wc -w)" = 3 ] || finish skipped ambiguous-baseline
+  before=$(git rev-parse -q --verify "$after^1") || finish skipped root-commit
+  commit=$after
+
+  step=spec
+  spec_item
+
+  step=verify
+  mkdir -p "$item/verify/base" "$item/verify/patch"
+  git archive "$before" | tar -x -C "$item/verify/base"
+  git archive "$after" | tar -x -C "$item/verify/patch"
+  stage verify "$item/verify" reproduce.md Bash,Read,Grep,Glob "$before" "$item/spec.md" "$item/run.md"
+  take "$item/evidence/verify/verify.md" "$item/verify.md"
+  v=$(tail -n 1 "$item/verify.md")
+  case $v in
+    "verify: outcome=confirmed" | "verify: outcome=insufficient" | "verify: outcome=inconclusive") echo "$id $v" ;;
+    *) exit 1 ;;
+  esac
+  { if [ "$v" = "verify: outcome=confirmed" ]; then
+      printf 'Verified: the merged fix %s (%s) resolves this; its parent %s showed the broken state.\n' \
+        "$1" "$after" "$before"
+    else
+      printf 'Not confirmed: the merged fix %s (%s) against its parent %s ended `%s`. Not re-filed.\n' \
+        "$1" "$after" "$before" "$v"
+    fi
+    printf '\n## Spec\n\n'; cat "$item/spec.md"
+    printf '\n## Verification\n\n'; clip 60 < "$item/verify.md"
+    printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
+  no_creds < "$item/body.md" || block "credential-shaped text"
+  [ "${FACTORY_DRY_RUN:-0}" != 1 ] || finish deferred dry-run
+
+  step=link
+  send "$id" "$item/body.md" "$after"
+  [ "$v" != "verify: outcome=confirmed" ] || finish fixed "$linked"
+  finish blocked not-confirmed
+}
+
+# $1 nonempty: a merged same-repo linked PR is the fix under verification; any other linked PR skips.
+linked_pr() {
+  local lp r n
+  [[ $id != *[!0-9]* ]] || return 0
+  lp=$(gh issue view "$id" --repo "$repo" --json closedByPullRequestsReferences \
+    --jq '.closedByPullRequestsReferences[] | "\(.repository.owner.login)/\(.repository.name) \(.number)"')
+  [ -n "$lp" ] || return 0
+  [ -n "${1:-}" ] || finish skipped linked-pr
+  while read -r r n; do
+    [ "$r" = "$repo" ] && [[ $n =~ ^[0-9]+$ ]] &&
+      [ "$(gh pr view "$n" --repo "$repo" --json state --jq .state)" = MERGED ] || finish skipped linked-pr
+  done <<< "$lp"
 }
 
 recover_item() {
@@ -171,7 +256,7 @@ release() {
 }
 
 run_item() {
-  local r lp prs
+  local r prs
   id=$1 feature=$2 item=$fx/tmp/fix-$1
   view=$item out=$items/$1 branch=factory/fix-$1 title="fix: $(tag "$1") $2"
   outcome="" reason="" url=none step=claim claimed="" ticket="" red=""
@@ -188,6 +273,7 @@ run_item() {
     'In fix.md, before its last line, one line per existing test file you changed: test-change: <path from the repo root>: <one-line reason>.' \
     'Never delete or rename a test file.' > "$item/bans.md"
   { awk '/^## /{p = $0 == "## Run"} p' .factory/profile.md; grep '^- Scripts: ' .factory/profile.md || true; } > "$item/run.md"
+  [ -z "$3" ] || verify_item "$3"
 
   step=spec
   spec_item
@@ -202,10 +288,7 @@ run_item() {
   [ "$r" = "repro: outcome=reproduced" ] || finish not-reproduced reproduce
 
   step=fix
-  if [[ $id != *[!0-9]* ]]; then
-    lp=$(gh issue view "$id" --repo "$repo" --json closedByPullRequestsReferences --jq '.closedByPullRequestsReferences[].number')
-    [ -z "$lp" ] || finish skipped linked-pr
-  fi
+  linked_pr
   git worktree add -q --detach "$item/patch" "$start"
   stage fix "$item/patch" fix.md Bash,Read,Grep,Glob,Edit,Write "$start" \
     "$item/spec.md" "$item/repro.md" "$item/run.md" "$runview/skills/debugging"
@@ -247,22 +330,21 @@ run_item() {
 }
 
 pipeline() {
-  local id feature why o r u p sel=() started="" halt=""
+  local id feature why fref o r u p sel=() started="" halt=""
   runview=$view report=$out/$day.md start=$(git rev-parse "$ref")
   preflight
   [ "${FACTORY_DRY_RUN:-0}" = 1 ] || recover
   for p in ${trust[@]+"${trust[@]}"}; do sel+=(--trust "$p"); done
   [ -z "$label" ] || sel+=(--label "$label")
-  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --project "$report" > "$view/projected"
-  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$view/projected" "$view/input/items" 3 \
+  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$report" "$view/input/items" 3 \
     ${sel[@]+"${sel[@]}"} > "$view/select.tsv"
   mkdir "$view/outcomes"
   printf '\n## Pipeline\n\n' >> "$report"
-  grep -q $'\tfix$' "$view/select.tsv" || echo "pipeline: no candidates" | tee -a "$report"
-  while IFS=$'\t' read -r id feature why; do
+  grep -qE $'\t(fix$|verify\t)' "$view/select.tsv" || echo "pipeline: no candidates" | tee -a "$report"
+  while IFS=$'\t' read -r id feature why fref; do
     u=none
     case $why in
-      fix)
+      fix | verify)
         if [ -n "$halt" ]; then o=deferred r=$halt
         elif [ -e .factory/pause ]; then o=deferred r=paused
         # Three stages, the test command and the spec-writer, each at its timeout.
@@ -270,7 +352,7 @@ pipeline() {
         elif [ -n "$started" ] && [ "${FACTORY_DRY_RUN:-0}" = 1 ]; then o=deferred r=dry-run
         else
           started=1 o=blocked r=error
-          try run_item "$id" "$feature" < /dev/null
+          try run_item "$id" "$feature" "$fref" < /dev/null
           [ ! -f "$view/outcomes/$id" ] || read -r o r u < "$view/outcomes/$id"
           [ "$r" != runner-error ] || halt=runner-error
           [ "${FACTORY_DRY_RUN:-0}" != 1 ] || { echo "dry run: $id $o $r"; o=deferred r=dry-run u=none; }

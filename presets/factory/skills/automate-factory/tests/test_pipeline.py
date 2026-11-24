@@ -92,7 +92,10 @@ def out(v):
                 print(x["url"])
     elif jq in (".state", ".body"):
         print(v[jq[1:]])
-    elif jq != ".closedByPullRequestsReferences[].number":
+    elif jq.startswith(".closedByPullRequestsReferences[] |"):
+        for x in v.get("closedByPullRequestsReferences", []):
+            print(x.get("repo", "o/r"), x["number"])
+    else:
         sys.exit("stub: jq " + jq)
 def save():
     json.dump(st, open(path, "w"))
@@ -119,6 +122,13 @@ elif cmd == "issue comment":
     save()
 elif cmd == "pr list":
     out([p for p in st["prs"] if p["head"] == opt["head"]])
+elif cmd == "pr view":
+    p = st.get("pulls", {}).get(pos[0]) or sys.exit(1)
+    if opt.get("jq") == ".state":
+        print(p["state"])
+    else:
+        print(p["state"], str(p.get("cross", False)).lower(), p.get("base", "main"), p.get("merge", "null"),
+              p.get("commits", 1))
 elif cmd == "pr create":
     url = f"https://github.com/o/r/pull/{len(st['prs']) + 1}"
     st["prs"].append({"head": opt["head"], "url": url, "title": opt["title"], "draft": opt.get("draft", False),
@@ -237,7 +247,7 @@ class PipelineTest(unittest.TestCase):
 
     def gh_writes(self):
         return [c for c in self.calls() if c.startswith("gh ")
-                and not re.match(r"gh (issue list|issue view|pr list) ", c)]
+                and not re.match(r"gh (issue list|issue view|pr list|pr view) ", c)]
 
     def rows(self, name):
         p = f"{self.fx}/{name}"
@@ -511,6 +521,165 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(self.rows(name), [])
         self.assertFalse(os.path.exists(f"{self.fx}/items/1/summary.md"))
         self.assertEqual([self.outcome(i)[:2] for i in "12"], [("deferred", "dry-run")] * 2)
+
+    def fix_commit(self, branch=None):
+        if branch:
+            self.git("-C", self.repo, "checkout", "-qb", branch)
+        self.write(f"src/{branch or 'fix'}", "fixed\n")
+        self.git("-C", self.repo, "add", "-A")
+        self.git("-C", self.repo, "commit", "-qm", "fix")
+        sha = self.git("-C", self.repo, "rev-parse", "HEAD").strip()
+        if branch:
+            self.git("-C", self.repo, "checkout", "-q", "main")
+        return sha
+
+    def merge(self, branch):
+        self.git("-C", self.repo, "merge", "-q", "--no-ff", "-m", "merge", branch)
+        return self.git("-C", self.repo, "rev-parse", "HEAD").strip()
+
+    def push_main(self):
+        self.git("-C", self.repo, "push", "-q", self.remote, "main")
+
+    def test_fixed_merged_commit_verified_comments_once(self):
+        sha = self.fix_commit()
+        parent = self.git("-C", self.repo, "rev-parse", "HEAD^").strip()
+        self.push_main()
+        self.gh_state({1: {}}, [])
+        items = {"1": {"verdict": "fixed", "ref": sha[:7]}}
+        r = self.run_pipeline(items)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("fixed", "linked", "none"))
+        self.assertEqual(len(self.spec_calls()), 1)
+        self.assertEqual(len(self.stage_calls("1", "verify")), 1)
+        self.assertEqual(len(self.stage_calls()), 1)
+        comments = self.gh()["comments"]
+        self.assertEqual([c["issue"] for c in comments], ["1"])
+        body = comments[0]["body"]
+        self.assertTrue(body.startswith(f"Verified: the merged fix {sha[:7]} ({sha}) resolves this; "
+                                        f"its parent {parent} showed"))
+        self.assertIn("## Spec\n\nfeature: a\n", body)
+        self.assertIn("verify: outcome=confirmed", body)
+        self.assertEqual(self.rows("linked.tsv"), [f"1 {sha}"])
+        self.assertEqual(self.rows("pushed.tsv"), [])
+        self.assertEqual(self.remote_heads().split(), ["refs/heads/main"])
+        self.assertEqual(self.pr_creates(), [])
+        self.assertEqual(self.gh_writes(), [c for c in self.calls() if c.startswith("gh issue comment")])
+        r = self.run_pipeline(items)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("skipped", "linked"))
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+        self.assertEqual(len(self.gh()["comments"]), 1)
+
+    def test_fixed_merged_pr_not_confirmed_comments_and_stops(self):
+        self.fix_commit("feat")
+        merge = self.merge("feat")
+        self.push_main()
+        self.gh_state({1: {}}, [], pulls={"12": {"state": "MERGED", "merge": merge, "commits": 2}})
+        items = {"1": {"verdict": "fixed", "ref": "#12", "verify": "insufficient"}}
+        r = self.run_pipeline(items)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "not-confirmed"))
+        comments = self.gh()["comments"]
+        self.assertEqual(len(comments), 1)
+        self.assertTrue(comments[0]["body"].startswith(f"Not confirmed: the merged fix #12 ({merge})"))
+        self.assertIn("verify: outcome=insufficient", comments[0]["body"])
+        self.assertEqual(self.rows("linked.tsv"), [f"1 {merge}"])
+        self.assertEqual(self.gh()["issues"].keys(), {"1"})
+        self.assertEqual(self.pr_creates(), [])
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        os.rename(f"{self.out}/{datetime.date.today()}.md", f"{self.out}/{yesterday}.md")
+        r = self.run_pipeline(items)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("pipeline: no candidates", self.report())
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+
+    def test_fixed_refs_that_do_not_qualify_start_no_stage(self):
+        side = self.fix_commit("side")
+        self.fix_commit("feat")
+        merge = self.merge("feat")
+        self.push_main()
+        root = self.git("-C", self.repo, "rev-list", "--max-parents=0", "HEAD").strip()
+        pulls = {"12": {"state": "OPEN"}, "13": {"state": "MERGED", "cross": True, "merge": merge},
+                 "14": {"state": "MERGED", "base": "dev", "merge": merge}}
+        self.gh_state({n: {} for n in range(1, 9)}, [], pulls=pulls)
+        refs = {"1": "#12", "2": "#13", "3": side[:12], "4": "none", "5": "#14", "6": "#99", "7": root,
+                "8": "fedcba9"}
+        items = {i: {"verdict": "fixed", "ref": ref, "feature": f"f{i}"} for i, ref in refs.items()}
+        r = self.run_pipeline(dict(list(items.items())[:4]))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([self.outcome(i)[:2] for i in "1234"], [("skipped", "not-merged"), ("skipped", "fork-pr"),
+                                                                 ("skipped", "not-ancestor"), ("skipped", "fixed-ref")])
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+        r = self.run_pipeline(dict(list(items.items())[4:]))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([self.outcome(i)[:2] for i in "5678"], [("skipped", "other-base"), ("skipped", "unknown-ref"),
+                                                                 ("skipped", "root-commit"), ("deferred", "cap")])
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+        self.assertEqual(self.rows("linked.tsv"), [])
+
+    def test_fixed_owned_unroutable_or_malformed_starts_no_stage(self):
+        sha = self.fix_commit()
+        self.push_main()
+        self.gh_state({1: {"closedByPullRequestsReferences": [{"number": 99}]}, 2: {}}, [])
+        agent = {p: [{"id": "C1", "title": "e", "body": "b", "url": "https://s.invalid/C1",
+                      "created": "2026-11-0%dT00:00:00Z" % n, "updated": "2026-11-01T00:00:00Z", "labels": []}]
+                 for n, p in ((3, "err-sentry"), (4, "lin"))}
+        items = {"1": {"ref": sha}, "2": {"ref": "$(touch x)", "feature": "b"},
+                 "err-sentry-C1": {"ref": sha, "feature": "c"}, "lin-C1": {"ref": sha, "feature": "d"}}
+        r = self.run_pipeline({i: dict(v, verdict="fixed") for i, v in items.items()},
+                              trust=("#", "err-sentry", "lin"), agent=agent,
+                              extra_fetch="agent_fetch_new err-sentry < /dev/null; agent_fetch_new lin < /dev/null; ")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([self.outcome(i)[:2] for i in items],
+                         [("skipped", "linked-pr"), ("skipped", "fixed-ref"), ("skipped", "no-ticket"),
+                          ("skipped", "no-comment-write")])
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+        self.assertEqual(self.rows("linked.tsv"), [])
+
+    def test_fixed_linked_merged_pr_verifies_and_linked_open_pr_skips(self):
+        self.fix_commit("feat")
+        merge = self.merge("feat")
+        self.push_main()
+        self.gh_state({1: {"closedByPullRequestsReferences": [{"number": 12}]},
+                       2: {"closedByPullRequestsReferences": [{"number": 13}]}}, [],
+                      pulls={"12": {"state": "MERGED", "merge": merge, "commits": 2}, "13": {"state": "OPEN"}})
+        r = self.run_pipeline({"1": {"verdict": "fixed", "ref": "#12"},
+                               "2": {"verdict": "fixed", "ref": merge, "feature": "b"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("fixed", "linked", "none"))
+        self.assertEqual(self.outcome("2")[:2], ("skipped", "linked-pr"))
+        self.assertEqual(len(self.stage_calls("1", "verify")), 1)
+        self.assertEqual(self.stage_calls("2"), [])
+        self.assertEqual(len(self.spec_calls()), 1)
+        self.assertEqual([c["issue"] for c in self.gh()["comments"]], ["1"])
+
+    def test_fixed_foreign_linked_pr_skips_without_local_lookup(self):
+        self.fix_commit("feat")
+        merge = self.merge("feat")
+        self.push_main()
+        self.gh_state({1: {"closedByPullRequestsReferences": [{"number": 12, "repo": "x/r"}]},
+                       2: {"closedByPullRequestsReferences": [{"number": 13, "repo": "x/r"}]}}, [],
+                      pulls={"12": {"state": "MERGED", "merge": merge, "commits": 2}, "13": {"state": "OPEN"}})
+        r = self.run_pipeline({"1": {"verdict": "fixed", "ref": "#12"},
+                               "2": {"verdict": "fixed", "ref": merge, "feature": "b"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([self.outcome(i)[:2] for i in "12"], [("skipped", "linked-pr")] * 2)
+        self.assertEqual(self.stage_calls() + self.spec_calls() + self.gh_writes(), [])
+        self.assertEqual([c for c in self.calls() if c.startswith("gh pr view")], [])
+
+    def test_fixed_dry_run_writes_nothing(self):
+        sha = self.fix_commit()
+        self.push_main()
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"verdict": "fixed", "ref": sha}}, dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.stage_calls("1", "verify")), 1)
+        self.assertIn("1 verify: outcome=confirmed", r.stdout)
+        self.assertEqual(self.gh_writes(), [])
+        self.assertEqual(self.gh()["comments"], [])
+        for name in ("pushed.tsv", "linked.tsv", "tickets.tsv"):
+            self.assertEqual(self.rows(name), [])
+        self.assertEqual(self.outcome("1")[:2], ("deferred", "dry-run"))
 
 
 if __name__ == "__main__":

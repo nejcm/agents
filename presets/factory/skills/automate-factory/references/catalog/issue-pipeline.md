@@ -12,7 +12,8 @@
   one fixed destination, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). At
   `draft-pr`, per selected item: state under `.factory/reports/fix-issues/` (claim, `items/<id>/`,
   `pushed.tsv`, `tickets.tsv`, `linked.tsv`), a ticket for an `err-` item, one draft PR on
-  `factory/fix-<id>`, one link comment, and `pipeline:` lines under `## Pipeline` in the report.
+  `factory/fix-<id>`, one link comment (for verdict `fixed`, the verify comment only), and
+  `pipeline:` lines under `## Pipeline` in the report.
 - **Write levels**: report, comment, draft-pr (never `pr`).
 - **Steps**: `skills=("<skill-path:fix-issues>")`, plus `"<skill-path:debugging>"` at `draft-pr`;
   fill `repo`. Fetch is
@@ -33,9 +34,16 @@
   `.factory/automations/issue-pipeline.spec.md`; no edit prompt. Per item, oldest first, at most 3
   per run and one per feature: claim, a tool-less spec-writer checked by `check_items.py --spec`,
   then `fix-issues` reproduce, fix, `run.sh` gates, a fresh verify stage, a ticket for `err-`
-  items (GitHub Issues only), draft PR, link comment. Only `new-bug` items with a mapped feature
-  from a trusted source, open and unassigned on GitHub, are selected; a GitHub item with a linked
-  PR, a PR or a remote branch on `factory/fix-<id>` is skipped. Links go to the GitHub issue or
+  items (GitHub Issues only), draft PR, link comment. Only `new-bug` and `fixed` items with a
+  mapped feature from a trusted source, open and unassigned on GitHub, are selected; a GitHub item
+  with a linked PR, a PR or a remote branch on `factory/fix-<id>` is skipped. A `fixed` item counts
+  toward the cap, is skipped for a linked PR only while that PR is unmerged, and runs fix-issues
+  [verify mode](../../../fix-issues/references/reproduce.md#verify-an-existing-fix) instead:
+  its `ref` qualifies only as a commit, or a same-repo PR merged into `<base>`, an ancestor of the
+  fetched `<base>`, and the item needs a comment destination (a ticket for an `err-` item, a
+  `<prefix>.comment.sh`), else it is skipped with the reason; then the spec, one verify stage on the fix
+  commit's parent and the fix commit, and one comment, verified or not confirmed, with the spec
+  and verify record. No branch, PR or ticket; a not-confirmed fix is never re-filed. Links go to the GitHub issue or
   ticket, or through a source's `<prefix>.comment.sh`; an MCP comment write is not used, and the
   report says so. `.factory/pause` stops it before the next item.
 - **Choices**: day and time; where to post at `comment`. At `draft-pr`: `run_minutes` (the
@@ -76,6 +84,6 @@ with #. Quote only error signatures, indented four spaces. Never put a guessed c
 The user reads the report, picks issues, and runs `fix-issues` in their harness: "Continue from
 .factory/reports/issue-pipeline/<date>.md with issues <n>." It reproduces, fixes, verifies and
 opens draft PRs only after the user confirms each write. Below `draft-pr`, scheduled runs never
-do; at `draft-pr`, the follow-up is for items with a final outcome other than `fixed` and for
-verdict `fixed`, except a pushed item still waiting for its PR or link comment, which the next
-scheduled run recovers.
+do; at `draft-pr`, the follow-up is for items with a final outcome other than `fixed`, including
+verdict `fixed` whose fix is unmerged or not confirmed, except a pushed item still waiting for its
+PR or link comment, which the next scheduled run recovers.
