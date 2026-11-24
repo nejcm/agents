@@ -102,18 +102,18 @@ items, print nothing. If a call fails, stop.
 # $1 prefix, $2 target dir, $3 what to fetch, $4 MCP tools (empty: CLI output on stdin),
 # $5 $6 earlier reports dir and today's report name, whose judged items are skipped.
 agent_fetch() {
-  local prompt mcp=() usd=()
+  local prompt mcp=()
   prompt="$(cat ".factory/automations/$1.fetch.md")
 $3" || return
   [ -z "${4:-}" ] || { [ -s ".factory/automations/$1.mcp.json" ] || return
     mcp=(--mcp-config "$PWD/.factory/automations/$1.mcp.json" --allowedTools "$4"); }
-  [ "${auth:-subscription}" != api-key ] || usd=(--max-budget-usd "$max_usd")
-  (unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_PROFILE \
-    CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
-  [ "${auth:-subscription}" = api-key ] || unset ANTHROPIC_API_KEY
+  (unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
+    ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
+    CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
+    CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
   cd "$view" && claude -p --restricted --tools "" --strict-mcp-config ${mcp[@]+"${mcp[@]}"} \
     --no-session-persistence --permission-mode dontAsk --max-turns "${max_turns:-50}" \
-    ${usd[@]+"${usd[@]}"} --output-format stream-json --verbose "$prompt") > "$view/fetch-$1.jsonl" &&
+    --output-format stream-json --verbose "$prompt") > "$view/fetch-$1.jsonl" &&
     python3 -I "$view/skills/fix-issues/scripts/check_items.py" "$1" "$2" --mcp "${4:-}" \
       ${5:+--skip-judged "$5" "$6"} < "$view/fetch-$1.jsonl"
 }
@@ -133,7 +133,7 @@ agent_fetch_context() {
 
 MCP: `agent_fetch_new lin "mcp__linear__list_issues,mcp__linear__get_issue" < /dev/null`. CLI:
 the recorded command, with `$since` from `since_last`, piped into `agent_fetch_new err-<source>`.
-The attended run sets `auth` and `max_usd` from the profile and uses
+The attended run sets `max_turns` from the profile and uses
 `agent_fetch <prefix> "$view/input/items" "Fetch: only items <ids>." ...`.
 `fetch_context` still runs for PRs and commits. Missing fetch files: write and confirm them as
 automate-factory's step 5 does, before the first fetch.

@@ -38,7 +38,7 @@ Updated: <YYYY-MM-DD> (interview)
 - Issue sources: <answer>
 - Results and escalations: <destination>
 - Deploy targets: <environments; agent access>
-- Budgets: <auth: subscription | api-key; per run: <minutes> min, <turns> turns[, $<usd>]; per week; allowed models>
+- Budgets: <per run: <minutes> min, <turns> turns; per week; allowed models>
 - Agent PR review: <who; PRs allowed or not; drafts only or ready ones too>
 - Environment: <isolated | not isolated>
 - Resolved gaps and contradictions: <gap>: <decision>
@@ -86,7 +86,7 @@ Updated: <YYYY-MM-DD> (baselines) at <short SHA>
 Updated: <YYYY-MM-DD> (automate-factory)
 
 - Runners: systemd user <yes/no>, cron <yes/no>, isolated analyze <Claude Code version / no:
-  reason; managed policy confirmed none <yes/no>>, GitHub Actions <yes/no> (<command or source>)
+  reason; managed policy confirmed none <yes/no>>
 - <entry>: <runner>, <trigger>; level <report / comment / draft-pr / pr>; files <paths>; smoke
   run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>
 ```

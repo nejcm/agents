@@ -93,30 +93,29 @@ mkdir -p "$check" "$evidence"
 git archive "<baseline sha>" .cursor/skills/verify-<app> | tar -x -C "$check"
 cp <stage inputs> "$check/"
 prompt=$(cat <reference file> "$item/bans.md")
-(unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_PROFILE \
-  CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
-[ "$auth" = api-key ] || unset ANTHROPIC_API_KEY
+(unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
+  ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
+  CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
+  CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
 cd "$dir" && check=$check evidence=$evidence timeout <stage minutes>m claude -p --model <model> \
   --effort <effort> --safe-mode --setting-sources '' --strict-mcp-config --no-session-persistence \
   --tools "<stage tools>" --allowedTools "<stage tools>" --max-turns <stage turns> \
   --permission-mode dontAsk "$prompt" < /dev/null)
 ```
 
-- **Environment**: stages run in their directory under the user's normal `claude` login, `auth`
-  from the profile's `Budgets`. Isolation is the environment's job, recorded in the profile's
-  `Environment`; see automate-factory
-  [`safety.md`](../automate-factory/references/safety.md#lethal-trifecta-rule).
+- **Environment**: stages run in their directory under the user's normal `claude` subscription
+  login. Isolation is the environment's job, recorded in the profile's `Environment`; see
+  automate-factory [`safety.md`](../automate-factory/references/safety.md#lethal-trifecta-rule).
   `--setting-sources ''` skips user, project and local settings, so a tracked `apiKeyHelper` or
   `env` cannot switch auth; stages need none of them. Stages run as the user: they can change Git
   config and `PATH` and read the `gh` login, so bans and the coordinator split stop a wrong model,
   not an injected one; the isolated environment with a single-repo token bounds that.
-- **Prerequisites**: `claude` logged in (or `ANTHROPIC_API_KEY` on API-key auth) and no managed
+- **Prerequisites**: `claude` logged in and no managed
   hooks, confirmed as in automate-factory
   [`runners.md`](../automate-factory/references/runners.md#analyze-command). Missing either: stop
   after triage.
 - **Budget**: per stage from the profile's per-run caps (default 30 minutes, 50 turns):
-  `timeout` and `--max-turns`. On API-key auth also pass `--max-budget-usd <usd>` (estimated
-  spend, can overshoot); on subscription auth the dollar budget is unenforced.
+  `timeout` and `--max-turns`.
 - **Model tools**: reproduce and verify get `Bash,Read,Grep,Glob`; fix adds `Edit,Write`.
 - **Inputs**: the coordinator copies each stage's inputs (its reference's Inputs list) into
   `$check` model-free, with the verify skill from the stage's baseline commit; the stage reads

@@ -3,12 +3,12 @@
 Outward-facing: what shipped this week, for people outside the agent loop.
 
 - **Trigger**: weekly, Friday 16:00.
-- **Requires**: `gh` logged in (local) or `pull-requests: read`, `issues: read` (hosted).
-- **Runners**: local, GitHub Actions.
-- **Input**: the week's merged PRs, opened and closed issues, default-branch commits, and, locally,
-  the week's `.factory/reports/`. Untrusted: PR and issue titles and bodies, commit messages.
-- **Writes**: report to `.factory/reports/weekly-digest/<date>.md` or the job summary; at
-  `comment`, posted unchanged to one fixed destination.
+- **Requires**: `gh` logged in.
+- **Runners**: local.
+- **Input**: the week's merged PRs, opened and closed issues, default-branch commits, and the
+  week's `.factory/reports/`. Untrusted: PR and issue titles and bodies, commit messages.
+- **Writes**: report to `.factory/reports/weekly-digest/<date>.md`; at `comment`, posted
+  unchanged to one fixed destination.
 - **Write levels**: report, comment.
 - **Steps**: fetch, with `since` the date 7 days back (the `python3` one-liner in
   [`weekly-agent-analytics.md`](weekly-agent-analytics.md)):
@@ -19,15 +19,13 @@ Outward-facing: what shipped this week, for people outside the agent loop.
   gh issue list --state all --search "updated:>=$since" --limit 500 \
     --json number,title,state,createdAt,closedAt > "$view/input/issues.json"
   git log "$ref" --since="$since" --format='%h %an %s' > "$view/input/commits.txt"
-  # local only; hosted marks reports unavailable. Never copied: fix-issues, security-review,
-  # weekly-retro.
+  # Never copied: fix-issues, security-review, weekly-retro.
   tar -C .factory --exclude=reports/fix-issues --exclude=reports/security-review \
     --exclude=reports/weekly-retro -cf - reports | tar -x -C "$view/input"
   ```
 
-  Comment, locally: `post() { gh issue comment <n> --repo <owner/repo> --body-file "$out/$day.md"; }`
-  with `post_check() { gh issue view <n> --repo <owner/repo> > /dev/null; }`; on Actions, the
-  template's `publish` job.
+  Comment: `post() { gh issue comment <n> --repo <owner/repo> --body-file "$out/$day.md"; }`
+  with `post_check() { gh issue view <n> --repo <owner/repo> > /dev/null; }`.
 - **Choices**: day and time; where to post at `comment`.
 
 ## Prompt

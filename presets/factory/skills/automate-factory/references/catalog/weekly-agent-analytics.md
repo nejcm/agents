@@ -3,7 +3,7 @@
 - **Trigger**: weekly, Monday 07:00.
 - **Requires**: this repo's transcripts on the runner's machine; `agent-analytics` installed;
   `python3`. `gh` optional (sessions per merged PR).
-- **Runners**: local only. Hosted runners have no transcripts.
+- **Runners**: local.
 - **Input**: counter fields only; no model runs and no text is read.
 - **Writes**: `.factory/reports/<date>-agents.md` only.
 - **Write levels**: report.

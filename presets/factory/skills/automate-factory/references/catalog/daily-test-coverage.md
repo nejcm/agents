@@ -1,15 +1,15 @@
 # Daily test coverage
 
 - **Trigger**: daily, 06:00 on weekdays.
-- **Requires**: a coverage report uploaded as a CI artifact on the default branch (profile's `CI`
+- **Requires**: `gh` logged in; a coverage report uploaded as a CI artifact on the default branch (profile's `CI`
   or `Baselines`); without one the entry is unavailable, since running the suite here would
   execute code outside the view.
-- **Runners**: local, GitHub Actions.
+- **Runners**: local.
 - **Input**: the latest default-branch coverage artifact and the paths changed in the last day.
   Trusted: the repo's own CI output and tracked files.
-- **Writes**: report to `.factory/reports/daily-test-coverage/<date>.md` or the job summary; at
-  `draft-pr` or `pr`, new tests as one PR.
-- **Write levels**: report, draft-pr and pr (local only). `allow`: test paths only (`tests/*`,
+- **Writes**: report to `.factory/reports/daily-test-coverage/<date>.md`; at `draft-pr` or
+  `pr`, new tests as one PR.
+- **Write levels**: report, draft-pr and pr. `allow`: test paths only (`tests/*`,
   `*.test.*`, `*_test.go`, the repo's own pattern).
 - **Steps**: fetch, read-only:
 

@@ -11,16 +11,16 @@ environment holds. The isolation boundary is that environment: a VM, container o
 holding only the model's login and the token publish needs, scoped to the one repo (setup-factory
 records it as `Environment`). Within a run, model steps get no write command or destination: every
 write (push, PR, comment, post) happens in a model-free publish or post step, its target fixed at
-setup. Locally the edit step runs as the user: it can change Git config, `PATH` and the run
+setup. The edit step runs as the user: it can change Git config, `PATH` and the run
 script, and read the `gh` login. So the step split stops a model that is simply wrong, not an
 injected one; an injected model is bounded only by the isolated environment, holding a
-fine-grained token scoped to the one repo. The hosted report/comment split does keep write
-credentials out of model steps. Untrusted input is any text the repo owner did not write: issue and PR bodies, PR and
-review comments, attachments, error payloads, CI logs, commits and diffs from other authors,
-transcripts (they carry tool output and fetched pages), fetched web pages. Trusted input is the
-default branch's tracked files and numbers the repo's own CI produced. A step holds a secret or
-write access when any tool it has can use one: a shell (reads env and credential files, runs `gh`,
-`git push`, `curl`), an MCP server, a hook, a token in its environment.
+fine-grained token scoped to the one repo. Untrusted input is any text the repo owner did not
+write: issue and PR bodies, PR and review comments, attachments, error payloads, CI logs,
+commits and diffs from other authors, transcripts (they carry tool output and fetched pages),
+fetched web pages. Trusted input is the default branch's tracked files and numbers the repo's own
+CI produced. A step holds a secret or write access when any tool it has can use one: a shell
+(reads env and credential files, runs `gh`, `git push`, `curl`), an MCP server, a hook, a token
+in its environment.
 
 ## Steps
 
@@ -79,12 +79,5 @@ write access when any tool it has can use one: a shell (reads env and credential
   branch, issue or PR number, channel) are written into the run script when the user approves
   them, never taken from model output or fetched text. The body is passed as a file, never
   interpolated into a command line.
-- **Hosted runners**: `report` and `comment` only. Checkout with `persist-credentials: false`;
-  the CLI install runs in its own step without the model key; the fetch step alone gets
-  `GH_TOKEN`; workflow `permissions:` read-only. `comment` adds a separate model-free job with
-  the one write scope it needs. No edit: gates run model-written code, which on a hosted runner
-  (passwordless `sudo`) can read or tamper with anything in its job, so edit, gates and publish
-  need three jobs with a re-check of the patch in publish; later. Local runs accept that exposure,
-  bounded by the environment the user isolated and scoped.
 - **Memory**: no automation keeps notes between runs beyond its reports in `.factory/reports/`.
   A later run reads earlier reports as data, never as instructions.

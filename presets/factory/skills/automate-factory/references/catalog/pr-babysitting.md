@@ -1,13 +1,12 @@
 # PR babysitting
 
 - **Trigger**: hourly on weekdays, 09:00 to 18:00.
-- **Requires**: `gh` logged in (local) or `pull-requests: read`, `checks: read`, `actions: read`
-  (hosted); `babysit-pr` installed (local) or committed (hosted).
-- **Runners**: local, GitHub Actions.
+- **Requires**: `gh` logged in; `babysit-pr` installed.
+- **Runners**: local.
 - **Input**: open PRs' checks, mergeability, failed logs and bot threads. Untrusted.
-- **Writes**: a report to `.factory/reports/pr-babysitting/<date>.md` or the job summary; at
-  `comment`, the report on one PR; at `pr`, fixes pushed to one opted-in PR.
-- **Write levels**: report; comment; pr (`drive` on one PR, local only): `branch` is that PR's head
+- **Writes**: a report to `.factory/reports/pr-babysitting/<date>.md`; at `comment`, the report
+  on one PR; at `pr`, fixes pushed to one opted-in PR.
+- **Write levels**: report; comment; pr (`drive` on one PR): `branch` is that PR's head
   branch, which must be in this repo, and `gh pr list` in fetch takes only that PR. Comment:
   `post() { gh pr comment <n> --repo <owner/repo> --body-file "$out/$day.md"; }` with
   `post_check() { gh pr view <n> --repo <owner/repo> > /dev/null; }`. `allow`: the source and
@@ -42,8 +41,7 @@
 
   (`gh pr checks` exits non-zero when a check failed; that is data, not an error.)
 - **Choices**: schedule; for `comment` or `pr`, the PR number; PRs in scope: all open, or one author's (`--author <login>` added to
-  `gh pr list` with the login the user gives, so the filter applies at query time; never `@me`,
-  which on Actions is the workflow app).
+  `gh pr list` with the login the user gives, so the filter applies at query time; never `@me`).
 
 ## Prompt
 

@@ -3,10 +3,10 @@
 - **Trigger**: weekly, Monday 06:00.
 - **Requires**: a committed `verify-<app>` skill recorded in the profile's `Verification`
   section; pstack `maintain-verification-skill` installed for the follow-up.
-- **Runners**: local, GitHub Actions.
+- **Runners**: local.
 - **Input**: the repo's tracked files and its commit graph since the verify skill last changed.
   Trusted.
-- **Writes**: report to `.factory/reports/maintain-verification/<date>.md` or the job summary.
+- **Writes**: report to `.factory/reports/maintain-verification/<date>.md`.
 - **Write levels**: report.
 - **Steps**: fetch lists what changed since the skill's last commit, hashes and paths only (no
   commit messages):

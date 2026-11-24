@@ -1,17 +1,15 @@
 # Failed-CI triage
 
-- **Trigger**: a failed workflow run on the default branch (GitHub Actions `workflow_run`
-  `completed`, job guarded by `conclusion == 'failure'` and `head_branch` the default branch), or
-  daily on a local runner. PR failures are `pr-babysitting`'s job.
-- **Requires**: `gh` logged in (local) or `actions: read` (hosted).
-- **Runners**: GitHub Actions, local.
+- **Trigger**: daily, covering failed CI runs on the default branch. PR failures are
+  `pr-babysitting`'s job.
+- **Requires**: `gh` logged in.
+- **Runners**: local.
 - **Input**: failed jobs' logs and each run's metadata (head SHA, jobs). Untrusted.
-- **Writes**: report to `.factory/reports/failed-ci-triage/<date>.md` or the job summary; at
-  `draft-pr`, a fix for one regression as a draft PR.
-- **Write levels**: report, draft-pr (local only). `allow`: the source and test dirs the user
+- **Writes**: report to `.factory/reports/failed-ci-triage/<date>.md`; at `draft-pr`, a fix for
+  one regression as a draft PR.
+- **Write levels**: report, draft-pr. `allow`: the source and test dirs the user
   picks, never CI config or manifests.
-- **Steps**: fetch, with `RUN_ID` from `TARGET` or `github.event.workflow_run.id` through `env:`
-  on Actions, or each failed default-branch run of the last day locally
+- **Steps**: fetch, for each failed default-branch run `RUN_ID` of the last day
   (`gh run list --branch <base> --status failure --created ">=<date>" --json databaseId`):
 
   ```bash
@@ -20,8 +18,7 @@
   ```
 
   Analyze matches the logs against `repo/`, the default branch now, which may be newer than the
-  failed SHA. No last-green range is fetched, so no commit is blamed. Smoke with
-  `-f target=<a recent failed run ID>`.
+  failed SHA. No last-green range is fetched, so no commit is blamed.
 - **Choices**: workflows in scope.
 
 ## Prompt

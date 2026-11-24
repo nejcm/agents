@@ -5,7 +5,7 @@ Inward-facing: how agents worked this week and which skills or prompts to fix.
 - **Trigger**: weekly, Monday 07:00.
 - **Requires**: this repo's Claude Code or Codex transcripts on the runner's machine; `retro`
   installed.
-- **Runners**: local only. Hosted runners have no transcripts.
+- **Runners**: local.
 - **Input**: this repo's sessions modified in the last 7 days. Untrusted.
 - **Writes**: report to `.factory/reports/weekly-retro/<date>.md`; at `draft-pr`, the report's
   skill and prompt fixes as one draft PR.

@@ -17,14 +17,14 @@ export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFI
 trap 'rm -rf "$view"; git worktree prune' EXIT
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
-auth="<auth>" max_turns="<turns>" minutes="<minutes>" max_usd="<usd>"
+max_turns="<turns>" minutes="<minutes>"
 level="<level>"
-# Higher-precedence credentials would bill the run instead of the chosen auth.
-unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_PROFILE \
-  CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
-[ "$auth" = api-key ] || unset ANTHROPIC_API_KEY
+# Credentials, providers and endpoints that would override the subscription login.
+unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
+  ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
+  CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
+  CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
 caps=(--max-turns "$max_turns")
-[ "$auth" != api-key ] || caps+=(--max-budget-usd "$max_usd")
 git archive "$ref" | tar -x -C "$view/repo"
 
 # Project skills are repo-relative, read from the tracked snapshot and must resolve inside it;
