@@ -11,8 +11,8 @@ environment holds. The isolation boundary is that environment: a VM, container o
 holding only the model's login and the token publish needs, scoped to the one repo (setup-factory
 records it as `Environment`). Within a run, model steps get no write command or destination: every
 write (push, PR, comment, post) happens in a model-free publish or post step, its target fixed at
-setup. The edit step runs as the user: it can change Git config, `PATH` and the run
-script, and read the `gh` login. So the step split stops a model that is simply wrong, not an
+setup, except an agent write, which holds one MCP write tool and is checked afterwards. The edit
+step runs as the user: it can change Git config, `PATH` and the run script, and read the `gh` login. So the step split stops a model that is simply wrong, not an
 injected one; an injected model is bounded only by the isolated environment, holding a
 fine-grained token scoped to the one repo. Untrusted input is any text the repo owner did not
 write: issue and PR bodies, PR and review comments, attachments, error payloads, CI logs,
@@ -33,6 +33,7 @@ in its environment.
 | gates | none | the edit's diff | runs the fixed test command in the checkout |
 | publish | none | the commit and the captured summary | pushes to one fixed branch and opens or comments on its PR |
 | post | none | the report file | sends it unchanged to one fixed destination |
+| agent write | yes | the report file on stdin | one recorded MCP write tool; the call is checked against the fixed arguments |
 
 - **Analyze isolation**: Claude Code with `--restricted --safe-mode --tools "Read,Grep,Glob"
   --strict-mcp-config --no-session-persistence`, run with the view as its working directory.
@@ -49,6 +50,12 @@ in its environment.
   source offers one, and allowlist no tool that takes a URL or reaches another host. CLI and API
   sources never give the agent a shell: the command runs model-free and the agent only reshapes
   its output.
+- **Agent write**: a post to a tracker reached only through MCP, per `fix-issues`
+  [write back](../../fix-issues/references/triage.md#write-back). `--allowedTools` cannot pin
+  arguments, so injected report text can redirect the one call to another destination on the
+  same server; `check_items.py --write` fails the run afterwards on any call other than the fixed
+  one. Prefer the tracker's CLI or API, which posts model-free. On any post failure the post may
+  already be live, so a rerun posts again: check the destination before rerunning.
 - **Write levels**: each automation has one, chosen at setup and written into its run script:
   `report` (default, no writes), `comment` (post), `draft-pr` or `pr` (edit, gates, publish).
   An entry offers only the levels in its `Write levels`.
@@ -76,8 +83,10 @@ in its environment.
 - **Dry run**: no post or publish. Writes go to `.factory/reports/`, the run's temp view under
   `.factory/tmp/` and its worktree, nothing else.
 - **Fixed destination**: the post and publish steps' targets (`--repo <owner/repo>`, remote URL,
-  branch, issue or PR number, channel) are written into the run script when the user approves
-  them, never taken from model output or fetched text. The body is passed as a file, never
-  interpolated into a command line.
+  branch, issue or PR number, channel, team) are written into the run script, or the
+  `<prefix>.<op>.sh` it calls, when the user approves them, never taken from model output or
+  fetched text. The body is passed as a file or on stdin, never interpolated into a command line.
+  Tracker tokens a write needs sit in the isolated environment too, scoped to the destination
+  where the tracker allows it (a Slack bot in one channel).
 - **Memory**: no automation keeps notes between runs beyond its reports in `.factory/reports/`.
   A later run reads earlier reports as data, never as instructions.

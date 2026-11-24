@@ -28,7 +28,8 @@ this skill is their attended follow-up.
 Any issue or error source with a `Fetch` line in the profile's `Integrations`: GitHub Issues
 through `gh`, the rest through [agent fetch](references/triage.md#agent-fetch), as
 `<prefix>-<id>` items keyed by the source's own ID. A source without a `Fetch` line: say so and
-stop. Writes go to GitHub only; tickets and comments back to other sources are later.
+stop. Writes go to GitHub through `gh`, and to a source with `Write` lines through its
+[write back](references/triage.md#write-back); a write the profile does not record is skipped.
 
 ## Stages
 
@@ -39,7 +40,7 @@ stop. Writes go to GitHub only; tickets and comments back to other sources are l
 | reproduce | Verifier | user's spec, base export | shell; its directory is discarded |
 | fix | Builder | user's spec, repro record, patch checkout | shell and edits; the coordinator commits them |
 | verify | Verifier, fresh session | user's spec, repro record, base and commit exports | as reproduce |
-| post | none (coordinator) | stage files, sent unchanged | one fixed destination per write |
+| post | none (coordinator), or an [agent write](references/triage.md#write-back) | stage files, sent unchanged | one fixed destination per write |
 
 Untrusted text (issue and comment bodies, error payloads, PR text from other authors) reaches the
 triage stage only, which runs the isolated analyze command from automate-factory
@@ -60,9 +61,11 @@ results reach it only as projected enum lines, and the user reads the reports an
    - the item IDs the user names: issue numbers, or `<prefix>-<id>` (`err-<source>-<id>` for
      error groups) as `check_items.py` named their files.
 2. **Triage**: per [`references/triage.md`](references/triage.md), or start from a scheduled
-   report's verdict lines. Show the user the projected verdict table and the report path.
+   report's verdict lines, still building the view before any agent fetch or write back. Show the
+   user the projected verdict table and the report path.
 3. **Ticket**, for an `err-` item with verdict `new-bug` the user approves: per
-   [Writes](#writes), then continue under the new issue number. No other verdict files a ticket.
+   [Writes](#writes), then continue under the new issue number, or `<prefix>-<id>` of a ticket
+   in another tracker. No other verdict files a ticket.
 4. **Claim** each item the user continues with, per [Claims](#claims).
 5. **Spec**: the user writes the repro spec in their own words: feature (a file in the verify
    skill's feature map), preconditions and data, steps, expected final state, broken final state.
@@ -158,10 +161,13 @@ Work is keyed by the item ID, so a retry finds the same work:
 ## Writes
 
 Only the coordinator writes, after showing the command and the file it sends and getting a yes.
-Destinations come from step 1; bodies are files sent unchanged with `--body-file`; titles are
-built from projected fields only.
+Destinations come from step 1 or the profile; bodies are files sent unchanged with `--body-file` or
+on stdin; titles are built from projected fields only.
 
-- **Ticket**: `<group id>` is the item ID without `err-`, so `<source>-<id>`. First look for one
+- **Ticket**, into the tracker with a `ticket` `Write` line per
+  [write back](references/triage.md#write-back), whose ticket dedupe replaces the marker search
+  and gives the new `<prefix>-<id>` for `tickets.tsv`; without one, GitHub as below.
+  `<group id>` is the item ID without `err-`, so `<source>-<id>`. First look for one
   already filed for the group, by the local map and by marker:
   `awk -v id="<group id>" '$1 == id' .factory/reports/fix-issues/tickets.tsv` and
   `gh issue list --repo "$repo" --state all --search "\"fix-issues-error: <group id>\" in:body" --json number --jq '.[].number'`.
@@ -181,11 +187,14 @@ built from projected fields only.
   `spec.md` and the stages' `repro.md`, `fix.md` and `verify.md` concatenated. Update the
   claimed PR with `gh pr edit <n> --repo "$repo" --body-file <file>`, else
   `gh pr create --repo "$repo" --draft --base "$base" --head factory/fix-<id> --title "fix: <#id or prefix-id> <feature>" --body-file <file>`.
-- **Comment**: GitHub issues only, at most one per issue per run, after
+- **Comment**: at most one per item per run, the file built from the projected outcome, the
+  tested SHAs and the PR or artifact URL only. A GitHub issue, after
   `gh issue view <id> --repo "$repo" --json state` shows it open:
-  `gh issue comment <id> --repo "$repo" --body-file <file>`, the file built from the projected
-  outcome, the tested SHAs and the PR or artifact URL only. Triage-only outcomes (duplicate, not
-  a bug, needs info) are posted only when the user picks them.
+  `gh issue comment <id> --repo "$repo" --body-file <file>`. A `<prefix>-<id>` item, through its
+  source's `comment` write with the native ID. Triage-only outcomes (duplicate, not a bug, needs
+  info) are posted only when the user picks them.
+- **Status**: `<prefix>-<id>` items only, after the draft PR is opened, through the source's
+  `status` write: the one state recorded at setup, never a closing one.
 
 ## Rules
 

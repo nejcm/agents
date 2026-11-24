@@ -7,8 +7,8 @@
 - **Runners**: local. The follow-up reads the report from this checkout.
 - **Input**: open issues created since the newest earlier report, less a day of overlap, that no
   earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted.
-- **Writes**: report to `.factory/reports/issue-pipeline/<date>.md`; at `comment`, the report on
-  one fixed GitHub issue, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). No
+- **Writes**: report to `.factory/reports/issue-pipeline/<date>.md`; at `comment`, the report to
+  one fixed destination, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). No
   branches or PRs: a fix needs the user's repro spec and a separate verify stage (`fix-issues`).
 - **Write levels**: report, comment.
 - **Steps**: `skills=("<skill-path:fix-issues>")`; fill `repo`. Fetch is
@@ -19,7 +19,7 @@
   [agent fetch](../../../fix-issues/references/triage.md#agent-fetch) replace `fetch_new`, with
   the tracker's `<prefix>.fetch.md` and `<prefix>.mcp.json` written beside the script. Analyze is
   triage's [Analyze](../../../fix-issues/references/triage.md#analyze) prompt below.
-- **Choices**: day and time.
+- **Choices**: day and time; where to post at `comment`.
 
 ## Prompt
 

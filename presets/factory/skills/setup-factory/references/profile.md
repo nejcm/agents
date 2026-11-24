@@ -31,6 +31,9 @@ Updated: <YYYY-MM-DD> (interview)
 
 - Fetch <tool>: prefix `<prefix>`; <`gh` | mcp `<server>` tools `<tool>`, ... | cli `<command>`>;
   query <project, labels, states, lookback>; id `<field>`; extras <fields>; confirmed <date>
+- Write <tool>: prefix `<prefix>`; <ticket | comment | status | post>: <cli `<command>` | mcp
+  `<server>` tool `<tool>` body `<argument / none>` item `<argument / none>` args `<fixed JSON>`>;
+  destination <team, channel, state, or the item>; confirmed <date>
 
 ## Interview
 Updated: <YYYY-MM-DD> (interview)

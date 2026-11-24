@@ -42,6 +42,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    choices. For an agent-fetched source, write `<prefix>.fetch.md` and, for MCP,
    `<prefix>.mcp.json` per `fix-issues`
    [agent fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for confirmation, since it names the commands the server runs.
+   For a `comment` post to a destination other than GitHub, the source's `Write` line's
+   `<prefix>.post.sh`, or its MCP write tool, per
+   [write back](../fix-issues/references/triage.md#write-back).
 6. **Smoke run as the runner** (activation gate): its checkout, identity and tools, in dry-run
    mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
    exact error, leave the entry `proposed`, and fix nothing silently.
@@ -58,8 +61,7 @@ only to entries the user names or whose smoke run failed.
 - Write levels: `report`, the default; `comment`; `draft-pr` and `pr`, per
   [`references/safety.md`](references/safety.md#steps).
 - Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external
-  services, which do not run the fetch and view steps these prompts depend on; writes to
-  trackers other than GitHub.
+  services, which do not run the fetch and view steps these prompts depend on.
 - Not offered: GitHub-hosted runners, which need a Claude token as a repo secret.
 
 ## Rules

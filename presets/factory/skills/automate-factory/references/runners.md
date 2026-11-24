@@ -16,8 +16,9 @@ runner, check its Claude Code has the flags (`claude --help` lists `--restricted
 `--no-session-persistence`). Managed policy (settings files and drop-ins, OS or server policy,
 managed plugins) survives `--safe-mode` and has several sources, so it is a precondition the
 user confirms: no managed hooks or managed plugins apply to the runner's identity, and, for
-agent fetch, no managed permission allow rules for MCP tools and no managed auth setting
-(`apiKeyHelper`, provider or token env). Unconfirmed means analyze, or agent fetch, is
+agent fetch and agent write, no managed permission allow rules for MCP tools and no managed auth
+setting (`apiKeyHelper`, provider or token env). Unconfirmed means analyze, or agent fetch and
+write, is
 unavailable there. Record both in the profile's runner line.
 
 ## Local: systemd user timer or cron
@@ -77,7 +78,9 @@ confirms, with `crontab -e` or by editing the output of `crontab -l` and piping 
 ## Write levels
 
 `report` needs nothing more. `comment` fills `post` and `post_check` from the entry, with the
-destination approved by the user. `draft-pr` and `pr` need the profile's
+destination approved by the user: GitHub through `gh`, or a source's `Write` line per `fix-issues`
+[write back](../../fix-issues/references/triage.md#write-back) (an MCP write needs
+`skills=("<skill-path:fix-issues>")`). `draft-pr` and `pr` need the profile's
 `Agent PR review` allowing agent PRs (`pr` also allowing non-draft ones) and a test script in the
 profile, and Git 2.31 or later (the run script sets config through `GIT_CONFIG_COUNT`). Fill in
 the run script:
@@ -110,6 +113,7 @@ Run the entry once as the runner, in dry-run mode, before its automatic trigger 
   replace it with the real line.
 
 Pass means: the run exited 0, a report from this run landed where the entry says, for entries
-with a post step, `post_check` read the fixed destination with the runner's identity, and for
-`draft-pr` and `pr`, the edit and gates ran (the log shows `edit: no change` or no `gate:` line)
+with a post step, `post_check` read the fixed destination with the runner's identity (or, for a
+post-only destination with no `Fetch` line, the log shows `post_check: destination unchecked`),
+and for `draft-pr` and `pr`, the edit and gates ran (the log shows `edit: no change` or no `gate:` line)
 and the PR lookup read the destination. A gate failure exits 1 and publishes nothing.

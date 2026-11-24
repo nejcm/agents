@@ -21,6 +21,10 @@ the items the user selected. Skip the phase when there are no gaps.
    query and filters (project, labels, states, lookback), the field holding the item's immutable
    ID, and a short prefix (`err-<source>` for an error tracker). Pre-fill from the server's tool list or
    the CLI's help; the user confirms.
+   For each one runs should write back to (other than GitHub), its writes: which of `ticket`,
+   `comment`, `status`, `post`; for each, a CLI or API command (preferred) or one MCP write tool
+   with its body and item (or title) arguments; the fixed destination (team, channel, status
+   state); never a closing status.
 2. **Error and analytics tools**: for each detected or named tool, how an agent reaches it
    (MCP server, logged-in CLI, API env var, none).
 3. **Results and escalations**: where reports, questions and failures go (PR comment, issue,
@@ -33,7 +37,8 @@ the items the user selected. Skip the phase when there are no gaps.
    ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.
 7. **Environment**: recommend running unattended and issue-driven work in an isolated VM,
    container or devcontainer, set up as the user likes, holding only the credentials runs need:
-   the model's login and a fine-grained `gh` token scoped to this one repo; no SSH keys or other
+   the model's login, a fine-grained `gh` token scoped to this one repo, and tracker tokens the
+   recorded writes need, each scoped as narrowly as the tracker allows; no SSH keys or other
    personal logins. Model steps run as the user, so this is what bounds injected issue text. Ask
    whether this environment is isolated. If not, warn once that injected issue text can reach
    whatever this machine can, including every repo its `gh` login reaches, and that a
@@ -42,8 +47,8 @@ the items the user selected. Skip the phase when there are no gaps.
 
 ## Output
 
-Fill the profile's `Integrations` (reach method per tool, `Fetch` lines) and `Interview` sections
-with the answers, each marked "user, interview, <date>". Record each resolved gap under `Resolved
+Fill the profile's `Integrations` (reach method per tool, `Fetch` and `Write` lines) and
+`Interview` sections with the answers, each marked "user, interview, <date>". Record each resolved gap under `Resolved
 gaps and contradictions` and leave the `Repo` section untouched; on later runs, skip gaps already
 resolved there. For an integration that is not reachable yet, print the setup steps (install the
 MCP server, `<cli> login`, export the env var) and record it as unavailable.

@@ -107,7 +107,9 @@ ulis install --global --source . --preset react-web --yes
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
   catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
   you, so run them in an isolated VM or container holding only a repo-scoped token
-- `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a staged pipeline
+- `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a staged pipeline;
+  writes tickets, comments and status back to GitHub, or to any tracker through a CLI or MCP tool
+  recorded at setup
 
 Its skills only run when invoked explicitly.
 

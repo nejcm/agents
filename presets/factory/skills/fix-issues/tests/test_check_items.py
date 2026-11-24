@@ -34,8 +34,8 @@ def tool_result(is_error, use_id="t"):
     return {"type": "user", "message": {"role": "user", "content": content}}
 
 
-def tool_use(name, use_id="t"):
-    content = [{"type": "tool_use", "id": use_id, "name": name, "input": {}}]
+def tool_use(name, use_id="t", args=None):
+    content = [{"type": "tool_use", "id": use_id, "name": name, "input": args or {}}]
     return {"type": "assistant", "message": {"role": "assistant", "content": content}}
 
 
@@ -170,6 +170,52 @@ class CheckItems(unittest.TestCase):
         with self.assertRaises(SystemExit) as e:
             ci.main(["lin", tempfile.mkdtemp()], stream("x" * (ci.MAX_TOTAL + 1)))
         self.assertIn("bytes", str(e.exception.code))
+
+    def test_write_needs_exactly_the_fixed_call(self):
+        tool, fixed = "mcp__trk__save_comment", '{"issueId": "ENG-12"}'
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write("Fixed in #4.\n")
+
+        def write(*uses):
+            events = [e for i, u in enumerate(uses) for e in (tool_use(u[0], str(i), u[1]), tool_result(False, str(i)))]
+            ci.main(["--write", tool, "body", f.name, fixed], stream("", events, servers=[("trk", "connected")]))
+
+        write((tool, {"issueId": "ENG-12", "body": "Fixed in #4."}))
+        bad = [
+            [(tool, {"issueId": "ENG-13", "body": "Fixed in #4."})],
+            [(tool, {"issueId": "ENG-12", "body": "Fixed."})],
+            [(tool, {"issueId": "ENG-12", "body": "Fixed in #4.", "parentId": "x"})],
+            [(tool, {"issueId": "ENG-12", "body": "Fixed in #4."})] * 2,
+            [],
+            [("mcp__trk__other", {"issueId": "ENG-12", "body": "Fixed in #4."})],
+            [(tool, {"issueId": "ENG-12", "body": 4})],
+            [(tool, [["issueId", "ENG-12"], ["body", "Fixed in #4."]])],
+        ]
+        for uses in bad:
+            with self.subTest(uses=uses), self.assertRaises(SystemExit):
+                write(*uses)
+        call = [tool_use(tool, "1", {"issueId": "ENG-12", "body": "Fixed in #4."})]
+        for kw in ({"events": call + [tool_result(True, "1")], "servers": [("trk", "connected")]},
+                   {"events": call + [tool_result(False, "1")], "servers": [("trk", "failed")]}):
+            with self.subTest(kw=kw), self.assertRaises(SystemExit) as e:
+                ci.main(["--write", tool, "body", f.name, fixed], stream("", **kw))
+            self.assertIn("by hand", str(e.exception.code))
+        with self.assertRaises(SystemExit) as e:
+            ci.main(["--write", tool, "body", f.name, "{"], stream(""))
+        self.assertIn("not JSON", str(e.exception.code))
+
+    def test_write_without_body_checks_fixed_args_only(self):
+        tool, fixed = "mcp__trk__update_issue", '{"id": "ENG-12", "state": "In Review", "notify": false}'
+
+        def write(args):
+            events = [tool_use(tool, "1", args), tool_result(False, "1")]
+            ci.main(["--write", tool, "", "/dev/null", fixed], stream("", events, servers=[("trk", "connected")]))
+
+        write({"id": "ENG-12", "state": "In Review", "notify": False})
+        for args in ({"id": "ENG-12", "state": "Done", "notify": False},
+                     {"id": "ENG-12", "state": "In Review", "notify": 0}):
+            with self.subTest(args=args), self.assertRaises(SystemExit):
+                write(args)
 
 
 if __name__ == "__main__":

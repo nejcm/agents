@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check a fetch agent's stream-json run and write one <prefix>-<id>.json per item; or project a report."""
+"""Check a fetch agent's stream-json run and write one <prefix>-<id>.json per item; check a write agent's
+run; or project a report."""
 import argparse
 import datetime
 import json
@@ -69,7 +70,7 @@ def reject_constant(name):
 
 def final_text(stream, tools):
     servers = {t.split("__")[1] for t in tools}
-    result, calls, ok = None, set(), 0
+    result, calls, ok, uses, up = None, set(), 0, [], set()
     for n, line in enumerate(stream.splitlines(), 1):
         try:
             ev = json.loads(line)
@@ -77,12 +78,12 @@ def final_text(stream, tools):
             sys.exit(f"stream line {n}: not JSON")
         if ev.get("type") == "system" and ev.get("subtype") == "init":
             up = {m.get("name") for m in ev.get("mcp_servers") or () if m.get("status") == "connected"}
-            if servers - up:
-                sys.exit(f"MCP server not connected: {', '.join(sorted(servers - up))}")
         content = ev.get("message", {}).get("content") if ev.get("type") in ("user", "assistant") else None
         for c in content if isinstance(content, list) else ():
             if not isinstance(c, dict):
                 continue
+            if c.get("type") == "tool_use":
+                uses.append(c)
             if c.get("type") == "tool_use" and c.get("name") in tools:
                 calls.add(c.get("id"))
             if c.get("type") == "tool_result" and c.get("is_error"):
@@ -91,11 +92,13 @@ def final_text(stream, tools):
                 ok += 1
         if ev.get("type") == "result":
             result = ev
+    if servers - up:
+        sys.exit(f"MCP server not connected: {', '.join(sorted(servers - up))}")
     if not result or result.get("subtype") != "success" or result.get("is_error"):
         sys.exit("run did not succeed")
     if tools and not ok:
         sys.exit("no successful call to an allowlisted tool")
-    return result.get("result") or ""
+    return result.get("result") or "", uses
 
 
 def judged(reports, today):
@@ -114,11 +117,42 @@ def project(report):
                 print(line, end="")
 
 
+def check_write(tool, body_key, body_file, fixed, stream):
+    try:
+        want = json.loads(fixed, object_pairs_hook=strict_object, parse_constant=reject_constant)
+    except ValueError:
+        sys.exit("fixed arguments not JSON")
+    if not re.fullmatch(r"mcp__[^_]\w*?__\w+", tool) or not isinstance(want, dict) or body_key in want:
+        sys.exit("bad tool name, or fixed arguments not an object without the body key")
+    data = stream.read(MAX_STREAM + 1)
+    if len(data) > MAX_STREAM:
+        sys.exit(f"stream over {MAX_STREAM} bytes")
+    try:
+        _, uses = final_text(data.decode("utf-8", "replace"), {tool})
+    except SystemExit as e:
+        sys.exit(f"{e.code}: check the destination by hand")
+    if len(uses) != 1 or uses[0].get("name") != tool:
+        sys.exit(f"expected one call to {tool}, got {len(uses)}: check the destination by hand")
+    got = uses[0].get("input")
+    got = dict(got) if isinstance(got, dict) else None
+    if body_key and got is not None:
+        with open(body_file, errors="replace") as f:
+            body = f.read().strip()
+        sent = got.pop(body_key, None)
+        got = got if isinstance(sent, str) and sent.strip() == body else None
+    # Canonical JSON, so 1, 1.0 and True differ.
+    if got is None or json.dumps(got, sort_keys=True) != json.dumps(want, sort_keys=True):
+        sys.exit(f"{tool} called with other arguments or body: check the destination by hand")
+
+
 def main(argv, stdin=sys.stdin.buffer):
     if len(argv) == 2 and argv[0] == "--project":
         return project(argv[1])
+    if len(argv) == 5 and argv[0] == "--write":
+        return check_write(*argv[1:], stdin)
     ap = argparse.ArgumentParser(usage="check_items.py <prefix> <dir> [--mcp <tools>] "
-                                 "[--skip-judged <reports dir> <today>.md] < stream.jsonl | --project <report>")
+                                 "[--skip-judged <reports dir> <today>.md] < stream.jsonl | --project <report> | "
+                                 "--write <tool> <body key or ''> <body file> <fixed args JSON> < stream.jsonl")
     ap.add_argument("prefix")
     ap.add_argument("out")
     ap.add_argument("--mcp", default="")
@@ -131,7 +165,7 @@ def main(argv, stdin=sys.stdin.buffer):
     data = stdin.read(MAX_STREAM + 1)
     if len(data) > MAX_STREAM:
         sys.exit(f"stream over {MAX_STREAM} bytes")
-    text = final_text(data.decode("utf-8", "replace"), tools)
+    text, _ = final_text(data.decode("utf-8", "replace"), tools)
     if len(text.encode()) > MAX_TOTAL:
         sys.exit(f"output over {MAX_TOTAL} bytes")
     lines = text.split("\n") if text.strip() else []
