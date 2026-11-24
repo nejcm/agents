@@ -36,7 +36,8 @@ run writes nothing external; item text reaches stages only through the checked s
 exact pushed commit; credential check and size cap on every final body (`sendable`); the consumed
 in-repo skills in `deny`; pause, claims; a merge only at `issue-pipeline` `merge_level` `merge`,
 by the model-free rule under Merge levels, never of a revert; every other PR stays unmerged, and
-`issue-pipeline` PRs open as drafts. A
+`issue-pipeline` PRs open as drafts; a PR that changes [agent instructions](#steps) stays a draft
+and is never marked ready or merged, whatever `needs_human` says. A
 user-owned executable flow is not offered: sourced Bash can redefine `gates` or `publish`, or call
 `gh` directly, so no lock would hold.
 
@@ -138,6 +139,12 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   reviewers; else the item is `deferred` `run-time`. A refactor PR is
   a draft as for changed tests, gets the `factory:refactor` label, and its reason tops the body;
   the run record keeps `scope` and `weighted_lines`.
+- **Agent instructions**: a path any pushed commit changes is one when it matches `instructions`
+  in the run script (`AGENTS.md`, `CLAUDE.md` and `SKILL.md` at any depth, `.claude/`, `.agents/`,
+  `.cursor/rules/`, `.cursor/skills/`, `.factory/`) or sits under a directory holding a `SKILL.md`
+  at the start. Such a PR is a draft at any write level and `merge_level`, as for changed tests,
+  gets the `factory:instructions` label, the paths top the body, and the run record sets
+  `instruction_change`. This is not a `needs_human` disclosure: no setting lifts it.
 - **Shadow review**: `issue-pipeline` only, after verify: each model in the entry's `reviewers`
   runs as analyze does (`--restricted`, read-only tools, `--model <name>`) on an export of the
   gated commit with the checked spec, the diff and the gate and verify records, never item text.
@@ -146,14 +153,14 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   they decide nothing at the default `merge_level` `draft`.
 - **Merge levels**: `issue-pipeline` only, the one entry with reviewer verdicts; other entries
   never merge, and `pr` opens ready-for-review PRs as before. `merge_level` `ready`: after the
-  push, a PR whose every reviewer approved and that has no disclosure in `needs_human` is marked
-  ready for review. `merge` (at least two reviewers): such a PR is also recorded in
+  push, a PR whose every reviewer approved, that has no disclosure in `needs_human` and changes no
+  agent instructions is marked ready for review. `merge` (at least two reviewers): such a PR is also recorded in
   `fix-issues/merges.tsv` with its entry, verdicts and disclosures, and a later run of that entry
   squash-merges it with `gh pr merge --squash
   --match-head-commit <gated commit>` only when, checked model-free in that run, the PR is open,
   not draft, on `factory/fix-<id>` into `<base>` from this repo, its head is still the gated
   commit, the recorded verdicts and disclosures still pass the current `reviewers` and
-  `needs_human`, `mergeable` is `MERGEABLE`, the commit's CI rollup is `SUCCESS` (a commit with no CI
+  `needs_human`, the PR's files (`gh pr diff --name-only`) hold no agent instructions at `<base>`, `mergeable` is `MERGEABLE`, the commit's CI rollup is `SUCCESS` (a commit with no CI
   never merges), `merge_level` is still `merge`, and `.factory/pause` is absent. Pending CI or
   mergeability waits for the next run; any other failure drops the PR from factory merging with a
   "needs a human" line in the report.

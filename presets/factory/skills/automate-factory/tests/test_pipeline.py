@@ -64,6 +64,8 @@ else:
         put(ev + "/repro.md", "steps\nrepro: outcome=" + s.get("repro", "reproduced") + "\n")
     elif stage == "fix":
         put(".github/ci.yml" if s.get("deny") else "src/" + i, "fixed\n")
+        if s.get("instructions"):
+            put(s["instructions"], "always\n")
         if s.get("test") == "red":
             put(f"tests/{i}_test.sh", f"test -f src/{i}\n")
         elif s.get("test") == "green":
@@ -87,8 +89,8 @@ path = os.environ["GHSTATE"]
 st = json.load(open(path))
 cmd, opt, pos, i = " ".join(args[:2]), {}, [], 2
 while i < len(args):
-    if args[i] == "--draft":
-        opt["draft"], i = True, i + 1
+    if args[i] in ("--draft", "--name-only"):
+        opt[args[i][2:]], i = True, i + 1
     elif args[i].startswith("--"):
         opt[args[i][2:]], i = args[i + 1], i + 2
     else:
@@ -155,6 +157,8 @@ elif cmd == "pr view":
     else:
         print(p["state"], str(p.get("cross", False)).lower(), p.get("base", "main"), p.get("merge", "null"),
               p.get("commits", 1))
+elif cmd == "pr diff":
+    print("\n".join(st["pulls"][pos[0]].get("files", [])))
 elif cmd == "pr ready":
     st["ready"] = st.get("ready", []) + [pos[0]]
     save()
@@ -827,6 +831,40 @@ sys.exit(1 if spec else p.returncode)
                 self.assertIn("then squash-merged by a later run once CI is green on", prs["factory/fix-1"]["body"])
                 self.assertEqual(self.merge_calls(), [])
                 self.tearDown()
+
+    def test_agent_instruction_change_is_never_marked_ready_or_approved_for_merge(self):
+        self.gh_state({1: {}, 2: {}, 3: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a", "instructions": "AGENTS.md"},
+                               "2": {"feature": "b", "instructions": ".claude/skills/s/SKILL.md"}, "3": {"feature": "c"}},
+                              merge_level="merge", reviewers="sonnet opus", needs_human="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        prs = {p["head"]: p for p in self.gh()["prs"]}
+        self.assertEqual(self.gh()["ready"], [prs["factory/fix-3"]["url"]])
+        self.assertEqual([x.split()[0] for x in self.rows("merges.tsv")], ["3"])
+        for i, path in (("1", "AGENTS.md"), ("2", ".claude/skills/s/SKILL.md")):
+            pr = prs[f"factory/fix-{i}"]
+            self.assertTrue(pr["draft"])
+            self.assertTrue(pr["body"].startswith("## Changes agent instructions\n\nNeeds human review"))
+            self.assertIn(f"- {path}\n", pr["body"])
+            self.assertIn(f"gh pr edit {pr['url']} --repo o/r --add-label factory:instructions", self.calls())
+        self.assertNotIn(f"gh pr edit {prs['factory/fix-3']['url']} --repo o/r --add-label factory:instructions", self.calls())
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            rec = json.loads(f.read().splitlines()[-1])
+        self.assertEqual([(i["id"], i["instruction_change"]) for i in rec["items"]], [("1", True), ("2", True), ("3", False)])
+        self.assertEqual(self.merge_calls(), [])
+
+    def test_pending_merge_that_changes_agent_instructions_is_left(self):
+        url, sha = "https://github.com/o/r/pull/1", "a" * 40
+        self.main_commit("skills/own/SKILL.md", "skill")
+        for files, after in ((["src/1", "AGENTS.md"], "left"), ([".claude/skills/s/x.md"], "left"),
+                             (["skills/own/ref.md"], "left"), (["src/1"], "merged")):
+            with self.subTest(files):
+                self.land([f"1 approved {url} {sha}{OK}"], {url: {"state": "OPEN", "head": sha, "files": files}},
+                          {sha: "SUCCESS"}, merge_level="merge", reviewers="sonnet opus", needs_human="")
+                self.assertEqual(self.rows("merges.tsv")[-1].split()[1], after)
+                self.assertEqual(len(self.merge_calls()), int(after == "merged"))
+                if after == "left":
+                    self.assertIn(f"land: 1 {url} not merged: changes agent instructions; needs a human.", self.report())
 
     def test_merge_level_needs_two_reviewers_and_known_settings_before_any_write(self):
         for kw, msg in (({"merge_level": "merge"}, "merge_level merge needs at least 2 reviewers"),

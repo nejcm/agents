@@ -47,7 +47,7 @@ the items the user selected. Skip the phase when there are no gaps.
    `merge` only together with that entry's `Review:` line from the latest `agent-analytics`
    report (approve rate, agreement with human outcomes, misses, merge rates by scope); with no
    line or no resolved PR, say there is no evidence yet and recommend `draft`. `merge` needs two
-   reviewers.
+   reviewers. A PR that changes agent instructions always stays a draft, at any setting.
 7. **Environment**: recommend running unattended and issue-driven work in an isolated VM,
    container or devcontainer, set up as the user likes, holding only the credentials runs need:
    the model's login, a fine-grained `gh` token scoped to this one repo, and tracker tokens the

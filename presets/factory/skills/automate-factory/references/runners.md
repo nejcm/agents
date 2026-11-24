@@ -134,13 +134,13 @@ Every run past the pause and Git config checks appends one line to
 (`sk-ant-`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
-`escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, or
-`weekly-budget` for a run `skipped` at its weekly budget; else `null`),
+`escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget,
+`usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
-disclosed), `scope` and `weighted_lines`, all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
+disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
-commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`, `scope`, `weighted_lines`, `reviews`
+commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`, `scope`, `weighted_lines`, `instruction_change`, `reviews`
 (`model`, `family`, `verdict`, `valid`: false when the output had no verdict line)); a revert
 opened after a red factory merge adds item `revert-<id>`, outcome `escalated`, reason `main-red`. Usage comes from `claude -p --output-format json`
 (`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers; a total is

@@ -69,7 +69,8 @@
   for `merge` and each in `models` when that is set; `merge_level`, `draft` (default), `ready` or `merge`, offered per
   [interview](../../../setup-factory/references/interview.md) only with the entry's agreement
   numbers shown; `needs_human`, the disclosures that keep a PR draft and unmerged, any of
-  `test-change`, `dependency`, `refactor` (default all three). Any other value fails the run
+  `test-change`, `dependency`, `refactor` (default all three); a change to agent instructions keeps a PR
+  draft and unmerged regardless ([safety](../safety.md#steps)). Any other value fails the run
   before any write.
 
 ## Prompt

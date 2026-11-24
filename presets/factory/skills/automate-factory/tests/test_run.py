@@ -290,6 +290,23 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
                          ("failed", 1, 5, 0.1, None))
         self.assertEqual(rec["max_turns_hit"], 1)
 
+    def test_usage_limit_stop_is_recorded_as_a_reason_with_unknown_cost(self):
+        with open(f"{self.tmp.name}/bin/claude", "w") as f:
+            f.write('#!/bin/sh\necho \'{"type": "result", "subtype": "success", "is_error": true, "api_error_status": 429, '
+                    '"result": "You have hit your limit - resets 5pm", "num_turns": 1}\'\nexit 1\n')
+        r = self.run_entry("report")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.report_written())
+        [rec] = self.records()
+        self.assertEqual((rec["outcome"], rec["reason"], rec["cost_usd"], rec["input_tokens"]), ("failed", "usage-limit", None, None))
+
+    def test_non_json_stop_is_a_plain_failure_with_unknown_usage(self):
+        with open(f"{self.tmp.name}/bin/claude", "w") as f:
+            f.write("#!/bin/sh\necho 'Overloaded'\nexit 1\n")
+        self.run_entry("report")
+        [rec] = self.records()
+        self.assertEqual((rec["outcome"], rec["reason"], rec["cost_usd"]), ("failed", None, None))
+
     def test_run_record_redacts_a_credential_from_the_summary(self):
         self.json_claude("test-change: sk-ant-1234567890abcdefXYZ: why\nedit: outcome=changed")
         r = self.run_entry("draft-pr")
@@ -341,6 +358,22 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         self.assertIn("- tests/b_test.sh: covered elsewhere", body)
         self.assertIn("Deleted: tests/b_test.sh", body)
         self.assertIn("Old tests fail on the new code (exit 1): change needed.", body)
+
+    def test_agent_instruction_change_is_always_a_labelled_draft(self):
+        for path in ("AGENTS.md", "pkg/CLAUDE.md", ".claude/skills/s/notes.md", "skills/own/ref.md"):
+            with self.subTest(path):
+                self.skill_repo()
+                r, labels, creates = self.edit_run(f"mkdir -p $(dirname {path}); echo x > {path}")
+                self.assert_disclosed(r, labels, creates, "factory:instructions")
+                self.assertTrue(self.body().startswith("## Changes agent instructions\n"))
+                self.assertIn(f"- {path}\n", self.body())
+                self.assertEqual(self.records()[-1]["instruction_change"], True)
+                self.tearDown()
+                self.setUp()
+        r, labels, creates = self.edit_run("")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("--draft", creates[0])
+        self.assertEqual((labels, self.records()[-1]["instruction_change"]), ([], False))
 
     def test_deleted_test_without_reason_blocks(self):
         self.second_test()

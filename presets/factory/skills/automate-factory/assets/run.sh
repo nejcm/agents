@@ -47,12 +47,17 @@ if mode == "json":
         d = {}
     elif isinstance(d.get("result"), str):
         r = d["result"]
-        print(r, end="" if r.endswith("\n") else "\n")
+        print(r, end="" if r.endswith("\n") else "\n", file=sys.stderr if d.get("is_error") is True else sys.stdout)
     u = d.get("usage") if isinstance(d.get("usage"), dict) else {}
+    st = d.get("api_error_status")
+    stop = None
+    if d.get("is_error") is True:
+        stop = "usage-limit" if d.get("terminal_reason") == "blocking_limit" or re.search(
+            r"hit your .*limit|usage limit|limit reached", str(d.get("result")), re.I) else "rate-limit" if st == 429 else "api-error" if st else None
     keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
     with open(a[1], "a") as f:
         f.write(json.dumps(dict({k: u.get(k) for k in keys}, turns=d.get("num_turns"), cost_usd=d.get("total_cost_usd"),
-                            max_turns=d.get("subtype") == "error_max_turns")) + "\n")
+                            max_turns=d.get("subtype") == "error_max_turns", stop=stop)) + "\n")
     sys.exit()
 if mode == "spent":
     import datetime, math
@@ -93,10 +98,14 @@ rec = dict(x.split("=", 1) for x in kv)
 rec = {k: v or None for k, v in rec.items()}
 rec["exit_code"], rec["dry_run"] = int(rec["exit_code"]), rec["dry_run"] == "1"
 rec.update(disclosed(rec.pop("disclosure")))
+rec["instruction_change"] = None if rec["instruction_change"] is None else rec["instruction_change"] == "1"
 rec["gates"] = lines(gates)
 use = [json.loads(x) for x in lines(calls)]
 rec["calls"] = len(use)
 rec["max_turns_hit"] = sum(u.get("max_turns") is True for u in use)
+stops = [u["stop"] for u in use if u.get("stop")]
+if stops and not rec.get("reason") and rec["outcome"] == "failed":
+    rec["reason"] = stops[0]
 for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write_tokens", "cache_creation_input_tokens"),
              ("cache_read_tokens", "cache_read_input_tokens"), ("output_tokens", "output_tokens"), ("cost_usd", "cost_usd")):
     v = [u.get(n) for u in use]
@@ -104,9 +113,10 @@ for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write
 if os.path.isdir(outcomes):
     rec["items"] = []
     for i in sorted(os.listdir(outcomes)):
-        o = lines(os.path.join(outcomes, i)) + ["", "", "", "", ""]
+        o = lines(os.path.join(outcomes, i)) + ["", "", "", "", "", ""]
         rec["items"].append(dict(zip(("outcome", "reason", "pr", "start_commit", "end_commit"), (o[0] + " " + o[1]).split()),
-                                 id=i, diff_stat=o[2] or None, **disclosed(o[3]), reviews=reviews(o[4])))
+                                 id=i, diff_stat=o[2] or None, **disclosed(o[3]), reviews=reviews(o[4]),
+                                 instruction_change={"0": False, "1": True}.get(o[5])))
 path = ".factory/reports/runs.jsonl"
 if os.path.islink(path):
     sys.exit("record: runs.jsonl is a symlink")
@@ -116,6 +126,7 @@ PY
 )
 # Existing test files changed, dependencies disclosed, scope and weighted size, once gates passed.
 disclosure() { [ -z "${gated:-}" ] || echo "${#changed[@]} $([ -s "$view/deps.md" ] && echo 1 || echo 0) $scope $weighted"; }
+instruction_change() { [ -z "${gated:-}" ] || { [ ${#instr[@]} = 0 ] && echo 0 || echo 1; }; }
 record() {
   local rc=$1 o=$run_outcome stat=""
   [ "$rc" = 0 ] || { o=failed; [ -z "$gate_block" ] || o=blocked; }
@@ -125,7 +136,7 @@ record() {
   python3 -I -c "$record_py" record "$creds_re" "$calls" "$gates_log" "$view/outcomes" entry="$entry" \
     started="$began" ended="$(date -u +%FT%TZ)" base="$base" \
     start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" reason="$run_reason" exit_code="$rc" \
-    dry_run="${FACTORY_DRY_RUN:-0}" disclosure="$(disclosure)"
+    dry_run="${FACTORY_DRY_RUN:-0}" disclosure="$(disclosure)" instruction_change="$(instruction_change)"
 }
 # With a weekly budget, a run whose spend was not recorded must not look clean.
 trap 'rc_=$?; record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
@@ -216,6 +227,9 @@ deny=(.github/* .gitlab-ci.yml .circleci/* .buildkite/* Jenkinsfile .factory/* .
   .pre-commit-config.yaml .gitattributes CODEOWNERS */CODEOWNERS .cursor/skills/verify-*
   *.claude/settings* *.claude/hooks/* .cursor/*.json .cursor/hooks/* .codex/* .gemini/* .mcp.json
   .vscode/* .devcontainer/*)
+# Agent instructions: never marked ready or merged by the factory, whatever needs_human says.
+instructions=(AGENTS.md */AGENTS.md CLAUDE.md */CLAUDE.md SKILL.md */SKILL.md .claude/* */.claude/* .agents/* */.agents/*
+  .cursor/rules/* */.cursor/rules/* .cursor/skills/* .factory/*)
 set +f
 deny+=(${consumed[@]+"${consumed[@]}"})
 tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[^/]*\.py$'
@@ -223,7 +237,7 @@ tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[
 locks_re='(^|/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|uv\.lock|poetry\.lock|pdm\.lock|Pipfile\.lock|Cargo\.lock|go\.sum)$'
 generated_re='\.min\.(js|css)$|\.(js|css)\.map$|_pb2(_grpc)?\.pyi?$|\.pb\.go$'
 manifests_re='(^|/)(package\.json|pyproject\.toml|Cargo\.toml|go\.mod)$'
-pr="" start="" commit="" gated="" changed=() scope="" why="" weighted="" refactors=()
+pr="" start="" commit="" gated="" changed=() instr=() scope="" why="" weighted="" refactors=()
 scope_rule='scope: minimal, or scope: refactor <why a smaller fix is worse> when restructuring first makes the fix better; then commit each refactor step yourself with git commit, existing tests unchanged and passing at each, and leave the behaviour change uncommitted.'
 deps_py=$(cat <<'PY'
 import json, re, subprocess, sys
@@ -331,6 +345,20 @@ clip() {
 }
 
 no_creds() { ! grep -qE "$creds_re"; }
+
+# Paths on stdin; prints those matching instructions or inside a skill dir (one with SKILL.md) at $1.
+instruction_paths() {
+  local p g d
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    for g in "${instructions[@]}"; do [[ $p != $g ]] || { printf '%s\n' "$p"; continue 2; }; done
+    d=$p
+    while [[ $d == */* ]]; do
+      d=${d%/*}
+      ! git cat-file -e "$1:$d/SKILL.md" 2> /dev/null || { printf '%s\n' "$p"; continue 2; }
+    done
+  done
+}
 
 # Final body of every external write; returns 1 in dry run so the caller writes nothing.
 sendable() {
@@ -572,6 +600,8 @@ gates() {
   { git diff "$start" "$commit"; git log --format=%B "$start..$commit"; cat "$view/summary.md" "$view/deps.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
     no_creds || block "credential-shaped text"
   [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
+  git log -z --format= --name-only --no-renames "$start..$commit" > "$view/touched" || block "commit paths unreadable"
+  mapfile -t instr < <(tr '\0' '\n' < "$view/touched" | sort -u | instruction_paths "$start")
   gated=$start:$commit
   echo passed >> "$gates_log"
 }
@@ -584,9 +614,11 @@ add_label() {
 publish() {
   local draft=() url disclosed=""
   if [ -z "$commit" ] || [ "$gated" != "$start:$commit" ]; then gates; fi
-  [ ${#changed[@]} = 0 ] && [ ! -s "$view/deps.md" ] && [ "$scope" = minimal ] || disclosed=1
+  [ ${#changed[@]} = 0 ] && [ ! -s "$view/deps.md" ] && [ "$scope" = minimal ] && [ ${#instr[@]} = 0 ] || disclosed=1
   [ "$level" != draft-pr ] && [ -z "$disclosed" ] || draft=(--draft)
-  { [ "$scope" = minimal ] || printf '## Refactor scope\n\n%s\n\n%s\n\n' "${why:0:500}" \
+  { [ ${#instr[@]} = 0 ] || { printf '## Changes agent instructions\n\nNeeds human review: the factory never marks this PR ready or merges it.\n\n'
+      printf -- '- %s\n' "${instr[@]}" | clip 50; echo; }
+    [ "$scope" = minimal ] || printf '## Refactor scope\n\n%s\n\n%s\n\n' "${why:0:500}" \
       "Refactor commits first, existing tests unchanged and passing at each; the last commit changes behaviour."
     cat "$view/deps.md"
     [ ${#changed[@]} = 0 ] || cat "$view/section.md"
@@ -612,6 +644,7 @@ publish() {
   [ ${#changed[@]} = 0 ] || add_label factory:test-change "Factory edit changes existing tests"
   [ ! -s "$view/deps.md" ] || add_label factory:dependency "Factory edit adds dependencies"
   [ "$scope" = minimal ] || add_label factory:refactor "Factory edit refactors before the fix"
+  [ ${#instr[@]} = 0 ] || add_label factory:instructions "Factory edit changes agent instructions"
   run_outcome=published
 }
 

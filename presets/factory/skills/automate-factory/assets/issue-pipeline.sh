@@ -335,8 +335,8 @@ release() {
   local f
   set +e
   [ -n "$outcome" ] || outcome=blocked reason=$step
-  printf '%s %s %s\n%s %s\n%s\n%s\n%s\n' "$outcome" "$reason" "$url" "$start" "${commit:-$start}" "$stat" "$(disclosure)" \
-    "$reviews" > "$runview/outcomes/$id"
+  printf '%s %s %s\n%s %s\n%s\n%s\n%s\n%s\n' "$outcome" "$reason" "$url" "$start" "${commit:-$start}" "$stat" "$(disclosure)" \
+    "$reviews" "$(instruction_change)" > "$runview/outcomes/$id"
   [ -n "$claimed" ] || return
   if [ "$step" = publish ] && [ -n "$commit" ] &&
     [ "$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1)" = "$commit" ]; then
@@ -432,7 +432,7 @@ run_item() {
   publish > "$item/pr-url"
   url=$(tail -n 1 "$item/pr-url")
   printf '%s %s %s %s\n' "$id" "$commit" "$entry" "$start" >> "$fx/pushed.tsv"
-  [ "$merge_level" = draft ] || ! approved "$reviews" $(disclosure) || mark_ready
+  [ "$merge_level" = draft ] || [ ${#instr[@]} != 0 ] || ! approved "$reviews" $(disclosure) || mark_ready
 
   step=link
   link_item "$id" "$url" "$commit" "$start"
@@ -468,7 +468,7 @@ left() {
 
 # $1 item, $2 PR, $3 the gated commit, $4.. as approved(). Pending CI or mergeability waits for a later run.
 merge_item() {
-  local v st dr h mg b hb x m
+  local v st dr h mg b hb x m f
   approved "$4" "$5" "$6" "$7" || { left "$1" "$2" "$3" "reviewers or needs_human changed since review"; return; }
   v=$(gh pr view "$2" --repo "$repo" --json state,isDraft,headRefOid,mergeable,baseRefName,headRefName,isCrossRepository \
     --jq '"\(.state) \(.isDraft) \(.headRefOid) \(.mergeable) \(.baseRefName) \(.headRefName) \(.isCrossRepository)"')
@@ -477,6 +477,8 @@ merge_item() {
   [ "$dr" = false ] || { left "$1" "$2" "$3" "draft"; return; }
   [ "$h" = "$3" ] || { left "$1" "$2" "$3" "head moved"; return; }
   [ "$hb $b $x" = "factory/fix-$1 $ref false" ] || { left "$1" "$2" "$3" "not factory/fix-$1 into $ref"; return; }
+  f=$(gh pr diff "$2" --repo "$repo" --name-only) || return 0
+  [ -z "$(instruction_paths "$ref" <<< "$f")" ] || { left "$1" "$2" "$3" "changes agent instructions"; return; }
   case $mg in MERGEABLE) ;; UNKNOWN) return ;; *) left "$1" "$2" "$3" "mergeable $mg"; return ;; esac
   case $(ci_state "$3") in SUCCESS) ;; FAILURE | ERROR) left "$1" "$2" "$3" "CI failed"; return ;; *) return ;; esac
   [ ! -e .factory/pause ] || return 0
