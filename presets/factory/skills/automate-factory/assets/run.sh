@@ -89,6 +89,8 @@ clip() {
 
 block() { echo "gate: $*" >&2; exit 1; }
 
+no_creds() { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; }
+
 edit() {
   local prs head prompt tools=Bash,Read,Grep,Glob,Edit,Write
   check=$view/check work=$view/work
@@ -191,7 +193,7 @@ gates() {
       echo; } > "$view/section.md"
   fi
   { git diff "$start" "$commit"; cat "$view/summary.md"; [ ! -e "$view/section.md" ] || cat "$view/section.md"; } |
-    { ! grep -qE 'sk-ant-[A-Za-z0-9_-]{16}'; } || block "credential-shaped text"
+    no_creds || block "credential-shaped text"
   [ ! -e "$view/section.md" ] || cp "$view/section.md" "$out/$day-test-change.md"
 }
 
@@ -227,8 +229,12 @@ post_check
 case "$level" in
   comment) [ "${FACTORY_DRY_RUN:-0}" = 1 ] || post ;;
   draft-pr | pr)
-    edit
-    gates
-    [ "${FACTORY_DRY_RUN:-0}" = 1 ] || publish
+    if declare -F pipeline > /dev/null; then
+      pipeline
+    else
+      edit
+      gates
+      [ "${FACTORY_DRY_RUN:-0}" = 1 ] || publish
+    fi
     ;;
 esac

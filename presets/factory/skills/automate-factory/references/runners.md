@@ -60,6 +60,9 @@ Persistent=true
 WantedBy=timers.target
 ```
 
+For `issue-pipeline` at `draft-pr`, `<minutes>` in the unit's `TimeoutStartSec` and the cron
+`timeout` is the entry's `run_minutes` plus 10; the script keeps the per-stage `<minutes>`.
+
 `<tool dirs>`: the directories of `command -v` for `claude`, `gh`, `git`, `python3` and the
 Run recipe's tools, unresolved (a version-manager wrapper dispatches on its name). systemd and
 cron start with a minimal `PATH`, without the login shell's.
@@ -118,3 +121,9 @@ with a post step, `post_check` read the fixed destination with the runner's iden
 post-only destination with no `Fetch` line, the log shows `post_check: destination unchecked`),
 and for `draft-pr` and `pr`, the edit and gates ran (the log shows `edit: no change` or no `gate:` line)
 and the PR lookup read the destination. A gate failure exits 1 and publishes nothing.
+
+`issue-pipeline` at `draft-pr` passes only when the log shows one item's
+`<id> repro: outcome=reproduced` or `<id> repro: outcome=not-reproduced` line and no `gate:` line;
+`pipeline: no candidates` is not a pass. With no pending item, the user files a canary: a trusted
+or labelled issue describing behaviour that works, so the expected line is `not-reproduced`. The
+dry run records every selected item as `deferred`, so the first real run processes it.

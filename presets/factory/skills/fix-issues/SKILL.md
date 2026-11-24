@@ -208,7 +208,7 @@ on stdin; titles are built from projected fields only.
   ```bash
   s=.factory/reports/fix-issues
   for p in .factory .factory/reports "$s"; do [ ! -L "$p" ] || exit 1; done
-  [ -z "$(find "$s" -type l 2> /dev/null)" ] || exit 1
+  [ -z "$(find "$s" -path "$s/tmp/fix-*/*" -prune -o -type l -print 2> /dev/null)" ] || exit 1
   [ -z "$(git ls-files -- "$s")" ] || exit 1  # tracked state: the user runs git rm -r --cached
   mkdir -p "$s" && { [ -e "$s/.gitignore" ] || (set -C; printf '*\n' > "$s/.gitignore"); }
   [ "$(cat "$s/.gitignore")" = '*' ] && git check-ignore -q "$item/spec.md"
