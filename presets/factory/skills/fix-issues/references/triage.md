@@ -286,7 +286,8 @@ For each item, one section headed `## <id>`, where `<id>` is the issue number or
    feature is unclear, the verdict is `needs-info` with the one missing fact.
 4. **Dedupe** against `input/issues.json` and `input/context/`, never against the item itself, by
    signature, area, trigger and symptom: confident duplicate, possibly related, or no match. A
-   long-closed match is a regression lead, not a duplicate.
+   long-closed match is a regression lead, not a duplicate. Between two new items, the earliest
+   created is the original; only the later one is the `duplicate`.
 5. **Existing fix**: an open or merged PR in `input/prs.json`, or a commit in
    `input/commits.txt`, whose change plausibly fixes this; prefer a PR whose
    `closingIssuesReferences` names the item. A claim without a PR or commit is not a fix; a person

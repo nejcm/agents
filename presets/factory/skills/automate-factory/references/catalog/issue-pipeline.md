@@ -6,7 +6,8 @@
   section; `fix-issues` installed, and `debugging` for `draft-pr`.
 - **Runners**: local. The follow-up reads the report from this checkout.
 - **Input**: open issues created since the newest earlier report, less a day of overlap, that no
-  earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted.
+  earlier report judged (at `draft-pr`, also deferred and labelled ones); plus 90 days of issues,
+  PRs and commit subjects for dedupe. Untrusted.
 - **Writes**: report to `.factory/reports/issue-pipeline/<date>.md`; at `comment`, the report to
   one fixed destination, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). At
   `draft-pr`, per selected item: state under `.factory/reports/fix-issues/` (claim, `items/<id>/`,
@@ -22,8 +23,10 @@
   [agent fetch](../../../fix-issues/references/triage.md#agent-fetch) replace `fetch_new`, with
   the tracker's `<prefix>.fetch.md` and `<prefix>.mcp.json` written beside the script. Analyze is
   triage's [Analyze](../../../fix-issues/references/triage.md#analyze) prompt below.
-  At `draft-pr`, fetch also runs `fetch_deferred` (with `deferred_ids`), `fetch_labeled <label>`
-  for a `label` trust, and `agent_fetch_deferred <prefix>` after each `agent_fetch_new`; then
+  At `draft-pr`, fetch covers every `Fetch` line's source (an error tracker through
+  `agent_fetch_new err-<source>`) and also runs `fetch_deferred` (with `deferred_ids`),
+  `fetch_labeled <label>` for a `label` trust, and `agent_fetch_deferred <prefix>` after each
+  `agent_fetch_new`; then
   [`../../assets/issue-pipeline.sh`](../../assets/issue-pipeline.sh) goes into the run script
   after `publish`, with `<trust prefix>`, `<label>`, `<run minutes>` and `<app>` filled, and
   `run.sh` runs its `pipeline` in place of edit, gates and publish. Spec prompt below to
@@ -35,9 +38,10 @@
   PR, a PR or a remote branch on `factory/fix-<id>` is skipped. Links go to the GitHub issue or
   ticket, or through a source's `<prefix>.comment.sh`; an MCP comment write is not used, and the
   report says so. `.factory/pause` stops it before the next item.
-- **Choices**: day and time; where to post at `comment`. At `draft-pr`: `run_minutes` (default
-  240); `trust`, one array element per `Fetch` line with `trust trusted`: `#` for `gh`, else its
-  prefix, `trust=()` for none; `label`, the `trust label` name of the `gh` line, or empty; `allow` globs.
+- **Choices**: day and time; where to post at `comment`. At `draft-pr`: `run_minutes` (the
+  profile's pipeline budget, default 240); `trust`, one array element per `Fetch` line with
+  `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
+  name of the `gh` line, or empty; `allow` globs.
 
 ## Prompt
 
@@ -73,4 +77,5 @@ The user reads the report, picks issues, and runs `fix-issues` in their harness:
 .factory/reports/issue-pipeline/<date>.md with issues <n>." It reproduces, fixes, verifies and
 opens draft PRs only after the user confirms each write. Below `draft-pr`, scheduled runs never
 do; at `draft-pr`, the follow-up is for items with a final outcome other than `fixed` and for
-verdict `fixed`.
+verdict `fixed`, except a pushed item still waiting for its PR or link comment, which the next
+scheduled run recovers.

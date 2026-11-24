@@ -34,6 +34,8 @@ in its environment.
 | publish | none | the commit and the captured summary | pushes to one fixed branch and opens or comments on its PR |
 | post | none | the report file | sends it unchanged to one fixed destination |
 | agent write | yes | the report file on stdin | one recorded MCP write tool; the call is checked against the fixed arguments |
+| spec-writer | yes | one selected item's JSON, its triage section and its journey, on stdin | no tools; its stdout enters only through `check_items.py --spec` |
+| reproduce, fix, verify | yes | the checked spec, stage records, base or patch exports | `fix-issues` stages: shell, edits for fix only; no write command or destination |
 
 - **Analyze isolation**: Claude Code with `--restricted --safe-mode --tools "Read,Grep,Glob"
   --strict-mcp-config --no-session-persistence`, run with the view as its working directory.
@@ -56,6 +58,12 @@ in its environment.
   same server; `check_items.py --write` fails the run afterwards on any call other than the fixed
   one. Prefer the tracker's CLI or API, which posts model-free. On any post failure the post may
   already be live, so a rerun posts again: check the destination before rerunning.
+- **Issue pipeline**: `issue-pipeline` at `draft-pr` runs the steps above per item, per its
+  [catalog entry](catalog/issue-pipeline.md). Item text reaches stages only through the checked
+  spec, written only for items from a source the user marked trusted or carrying the maintainer's
+  label. Residuals, accepted: a stranger can edit a labelled public issue after the label, so the
+  spec tops the draft for the reviewer; on a public repo the body carries clipped stage records,
+  checked only for `sk-ant-` text.
 - **Write levels**: each automation has one, chosen at setup and written into its run script:
   `report` (default, no writes), `comment` (post), `draft-pr` or `pr` (edit, gates, publish).
   An entry offers only the levels in its `Write levels`.
@@ -91,8 +99,14 @@ in its environment.
   `pr-babysitting`, the opted-in PR's branch); while that branch has an open same-repo PR, the
   run starts from the PR's head, pushes on top, never forced, and comments instead of opening
   another. `factory/<entry>` without an open PR, or a fixed PR branch without one, stops the run.
+  Exception: `issue-pipeline` opens one draft PR per item on `factory/fix-<id>`, at most 3 items
+  per run, and skips an item whose branch or PR exists.
+- **Pause**: `.factory/pause` makes every run exit 0 before any work; `issue-pipeline` also checks
+  it before each item and defers the rest.
 - **Dry run**: no post or publish. Writes go to `.factory/reports/`, the run's temp view under
-  `.factory/tmp/` and its worktree, nothing else.
+  `.factory/tmp/` and its worktree, nothing else; `issue-pipeline` also uses its claim under
+  `.factory/reports/fix-issues/tmp/` and stages only the first selected item, with no ticket, link
+  or state rows.
 - **Fixed destination**: the post and publish steps' targets (`--repo <owner/repo>`, remote URL,
   branch, issue or PR number, channel, team) are written into the run script, or the
   `<prefix>.<op>.sh` it calls, when the user approves them, never taken from model output or

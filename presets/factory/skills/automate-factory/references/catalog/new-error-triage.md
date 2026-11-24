@@ -40,5 +40,6 @@ then only the report; with no groups, the line "No new errors".
 
 The user picks `new-bug` groups and runs `fix-issues`: "Continue from
 .factory/reports/new-error-triage/<date>.md with groups <err-id>." It files a ticket for each group
-the user confirms, then reproduces and fixes under the ticket's number or `<prefix>-<id>`. Scheduled
-runs never file tickets or open PRs.
+the user confirms, then reproduces and fixes under the ticket's number or `<prefix>-<id>`. This entry
+never files tickets or opens PRs; a group reaches one unattended only through `issue-pipeline` at
+`draft-pr` with its `err-` source trusted, ticket first.

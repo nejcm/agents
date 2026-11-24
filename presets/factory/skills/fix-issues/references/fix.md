@@ -17,6 +17,10 @@ Fix only when all hold, checked by the coordinator:
   fix artifact for [verify mode](reproduce.md#verify-an-existing-fix); never author over it.
 - The profile allows agent PRs, or the user accepts a local commit as the outcome.
 
+Unattended (`issue-pipeline` at `draft-pr`), no one confirms the evidence: the reproduced line,
+an empty `closedByPullRequestsReferences` for a GitHub issue, and the claim checks are the gate;
+the base-first verify stage and review of the draft stand in for the user.
+
 ## Fix
 
 `start` is `$base_sha`, or the claimed draft's checked head. Checkout:
@@ -65,12 +69,12 @@ defined by base: the journey is read from `$check`, `repro.md`'s steps are run a
 
 It writes `$evidence/verify.md`: pass or fail per step, evidence paths, commands run, and last
 `verify: outcome=confirmed` only when all four pass, else `insufficient` or `inconclusive` as in
-[verify mode](reproduce.md#verify-an-existing-fix). A compile, unit test or plausible diff alone
-is not a pass.
+[verify mode](reproduce.md#verify-an-existing-fix). A compile, unit test, code review or plausible
+diff alone is not a pass.
 
 Not confirmed: rerun the fix stage once in the same checkout with `verify.md` in its inputs,
 commit, and verify again in a fresh stage. A second failure ends the item with the repro report
-and no PR.
+and no PR. Unattended has no rerun: the item ends `blocked`.
 
 ## Before post
 

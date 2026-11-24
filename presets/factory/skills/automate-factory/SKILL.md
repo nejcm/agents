@@ -35,19 +35,23 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and the
    runner config as a proposed diff; for `draft-pr` and `pr`, the entry's `Edit prompt` to
    `.factory/automations/<entry>.edit.md` and the fixed values per [Write
-   levels](references/runners.md#write-levels). Fill each `<skill-path:<name>>` in the script's
+   levels](references/runners.md#write-levels). For `issue-pipeline` at `draft-pr`, instead of the
+   edit prompt: its `Spec prompt` to `.factory/automations/issue-pipeline.spec.md`, and
+   [`assets/issue-pipeline.sh`](assets/issue-pipeline.sh) inserted into the script after `publish`. Fill each `<skill-path:<name>>` in the script's
    `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills). A skill not
    found makes the entry unavailable on that runner. Also fill `<app>`, `<base>` and the entry's
    choices. For an agent-fetched source, write `<prefix>.fetch.md` and, for MCP,
    `<prefix>.mcp.json` per `fix-issues`
-   [agent fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for confirmation, since it names the commands the server runs.
+   [agent fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for
+   confirmation, since it names the commands the server runs.
    For a `comment` post to a destination other than GitHub, the source's `Write` line's
    `<prefix>.post.sh`, or its MCP write tool, per
    [write back](../fix-issues/references/triage.md#write-back).
 6. **Smoke run as the runner** (activation gate): its checkout, identity and tools, in dry-run
    mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
-   exact error, leave the entry `proposed`, and fix nothing silently.
+   exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
+   `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
 7. **Record** each entry in the profile's `Automations` section: runner, trigger, files, smoke
    run date and result, write level, status (`active`, `proposed`, `failed: <reason>`).
 
@@ -76,7 +80,11 @@ only to entries the user names or whose smoke run failed.
   name only ("`LINEAR_API_KEY` env var") and print the steps for the user to set it.
 - **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 50 turns when
   unset: `--max-turns` (print mode; absent from `--help` but accepted and validated), and the
-  minutes as `TimeoutStartSec` (systemd) or `timeout` (cron).
+  minutes as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
+  has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
+  unit or cron timeout is `run_minutes` plus 10.
+- **Pause**: `.factory/pause` in the target repo makes every run exit 0 before any work, and
+  stops `issue-pipeline` before its next item; delete it to resume.
 - **Loading skills**: the run script copies the skills a prompt needs into the run's view, and
   the prompt reads `skills/<name>/SKILL.md` by path, never by invocation;
   `disable-model-invocation` blocks that.

@@ -19,9 +19,10 @@ filing a ticket and commenting each need the user's confirmation at that step. N
 force-push or close an issue.
 
 Needs `.factory/profile.md` with `Run` and `Verification` sections (`setup-factory`). Without
-them, say which phase to run and stop. Never run from a schedule: scheduled runs are the
-`issue-pipeline` and `new-error-triage` entries of `automate-factory`, which never open PRs, and
-this skill is their attended follow-up.
+them, say which phase to run and stop. Never run from a schedule: the scheduled path is
+`automate-factory`'s `issue-pipeline` at `draft-pr`, which runs these stages unattended for
+trusted sources ([catalog](../automate-factory/references/catalog/issue-pipeline.md)). This skill
+is the attended follow-up for its reports and `new-error-triage`'s.
 
 ## Sources
 
@@ -47,6 +48,11 @@ triage stage only, which runs the isolated analyze command from automate-factory
 [`safety.md`](../automate-factory/references/safety.md#steps) and follows its lethal-trifecta
 rule. The coordinator holds credentials, so it reads no model prose at all: triage and stage
 results reach it only as projected enum lines, and the user reads the reports and evidence.
+
+Unattended, automate-factory's `assets/issue-pipeline.sh` is the coordinator: a tool-less
+spec-writer replaces the user's spec, `check_items.py --spec` checks it, reproduce, fix and verify
+run as above with `run.sh` gates after fix, and every post is model-free (`gh`,
+`<prefix>.comment.sh`).
 
 ## Steps
 
@@ -154,7 +160,11 @@ Work is keyed by the item ID, so a retry finds the same work:
   without a draft: when its SHA is this item's last line in
   `.factory/reports/fix-issues/pushed.tsv`, resume at Draft PR with that commit, the body built
   from `.factory/reports/fix-issues/items/<id>/` (its `spec.md` and stage records); otherwise
-  report it and stop.
+  report it and stop. When that last line is tagged `issue-pipeline` and `linked.tsv` has no row
+  for the item, report it and stop: the next scheduled run opens its PR and comments.
+- Unattended: an existing claim, any same-repo PR or a remote `factory/fix-<id>` skips the item.
+  A `pushed.tsv` row tagged `issue-pipeline` with no PR gets one from `items/<id>/body.md` on
+  the next run, and one without a `linked.tsv` row gets its link comment.
 - Release: `git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree remove --force "$item/patch"`,
   then remove `$item`, after the report is written.
 
@@ -178,21 +188,26 @@ on stdin; titles are built from projected fields only.
   `fix-issues-error: <group id>`, run
   `gh issue create --repo "$repo" --title "Error <group id>: <feature>" --body-file <body>`, and
   at once append `<group id> <number>`, the number ending the printed URL, to
-  `.factory/reports/fix-issues/tickets.tsv`.
+  `.factory/reports/fix-issues/tickets.tsv`. Unattended: GitHub only, after verify, body
+  `spec.md` plus the marker; a later failure leaves the ticket, reused next run. No undo.
 - **Push**: `git -c core.hooksPath=/dev/null -c core.fsmonitor=false push "$remote_url" "<commit>:refs/heads/factory/fix-<id>"`,
   never forced; a rejected push is a stop. Then at once append `<id> <commit>` to
-  `.factory/reports/fix-issues/pushed.tsv`.
+  `.factory/reports/fix-issues/pushed.tsv` (unattended: `<id> <commit> issue-pipeline <base>`).
 - **Draft PR**: when the profile's `Agent PR review` allows agent PRs. Body model-free:
   `Fixes #<id>` (or `Source item: <prefix>-<id>`), the tested `$before` and `$commit` SHAs, then
   `spec.md` and the stages' `repro.md`, `fix.md` and `verify.md` concatenated. Update the
   claimed PR with `gh pr edit <n> --repo "$repo" --body-file <file>`, else
   `gh pr create --repo "$repo" --draft --base "$base" --head factory/fix-<id> --title "fix: <#id or prefix-id> <feature>" --body-file <file>`.
+  Unattended, after the automation line: `Fixes #<n>` (or `Source item:`), then `## Spec`,
+  `## Reproduction`, `## Root cause and fix`, `## Tests` (gates and the red → green line),
+  `## Verification`, and the evidence path.
 - **Comment**: at most one per item per run, the file built from the projected outcome, the
   tested SHAs and the PR or artifact URL only. A GitHub issue, after
   `gh issue view <id> --repo "$repo" --json state` shows it open:
   `gh issue comment <id> --repo "$repo" --body-file <file>`. A `<prefix>-<id>` item, through its
   source's `comment` write with the native ID. Triage-only outcomes (duplicate, not a bug, needs
-  info) are posted only when the user picks them.
+  info) are posted only when the user picks them. Unattended, the link step then appends
+  `<id> <PR url>` to `.factory/reports/fix-issues/linked.tsv`, sent or not.
 - **Status**: `<prefix>-<id>` items only, after the draft PR is opened, through the source's
   `status` write: the one state recorded at setup, never a closing one.
 
@@ -217,6 +232,7 @@ on stdin; titles are built from projected fields only.
   invoked; `disable-model-invocation` blocks that.
 - **Git after a stage**: coordinator `add`, `commit`, `worktree` and `push` take
   `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, against mistakes only.
-- **Retries**: one corrected retry per stage, then stop and report, per orchestration.
+- **Retries**: one corrected retry per stage, then stop and report, per orchestration. Unattended
+  has none.
 - **Two machines** can both claim an item before its draft PR exists; the second push is
   rejected and stops. Attended v1 accepts that.
