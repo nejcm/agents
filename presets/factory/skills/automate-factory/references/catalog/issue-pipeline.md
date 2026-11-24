@@ -12,8 +12,8 @@
   one fixed destination, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). At
   `draft-pr`, per selected item: state under `.factory/reports/fix-issues/` (claim, `items/<id>/`,
   `pushed.tsv`, `tickets.tsv`, `linked.tsv`), a ticket for an `err-` item, one draft PR on
-  `factory/fix-<id>`, one link comment (for verdict `fixed`, the verify comment only), and
-  `pipeline:` lines under `## Pipeline` in the report.
+  `factory/fix-<id>`, one link comment (for verdict `fixed`, or any item under `flow` `repro-only`,
+  its one comment only), and `pipeline:` lines under `## Pipeline` in the report.
 - **Write levels**: report, comment, draft-pr (never `pr`).
 - **Steps**: `skills=("<skill-path:fix-issues>")`, plus `"<skill-path:debugging>"` at `draft-pr`;
   fill `repo`. Fetch is
@@ -36,8 +36,9 @@
   then `fix-issues` reproduce, fix, `run.sh` gates, a fresh verify stage, a ticket for `err-`
   items (GitHub Issues only), draft PR, link comment. Only `new-bug` and `fixed` items with a
   mapped feature from a trusted source, open and unassigned on GitHub, are selected; a GitHub item
-  with a linked PR, a PR or a remote branch on `factory/fix-<id>` is skipped. A `fixed` item counts
-  toward the cap, is skipped for a linked PR only while that PR is unmerged, and runs fix-issues
+  with a PR or a remote branch on `factory/fix-<id>`, or (under `flow` `fix`) a linked PR, is
+  skipped. A `fixed` item counts toward the cap, is skipped for a linked PR only while that PR is
+  unmerged, and runs fix-issues
   [verify mode](../../../fix-issues/references/reproduce.md#verify-an-existing-fix) instead:
   its `ref` qualifies only as a commit, or a same-repo PR merged into `<base>`, an ancestor of the
   fetched `<base>`, and the item needs a comment destination (a ticket for an `err-` item, a

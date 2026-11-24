@@ -22,6 +22,21 @@ CI produced. A step holds a secret or write access when any tool it has can use 
 (reads env and credential files, runs `gh`, `git push`, `curl`), an MCP server, a hook, a token
 in its environment.
 
+## What the user can change
+
+Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
+- Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
+  `run_minutes`, `cap`, budgets.
+- Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
+- `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
+
+Locked in the run scripts, at every write: model-free writes to destinations fixed at setup; dry
+run writes nothing external; item text reaches stages only through the checked spec; gates on the
+exact pushed commit; credential check and size cap on every final body (`sendable`); the consumed
+in-repo skills in `deny`; pause, claims, never merge; `issue-pipeline` PRs always draft. A
+user-owned executable flow is not offered: sourced Bash can redefine `gates` or `publish`, or call
+`gh` directly, so no lock would hold.
+
 ## Steps
 
 | Step | Model | Reads | Capability |
