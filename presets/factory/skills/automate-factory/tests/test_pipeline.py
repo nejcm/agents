@@ -178,7 +178,7 @@ else:
     sys.exit("stub: " + cmd)
 """
 
-OK = " issue-pipeline sonnet=approve,opus=approve, 0 0 minimal 1"
+OK = " issue-pipeline claude:sonnet=approve,claude:opus=approve, 0 0 minimal 1"
 SPEC_HEADINGS = ["## Spec", "## Reproduction", "## Root cause and fix", "## Tests", "## Verification"]
 
 
@@ -237,7 +237,7 @@ class PipelineTest(unittest.TestCase):
 
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
                      report_extra="", cap="3", flow="fix", verify_fixed="on", merge_level="draft",
-                     reviewers="sonnet", needs_human=None, run_minutes="240", models=""):
+                     reviewers="claude:sonnet", needs_human=None, run_minutes="240", models=""):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -255,12 +255,14 @@ class PipelineTest(unittest.TestCase):
         pipeline = pipeline.replace('("<trust prefix>")', "(" + " ".join(f'"{p}"' for p in trust) + ")")
         for k, v in {"<label>": label, "<run minutes>": run_minutes, "<app>": "app", "<cap>": cap, "<flow>": flow,
                      "<verify-fixed>": verify_fixed, "<merge level>": merge_level,
-                     "reviewers=(sonnet)": f"reviewers=({reviewers})"}.items():
+                     "reviewers=(claude:sonnet)": f"reviewers=({reviewers})"}.items():
             pipeline = pipeline.replace(k, v)
         if needs_human is not None:
             pipeline = pipeline.replace("needs_human=(test-change dependency refactor)", f"needs_human=({needs_human})")
         fetch = "fetch_new; fetch_deferred; " + (f"fetch_labeled {label}; " if label else "") + extra_fetch + "fetch_context"
-        script = script.replace("models=()", f"models=({models})")
+        if models:
+            self.assertIn(test_run.MODELS, script)
+            script = script.replace(test_run.MODELS, f"declare -A models=({models})")
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
         script = script.replace("\nfetch\nanalyze\n", "\n" + pipeline + "\nfetch\nanalyze\n")
@@ -772,21 +774,21 @@ sys.exit(1 if spec else p.returncode)
         [call] = {c for c in self.calls() if "--model" in c and "--tools Read,Grep,Glob" in c and "--restricted" in c}
         self.assertIn("--model sonnet", call)
         bodies = {p["head"]: p["body"] for p in self.gh()["prs"]}
-        self.assertIn("## Shadow review\n\nAdvisory; nothing merges on it.\n\n- sonnet (same family): approve\n\n"
+        self.assertIn("## Shadow review\n\nAdvisory; nothing merges on it.\n\n- claude:sonnet (same family): approve\n\n"
                       "    - src/1:1: nit\n", bodies["factory/fix-1"])
-        self.assertIn("- sonnet (same family): changes (invalid output)\n", bodies["factory/fix-2"])
+        self.assertIn("- claude:sonnet (same family): changes (invalid output)\n", bodies["factory/fix-2"])
         self.assertNotIn("looks fine", bodies["factory/fix-2"])
         with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
             [rec] = [json.loads(x) for x in f]
         self.assertEqual([(i["id"], i["scope"], i["weighted_lines"], i["reviews"]) for i in rec["items"]], [
-            ("1", "minimal", 1, [{"model": "sonnet", "family": "same family", "verdict": "approve", "valid": True}]),
-            ("2", "minimal", 1, [{"model": "sonnet", "family": "same family", "verdict": "changes", "valid": False}])])
+            ("1", "minimal", 1, [{"model": "claude:sonnet", "family": "same family", "verdict": "approve", "valid": True}]),
+            ("2", "minimal", 1, [{"model": "claude:sonnet", "family": "same family", "verdict": "changes", "valid": False}])])
 
     def test_shadow_review_in_dry_run_writes_nothing(self):
         self.gh_state({1: {}}, [])
         r = self.run_pipeline({"1": {}}, dry=True)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("1 review: sonnet approve", r.stdout)
+        self.assertIn("1 review: claude:sonnet approve", r.stdout)
         self.assertEqual(self.remote_heads() + "".join(self.gh_writes()), "")
         self.assertEqual(self.rows("pushed.tsv") + self.rows("linked.tsv"), [])
 
@@ -804,7 +806,7 @@ sys.exit(1 if spec else p.returncode)
     def test_ready_marks_ready_only_when_every_reviewer_approves(self):
         self.gh_state({1: {}, 2: {}}, [])
         r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "review-opus": "review: verdict=changes"}},
-                              merge_level="ready", reviewers="sonnet opus")
+                              merge_level="ready", reviewers="claude:sonnet claude:opus")
         self.assertEqual(r.returncode, 0, r.stderr)
         url = {p["head"]: p["url"] for p in self.gh()["prs"]}
         self.assertEqual(self.gh()["ready"], [url["factory/fix-1"]])
@@ -820,13 +822,13 @@ sys.exit(1 if spec else p.returncode)
                 self.gh_state({1: {}, 2: {}, 3: {}}, [])
                 r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "review-opus": "x"},
                                        "3": {"feature": "c", "edit_test": True}},
-                                      merge_level="merge", reviewers="sonnet opus", needs_human=needs_human)
+                                      merge_level="merge", reviewers="claude:sonnet claude:opus", needs_human=needs_human)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 prs = {p["head"]: p for p in self.gh()["prs"]}
                 urls = [prs[f"factory/fix-{i}"]["url"] for i in approved]
                 self.assertEqual(self.gh()["ready"], urls)
                 heads = [self.git("--git-dir", self.remote, "rev-parse", f"factory/fix-{i}").strip() for i in approved]
-                self.assertEqual(self.rows("merges.tsv"), [f"{i} approved {u} {h} issue-pipeline sonnet=approve,opus=approve, "
+                self.assertEqual(self.rows("merges.tsv"), [f"{i} approved {u} {h} issue-pipeline claude:sonnet=approve,claude:opus=approve, "
                                                            f"{int(i == '3')} 0 minimal {1 + int(i == '3')}" for i, u, h in zip(approved, urls, heads)])
                 self.assertIn("then squash-merged by a later run once CI is green on", prs["factory/fix-1"]["body"])
                 self.assertEqual(self.merge_calls(), [])
@@ -836,7 +838,7 @@ sys.exit(1 if spec else p.returncode)
         self.gh_state({1: {}, 2: {}, 3: {}}, [])
         r = self.run_pipeline({"1": {"feature": "a", "instructions": "AGENTS.md"},
                                "2": {"feature": "b", "instructions": ".claude/skills/s/SKILL.md"}, "3": {"feature": "c"}},
-                              merge_level="merge", reviewers="sonnet opus", needs_human="")
+                              merge_level="merge", reviewers="claude:sonnet claude:opus", needs_human="")
         self.assertEqual(r.returncode, 0, r.stderr)
         prs = {p["head"]: p for p in self.gh()["prs"]}
         self.assertEqual(self.gh()["ready"], [prs["factory/fix-3"]["url"]])
@@ -860,7 +862,7 @@ sys.exit(1 if spec else p.returncode)
                              (["skills/own/ref.md"], "left"), (["src/1"], "merged")):
             with self.subTest(files):
                 self.land([f"1 approved {url} {sha}{OK}"], {url: {"state": "OPEN", "head": sha, "files": files}},
-                          {sha: "SUCCESS"}, merge_level="merge", reviewers="sonnet opus", needs_human="")
+                          {sha: "SUCCESS"}, merge_level="merge", reviewers="claude:sonnet claude:opus", needs_human="")
                 self.assertEqual(self.rows("merges.tsv")[-1].split()[1], after)
                 self.assertEqual(len(self.merge_calls()), int(after == "merged"))
                 if after == "left":
@@ -882,13 +884,13 @@ sys.exit(1 if spec else p.returncode)
     def test_pending_merge_rechecks_its_entry_and_current_reviewers_and_needs_human(self):
         url, sha = "https://github.com/o/r/pull/1", "a" * 40
         for name, row, kw, after in (
-                ("reviewer added", OK, {"reviewers": "sonnet opus haiku"}, "left"),
+                ("reviewer added", OK, {"reviewers": "claude:sonnet claude:opus claude:haiku"}, "left"),
                 ("needs_human widened", OK.replace(" 0 0 ", " 1 0 "), {}, "left"),
                 ("needs_human narrowed", OK.replace(" 0 0 ", " 1 0 "), {"needs_human": "dependency"}, "merged"),
                 ("other entry", OK.replace("issue-pipeline", "other"), {}, "approved")):
             with self.subTest(name):
                 self.land([f"1 approved {url} {sha}{row}"], {url: {"state": "OPEN", "head": sha}}, {sha: "SUCCESS"},
-                          **dict({"merge_level": "merge", "reviewers": "sonnet opus"}, **kw))
+                          **dict({"merge_level": "merge", "reviewers": "claude:sonnet claude:opus"}, **kw))
                 self.assertEqual(self.rows("merges.tsv")[-1].split()[1], after)
                 self.assertEqual(len(self.merge_calls()), int(after == "merged"))
                 if after == "left":
@@ -949,23 +951,39 @@ sys.exit(1 if spec else p.returncode)
         self.assertNotIn("ran", r.stdout)
         self.assertFalse(any("red" in n for n in os.listdir(f"{self.repo}/.factory/tmp")))
 
-    def test_reviewers_must_be_allowed_models_and_every_call_names_one(self):
+    def test_reviewers_must_be_valid_claude_picks_before_any_call(self):
+        for reviewers, msg in (('"claude:haiku sonnet"', "model claude:haiku sonnet is not <cli>:<model>[@effort]"),
+                               ("sonnet", "model sonnet is not <cli>:<model>[@effort]"),
+                               ("claude:sonnet codex:gpt-6.1-sol", "model codex:gpt-6.1-sol: CLI codex is not supported yet, only claude")):
+            with self.subTest(reviewers):
+                self.gh_state({1: {}}, [])
+                r = self.run_pipeline({"1": {}}, reviewers=reviewers)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("gate: " + msg, r.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_per_stage_models_reach_each_stage_call_and_the_record(self):
         self.gh_state({1: {}}, [])
-        r = self.run_pipeline({"1": {}}, models="haiku", reviewers="sonnet")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("gate: reviewer sonnet is not in models", r.stderr)
-        self.assertEqual(self.calls(), [])
-        for reviewers, msg in (('"haiku sonnet"', "reviewer haiku sonnet is not a model name"),
-                               ("haik", "reviewer haik is not in models")):
-            r = self.run_pipeline({"1": {}}, models="haiku sonnet", reviewers=reviewers)
-            self.assertNotEqual(r.returncode, 0)
-            self.assertIn("gate: " + msg, r.stderr)
-            self.assertEqual(self.calls(), [])
-        r = self.run_pipeline({"1": {}}, models="haiku sonnet", reviewers="sonnet")
+        r = self.run_pipeline({"1": {}}, models="[default]=claude:haiku [fix]=claude:opus@high [verify]=claude:default@low",
+                              reviewers="claude:sonnet@max claude:haiku")
         self.assertEqual(r.returncode, 0, r.stderr)
-        claude = [c for c in self.calls() if c.startswith("claude ")]
-        models = sorted(tuple(re.findall(r"--model (\S+)", c)) for c in claude)
-        self.assertEqual(models, [("haiku",)] * 5 + [("sonnet",)])
+        seen = []
+        for c in self.prompts():
+            ev, args = c["evidence"], c["args"]
+            n = ev.rsplit("/", 1)[1] if ev else "spec" if args[args.index("--tools") + 1] == "" else \
+                "review" if c["prompt"].startswith("Review the change") else "analyze"
+            seen.append((n, " ".join(re.findall(r"--(?:model|effort) \S+", " ".join(args)))))
+        self.assertEqual(seen, [("analyze", "--model haiku"), ("spec", "--model haiku"), ("reproduce", "--model haiku"),
+                                ("fix", "--model opus --effort high"), ("verify", "--effort low"),
+                                ("review", "--model sonnet --effort max"), ("review", "--model haiku")])
+        with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
+            [rec] = [json.loads(x) for x in f]
+        self.assertEqual([(s["stage"], s["model"], s["effort"], s["isolation"]) for s in rec["stages"]], [
+            ("analyze", "haiku", None, "restricted"), ("spec", "haiku", None, "restricted"),
+            ("reproduce", "haiku", None, "environment"), ("fix", "opus", "high", "environment"),
+            ("verify", "default", "low", "environment"), ("review", "sonnet", "max", "restricted"),
+            ("review", "haiku", None, "restricted")])
+        self.assertEqual([i["reviews"] for i in rec["items"]][0][0]["model"], "claude:sonnet@max")
 
     def land(self, merges, pulls, ci=None, fail=(), **kw):
         os.makedirs(self.fx, exist_ok=True)
@@ -997,7 +1015,7 @@ sys.exit(1 if spec else p.returncode)
                 ("merge refused", {}, "SUCCESS", ("pr merge",), {}, "left")):
             with self.subTest(name):
                 self.land([f"1 approved {url} {sha}{OK}"], {url: dict(ok, **pull)}, {sha: ci}, fail,
-                          **dict({"merge_level": "merge", "reviewers": "sonnet opus"}, **kw))
+                          **dict({"merge_level": "merge", "reviewers": "claude:sonnet claude:opus"}, **kw))
                 calls = self.merge_calls()
                 self.assertEqual(calls, [f"gh pr merge {url} --repo o/r --squash --match-head-commit {sha}"]
                                  if name in ("all hold", "merge refused") else [])
@@ -1012,7 +1030,7 @@ sys.exit(1 if spec else p.returncode)
         url, sha = "https://github.com/o/r/pull/1", "a" * 40
         self.write(".factory/pause", "")
         self.land([f"1 approved {url} {sha}{OK}"], {url: {"state": "OPEN", "head": sha}}, {sha: "SUCCESS"},
-                  merge_level="merge", reviewers="sonnet opus")
+                  merge_level="merge", reviewers="claude:sonnet claude:opus")
         self.assertEqual(self.calls(), [])
         self.assertEqual(self.rows("merges.tsv"), [f"1 approved {url} {sha}{OK}"])
 
@@ -1043,7 +1061,7 @@ sys.exit(1 if spec else p.returncode)
                          [("revert-2", "escalated", "main-red", pr["url"])])
         self.assertEqual(self.merge_calls(), [])
         self.git("-C", self.repo, "checkout", "-q", "main")
-        r = self.run_pipeline({}, report_extra="No new issues\n", merge_level="merge", reviewers="sonnet opus")
+        r = self.run_pipeline({}, report_extra="No new issues\n", merge_level="merge", reviewers="claude:sonnet claude:opus")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((len(self.gh()["prs"]), self.merge_calls()), (1, []))
 
@@ -1063,7 +1081,7 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(self.git("--git-dir", self.remote, "rev-parse", "factory/revert-2").strip(), tip)
         self.assertEqual(self.rows("merges.tsv")[1:], [f"2 reverted {url} {m}"])
         self.assertIn(f"revert PR {pr['url']}; needs a human.", self.report())
-        r = self.run_pipeline({}, report_extra="No new issues\n", merge_level="merge", reviewers="sonnet opus")
+        r = self.run_pipeline({}, report_extra="No new issues\n", merge_level="merge", reviewers="claude:sonnet claude:opus")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((len(self.gh()["prs"]), self.merge_calls(), self.pr_creates()), (1, [], []))
 

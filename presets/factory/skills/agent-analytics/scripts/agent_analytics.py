@@ -420,11 +420,12 @@ def factory_runs(repo, since):
         outcome = rec.get("outcome") if re.fullmatch(r"[a-z-]{1,20}", str(rec.get("outcome"))) else "?"
         r = runs.setdefault(entry, {"runs": 0, "dry": 0, "outcomes": collections.Counter(), "seen": collections.Counter(),
                                     "items": collections.Counter(), "escalations": collections.Counter(),
-                                    "tests": 0, "test_files": 0, "deps": 0, "capped": 0,
+                                    "tests": 0, "test_files": 0, "deps": 0, "capped": 0, "partial": 0,
                                     "scopes": collections.Counter(), "weighted": None, "prs": {}, **{k: 0 for k in RUN_METRICS}})
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
         r["capped"] += is_num(rec.get("max_turns_hit")) and rec["max_turns_hit"] > 0
+        r["partial"] += rec.get("cost_complete") is False and rec.get("cost_usd") is not None
         r["outcomes"][outcome] += 1
         items = rec.get("items") if isinstance(rec.get("items"), list) else []
         for i in items:
@@ -473,7 +474,8 @@ def render_runs(runs):
         items = ", ".join(f"{o} {n}" for o, n in sorted(r["items"].items()))
         escalations = ", ".join(f"{o} {n}" for o, n in sorted(r["escalations"].items()))
         out.append(f"- {entry}: {r['dry']} of {r['runs']} runs dry. Turns reported by {r['seen']['turns']}, "
-                   f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}."
+                   f"tokens by {r['seen']['output_tokens']}, cost by {r['seen']['cost_usd']}"
+                   + (f" ({r['partial']} missing a call's cost)" if r["partial"] else "") + "."
                    + (f" Items: {items}." if items else "")
                    + (f" Runs that hit the turn cap: {r['capped']}." if r["capped"] else "")
                    + (f" Escalation reasons: {escalations}." if escalations else "")

@@ -23,7 +23,7 @@
   }
   ```
 
-- **Choices**: day and time.
+- **Choices**: none; it has no model, so no model picks.
 
 ## Prompt
 

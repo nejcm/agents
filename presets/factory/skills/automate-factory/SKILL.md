@@ -30,7 +30,16 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `Runners` and detected in step 1. Then ask its write level, `report` as the default, offering
    only the entry's `Write levels` that the runner and profile allow
    ([`references/runners.md`](references/runners.md#write-levels)), and only the entry's
-   `Choices`.
+   `Choices`. Then the per-entry settings, as one table for all picks with suggested defaults,
+   where one answer accepts every default and the user names only what to change (budgets stay
+   in the profile's `Interview` section):
+   - schedule: any cron-like value, default the entry's `Trigger`;
+   - models: a `default` pick and optional per-stage picks, `<cli>:<model>[@effort]` with the
+     effort inside the pick, default `claude:default`, only the stages the entry and level run
+     ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`;
+   - extra skills: skill dirs the entry's analyze and edit steps also read (not yet
+     `issue-pipeline`'s spec, reproduce, fix, verify or review), default none, each with a
+     directory name no other skill of the entry has.
 5. **Write** per [`references/runners.md`](references/runners.md): the prompt to
    `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and the
    runner config as a proposed diff; for `draft-pr` and `pr`, the entry's `Edit prompt` to
@@ -53,8 +62,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
    `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
-7. **Record** each entry in the profile's `Automations` section: runner, trigger, files, smoke
-   run date and result, write level, `issue-pipeline`'s `flow`, `verify_fixed`, `reviewers`,
+7. **Record** each entry in the profile's `Automations` section: runner, schedule, model picks,
+   extra skills, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
+   `verify_fixed`, `reviewers`,
    `merge_level` and `needs_human`, status
    (`active`, `proposed`, `failed: <reason>`).
 
@@ -65,9 +75,9 @@ entries the user names or whose smoke run failed. To change an entry:
 
 1. Regenerate its files (step 5) into a scratch directory from the current profile, never
    writing `*.local.md`: the before copy.
-2. Write the change where it lives: a setting (schedule, write level, destination, trust,
-   `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`, `merge_level`, `needs_human`,
-   budgets, `weekly_usd`, `models`) to the profile, or guidance to the entry's
+2. Write the change where it lives: a setting (schedule, model picks, extra skills, write level,
+   destination, trust, `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`,
+   `merge_level`, `needs_human`, budgets, `weekly_usd`) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the
    deny list are not settings.
 3. Regenerate only that entry's files again from the changed profile. A file in
@@ -99,17 +109,17 @@ entries the user names or whose smoke run failed. To change an entry:
 - **Secrets**: never ask for, read, store or write one. Name a secret by its variable or setting
   name only ("`LINEAR_API_KEY` env var") and print the steps for the user to set it.
 - **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 200 turns when
-  unset; minutes are the budget, turns only stop a looping run: `--max-turns` (print mode; absent from `--help` but accepted and validated), and the
-  minutes as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
+  unset; minutes are the budget, turns only stop a looping run: `--max-turns` (print mode; absent from `--help` but accepted and validated), the
+  minutes as `timeout` on every model call, and as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
   unit or cron timeout is `run_minutes` plus 10; and an item cap, `cap` (default 3).
   Refactor, old-test and new-test runs and a revert's test runs also wait for time left in `run_minutes`. The
   profile's per-week budget is `weekly_usd` (empty: no limit): before any model call, a run sums
   `cost_usd` over every `runs.jsonl` record started in the last 7 days (a missing cost counts as 0
-  and is noted) and, at or over it, exits 0 with one `weekly budget reached` report line and no
-  other write. Allowed models are `models` (empty: no `--model`, the CLI default): the first goes
-  to every `claude` call but the reviewers', which must be among them. An unfilled or invalid
-  value fails the run before any call.
+  and is noted, as is a run with a call that reported no cost) and, at or over it, exits 0 with
+  one `weekly budget reached` report line and no other write; a call that reported no cost adds
+  nothing to the sum. Model picks are per entry and stage ([runners.md](references/runners.md#models)); an unfilled or
+  invalid value fails the run before any call.
 - **Pause**: `.factory/pause` in the target repo makes every run exit 0 before any work, and
   stops `issue-pipeline` before its next item; delete it to resume.
 - **Loading skills**: the run script copies the skills a prompt needs into the run's view, and

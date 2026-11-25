@@ -38,7 +38,7 @@ Inward-facing: how agents worked this week and which skills or prompts to fix.
 
   Directory names and file dates only pick candidates; a file is copied only when the first `cwd`
   it records is the repo root or a path under it.
-- **Choices**: day and time.
+- **Choices**: none.
 
 ## Prompt
 

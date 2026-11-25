@@ -60,13 +60,13 @@
   ticket. `fixed` items follow `verify_fixed` either way. With `verify_fixed` `off`, a `fixed` item
   is skipped with reason `verdict` and uses no cap or feature slot. Any other value of either fails
   the run before any stage.
-- **Choices**: day and time; where to post at `comment`. At `draft-pr`: `run_minutes` (the
+- **Choices**: where to post at `comment`. At `draft-pr`: `run_minutes` (the
   profile's pipeline budget, default 240); `cap` (its item count, default 3); `flow`, `fix` (default) or `repro-only`;
   `verify_fixed`, `on` (default) or `off`; `trust`, one array element per `Fetch` line with
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
-  name of the `gh` line, or empty; `allow` globs; `reviewers`, Claude model aliases or names
-  other than the runner's default model (default `sonnet`), recorded as same family, at least two
-  for `merge` and each in `models` when that is set; `merge_level`, `draft` (default), `ready` or `merge`, offered per
+  name of the `gh` line, or empty; `allow` globs; `reviewers`, the `review` stage's
+  [picks](../runners.md#models), best other than the `fix` pick (default `claude:sonnet`), recorded as same family,
+  at least two for `merge`; `merge_level`, `draft` (default), `ready` or `merge`, offered per
   [interview](../../../setup-factory/references/interview.md) only with the entry's agreement
   numbers shown; `needs_human`, the disclosures that keep a PR draft and unmerged, any of
   `test-change`, `dependency`, `refactor` (default all three); a change to agent instructions keeps a PR

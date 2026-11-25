@@ -205,6 +205,17 @@ class ReportTest(unittest.TestCase):
         self.assertIn("Turns reported by 1, tokens by 0, cost by 1.", report)
         self.assertNotIn("nan", report)
 
+    def test_runs_missing_a_calls_cost_are_noted(self):
+        report = self.runs([{"entry": "e", "outcome": "ok", "cost_usd": 0.5, "cost_complete": False},
+                            {"entry": "e", "outcome": "ok", "cost_usd": 0.25, "cost_complete": True}])
+        self.assertIn("| 0.75 |", report)
+        self.assertIn("cost by 2 (1 missing a call's cost).", report)
+
+    def test_a_run_with_no_reported_cost_is_not_called_partial(self):
+        report = self.runs([{"entry": "e", "outcome": "ok", "cost_usd": None, "cost_complete": False}])
+        self.assertIn("cost by 0.", report)
+        self.assertNotIn("missing a call's cost", report)
+
 
 class RobustnessTest(unittest.TestCase):
     def setUp(self):

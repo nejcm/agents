@@ -53,7 +53,8 @@ the run script ([runners.md](../automate-factory/references/runners.md#run-recor
 runs, dry runs, outcomes (`escalated` among them), item outcomes for `issue-pipeline`, escalation
 reasons (`ci-cap` among them), runs and items that disclosed existing-test changes (and how many
 files) or dependencies, turns,
-tokens and cost (the CLI's own estimate), and for reviewed PRs, joined with
+tokens and cost (the CLI's own estimate; runs whose cost misses a call that reported none are
+counted), and for reviewed PRs, joined with
 `.factory/reports/fix-issues/fates.tsv`: reviewer approve rate, agreement with the human outcome
 (a human merge is agreement with approve; closed, reverted or a change request with changes; a
 factory merge is not a human outcome), misses

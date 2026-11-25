@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -41,6 +42,9 @@ case "$1 $2" in
     case " ${CI_GREEN:-} " in *" $s "*) echo SUCCESS ;; *) echo "${CI:-SUCCESS}" ;; esac ;;
 esac
 """
+
+
+MODELS = "declare -A models=([default]=claude:default)"
 
 
 class RunShTest(unittest.TestCase):
@@ -87,14 +91,14 @@ class RunShTest(unittest.TestCase):
             f.write(text)
 
     def run_entry(self, level, scen="plain", dry=False, skills="", post="", main="", extra=None, allow="*", dep_files="0",
-                  weekly="", models=""):
+                  weekly="", models="", minutes="1"):
         with open(RUN_SH) as f:
             script = f.read()
-        for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": "1",
+        for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": minutes,
                      "<level>": level, "<remote url>": self.remote, "<test command>": "sh tests/a_test.sh",
                      "<path glob>": allow, "<weekly usd>": weekly}.items():
             script = script.replace(k, v)
-        for old, new in (("skills=()", f"skills=({skills})"), ("models=()", f"models=({models})" if models else ""), ("post() { :; }", post),
+        for old, new in (("skills=()", f"skills=({skills})"), (MODELS, models if "=(" in models else f"declare -A models=({models})" if models else ""), ("post() { :; }", post),
                          ("      edit\n      publish\n", main),
                          ("dep_files=0", "dep_files=1" if dep_files == "1" else "")):
             if new:
@@ -818,26 +822,119 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         self.assertIn("record: ", r.stderr)
 
     def test_unfilled_or_invalid_budget_or_model_fails_before_any_call(self):
+        bad = "is not <cli>:<model>[@effort]"
         for kw, msg in (({"weekly": "<weekly usd>"}, "weekly budget <weekly usd> is not empty or a number of USD"),
                         ({"weekly": "-1"}, "weekly budget -1 is not empty or a number of USD"),
-                        ({"models": '"<models>"'}, "model <models> is not a model name")):
+                        ({"models": '[default]="<model default>"'}, f"model <model default> {bad}"),
+                        ({"models": "[default]=sonnet"}, f"model sonnet {bad}"),
+                        ({"models": '[default]="claude:opus claude:sonnet"'}, f"model claude:opus claude:sonnet {bad}"),
+                        ({"models": "[default]=claude:a,b"}, f"model claude:a,b {bad}"),
+                        ({"models": "[default]=claude:default [edit]=codex:gpt-6.1-sol@xhigh"},
+                         "model codex:gpt-6.1-sol@xhigh: CLI codex is not supported yet, only claude"),
+                        ({"models": "[default]=claude:opus@huge"},
+                         "model claude:opus@huge: effort huge is not low, medium, high, xhigh or max"),
+                        ({"models": "[default]=claude:opus [verfy]=claude:opus"}, "models: verfy is not a stage"),
+                        ({"models": "[edit]=claude:opus"}, "models has no default"),
+                        ({"models": "models=(opus sonnet)"}, "models: 0 is not a stage")):
             with self.subTest(msg):
                 r = self.run_entry("draft-pr", **kw)
                 self.assertNotEqual(r.returncode, 0)
                 self.assertIn("gate: " + msg, r.stderr)
                 self.assertEqual(self.calls(), [])
 
-    def test_allowed_models_put_the_first_on_every_call(self):
+    def test_default_and_per_stage_models_reach_each_call(self):
+        for models, analyze, edit in (("", [], []),
+                                      ("[default]=claude:default@low", ["--effort low"], ["--effort low"]),
+                                      ("[default]=claude:opus@high [edit]=claude:sonnet",
+                                       ["--model opus", "--effort high"], ["--model sonnet"])):
+            with self.subTest(models):
+                if os.path.exists(self.log):
+                    os.remove(self.log)
+                self.git("--git-dir", self.remote, "update-ref", "-d", "refs/heads/factory/e")
+                r = self.run_entry("draft-pr", models=models)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                [a, e] = [c for c in self.calls() if c.startswith("claude ")]
+                self.assertIn("--restricted", a)
+                for call, want in ((a, analyze), (e, edit)):
+                    self.assertEqual(re.findall(r"--(?:model|effort) \S+", call), want)
+
+    def test_a_model_not_picked_for_its_stage_refuses(self):
+        r = self.run_entry("draft-pr", models="[default]=claude:opus",
+                           main='      run_model edit claude:sonnet Read "$view" "$view/x.json" p < /dev/null\n')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("gate: model claude:sonnet is not picked for edit", r.stderr)
+        self.assertEqual(len([c for c in self.calls() if c.startswith("claude ")]), 1)
+
+    def test_analyze_stops_at_its_minutes(self):
+        with open(f"{self.tmp.name}/bin/claude", "w") as f:
+            f.write("#!/bin/sh\nexec sleep 30\n")
+        t = datetime.datetime.now()
+        r = self.run_entry("report", minutes="0.02")
+        self.assertEqual(r.returncode, 124, r.stderr)
+        self.assertLess((datetime.datetime.now() - t).total_seconds(), 20)
+        self.assertEqual(self.last_record()["stages"][0]["exit"], 124)
+        self.assertFalse(self.report_written())
+
+    def test_extra_skills_reach_the_view_and_need_distinct_names(self):
+        self.skill_repo()
+        os.makedirs(f"{self.tmp.name}/x/own")
+        with open(f"{self.tmp.name}/x/own/SKILL.md", "w") as f:
+            f.write("x\n")
+        main = '      ls "$view/skills" > "$LOG.skills"\n      edit\n      publish\n'
+        r = self.run_entry("draft-pr", skills=f'"skills/own" "{self.tmp.name}/x"', main=main)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(self.log + ".skills") as f:
+            self.assertEqual(f.read().split(), ["own", "x"])
+        os.remove(self.log)
+        r = self.run_entry("draft-pr", skills=f'"skills/own" "{self.tmp.name}/x/own"', main=main)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn(f"gate: skill {self.tmp.name}/x/own: another skill is named own", r.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_run_record_lists_stages_and_sums_reported_cost(self):
+        self.json_claude("did it\nscope: minimal\nedit: outcome=changed\n")
+        r = self.run_entry("draft-pr", models="[default]=claude:opus@high [edit]=claude:default")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        [rec] = self.records()
+        usage = {"turns": 2, "input_tokens": 3, "cache_write_tokens": 5, "cache_read_tokens": 7, "output_tokens": 11,
+                 "cost_usd": 0.25, "exit": 0}
+        self.assertEqual(rec["stages"], [
+            dict(stage="analyze", cli="claude", model="opus", family="anthropic", effort="high", isolation="restricted", **usage),
+            dict(stage="edit", cli="claude", model="default", family="anthropic", effort=None, isolation="environment",
+                 **usage)])
+        self.assertEqual((rec["cost_usd"], rec["cost_complete"]), (0.5, True))
+        stub = f"{self.tmp.name}/bin/claude"
+        with open(stub) as f:
+            body = f.read()
+        with open(stub, "w") as f:
+            f.write(body.replace('"total_cost_usd": 0.25,', '"total_cost_usd": 0.25 if "--restricted" in sys.argv else None,'))
+        self.git("--git-dir", self.remote, "update-ref", "-d", "refs/heads/factory/e")
         r = self.run_entry("draft-pr")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertFalse(any("--model" in c for c in self.calls()))
-        os.remove(self.log)
-        self.git("--git-dir", self.remote, "update-ref", "-d", "refs/heads/factory/e")
-        r = self.run_entry("draft-pr", models="opus sonnet")
+        rec = self.records()[1]
+        self.assertEqual([s["cost_usd"] for s in rec["stages"]], [0.25, None])
+        self.assertEqual((rec["cost_usd"], rec["cost_complete"], rec["turns"]), (0.25, False, 4))
+        r = self.run_entry("report", weekly="5")
         self.assertEqual(r.returncode, 0, r.stderr)
-        claude = [c for c in self.calls() if c.startswith("claude ")]
-        self.assertEqual(len(claude), 2)
-        self.assertTrue(all(" --model opus " in c for c in claude), claude)
+        self.assertIn("weekly budget: $0.75 of $5 in the last 7 days; 1 runs with a stage that reported no cost\n", r.stdout)
+
+    def test_runner_templates_take_the_entry_schedule_and_minutes(self):
+        with open(os.path.join(HERE, "..", "references", "runners.md")) as f:
+            doc = f.read()
+        ini = re.findall(r"```ini\n(.*?)```", doc, re.S)
+        [cron] = re.findall(r"```crontab\n(.*?)```", doc, re.S)
+        fill = {"<repo>": "r", "<entry>": "e", "<repo-root>": "/w/r", "<minutes>": "45", "<tool dirs>": "/opt/bin"}
+        def render(text, schedule):
+            text = text.replace("<schedule>", schedule)
+            for k, v in fill.items():
+                text = text.replace(k, v)
+            self.assertNotRegex(text, r"<[a-z -]+>")
+            return text
+        service, timer = (render(t, "Tue *-*-* 09:30:00") for t in ini)
+        self.assertIn("TimeoutStartSec=45min\n", service)
+        self.assertIn("ExecStart=/w/r/.factory/automations/e.sh\n", service)
+        self.assertIn("OnCalendar=Tue *-*-* 09:30:00\n", timer)
+        self.assertIn("\n30 9 * * 2 timeout 45m /w/r/.factory/automations/e.sh ", render(cron, "30 9 * * 2"))
 
 
 if __name__ == "__main__":

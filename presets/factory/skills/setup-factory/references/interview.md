@@ -37,10 +37,9 @@ the items the user selected. Skip the phase when there are no gaps.
    and which ones an agent may touch (default: none).
 5. **Budgets**: per run in minutes and turns (default 30 and 200); per scheduled `issue-pipeline`
    run that opens PRs, in minutes (default 240) and items (default 3); per week in USD of the
-   CLI's cost estimate (default none; a run at or over it stops before any model call); which
-   models are allowed (default: the CLI default; the first listed runs every call, reviewers must
-   be listed). Runs use
-   the user's `claude` subscription login, never an API key.
+   CLI's cost estimate (default none; a run at or over it stops before any model call). Models,
+   schedules and extra skills are per entry, asked by `automate-factory` when it places each entry.
+   Runs use the user's `claude` subscription login, never an API key.
 6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or
    ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.
    For `issue-pipeline`, `merge_level` stays `draft` unless the user picks more. Offer `ready` or

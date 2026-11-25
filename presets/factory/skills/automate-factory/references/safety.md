@@ -26,8 +26,8 @@ in its environment.
 
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
-  `run_minutes`, `cap`, budgets (`weekly_usd`, `models`), `ceiling`, `issue-pipeline` `reviewers`, `merge_level` and
-  `needs_human`.
+  `run_minutes`, `cap`, budgets (`weekly_usd`), per-entry model picks and extra skills, `ceiling`,
+  `issue-pipeline` `reviewers`, `merge_level` and `needs_human`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
 - `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
 
@@ -148,7 +148,7 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   gets the `factory:instructions` label, the paths top the body, and the run record sets
   `instruction_change`. This is not a `needs_human` disclosure: no setting lifts it.
 - **Shadow review**: `issue-pipeline` only, after verify: each model in the entry's `reviewers`
-  runs as analyze does (`--restricted`, read-only tools, `--model <name>`) on an export of the
+  runs as analyze does (`--restricted`, read-only tools, its own pick) on an export of the
   gated commit with the checked spec, the diff and the gate and verify records, never item text.
   Its last line must be `review: verdict=approve` or `review: verdict=changes`; anything else
   counts as `changes`. Verdicts and capped findings go in the PR body and the item's run record;

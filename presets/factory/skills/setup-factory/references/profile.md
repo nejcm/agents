@@ -46,7 +46,7 @@ Updated: <YYYY-MM-DD> (interview)
 - Results and escalations: <destination>
 - Deploy targets: <environments; agent access>
 - Budgets: <per run: <minutes> min, <turns> turns; pipeline run <minutes> min, <n> items; per week
-  <USD / none>; allowed models <first used for every call, ... / CLI default>>
+  <USD / none>>
 - Agent PR review: <who; PRs allowed or not; drafts only or ready ones too>
 - Environment: <isolated | not isolated>
 - Resolved gaps and contradictions: <gap>: <decision>
@@ -98,8 +98,9 @@ Updated: <YYYY-MM-DD> (automate-factory)
 
 - Runners: systemd user <yes/no>, cron <yes/no>, isolated analyze <Claude Code version / no:
   reason; managed policy confirmed none <yes/no>>
-- <entry>: <runner>, <trigger>; level <report / comment / draft-pr / pr>; files <paths>; smoke
+- <entry>: <runner>, schedule <cron-like value>; models default <cli:model[@effort]>[, <stage>
+  <cli:model[@effort]> ...]; extra skills <dirs / none>; level <report / comment / draft-pr / pr>; files <paths>; smoke
   run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>; for
   `issue-pipeline` at draft-pr: flow <fix / repro-only>, verify_fixed <on / off>, reviewers
-  <models>, merge_level <draft / ready / merge>, needs_human <test-change dependency refactor>
+  <cli:model[@effort] ...>, merge_level <draft / ready / merge>, needs_human <test-change dependency refactor>
 ```

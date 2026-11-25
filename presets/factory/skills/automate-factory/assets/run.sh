@@ -55,10 +55,16 @@ if mode == "json":
     if d.get("is_error") is True:
         stop = "usage-limit" if d.get("terminal_reason") == "blocking_limit" or re.search(
             r"hit your .*limit|usage limit|limit reached", str(d.get("result")), re.I) else "rate-limit" if st == 429 else "api-error" if st else None
-    keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+    cli, _, m = a[3].partition(":")
+    m, _, effort = m.partition("@")
+    fam = next((f for f, p in (("anthropic", "claude|opus|sonnet|haiku|fable"), ("openai", r"gpt|o\d"), ("google", "gemini"))
+                if re.match(p, (cli if m == "default" else m).lower())), "unknown")
+    tokens = (("input_tokens", "input_tokens"), ("cache_write_tokens", "cache_creation_input_tokens"),
+              ("cache_read_tokens", "cache_read_input_tokens"), ("output_tokens", "output_tokens"))
     with open(a[1], "a") as f:
-        f.write(json.dumps(dict({k: u.get(k) for k in keys}, turns=d.get("num_turns"), cost_usd=d.get("total_cost_usd"),
-                            max_turns=d.get("subtype") == "error_max_turns", stop=stop)) + "\n")
+        f.write(json.dumps(dict(stage=a[2], cli=cli, model=m, family=fam, effort=effort or None, isolation=a[4], exit=int(a[5]),
+                                turns=d.get("num_turns"), **{k: u.get(n) for k, n in tokens}, cost_usd=d.get("total_cost_usd"),
+                                max_turns=d.get("subtype") == "error_max_turns", stop=stop)) + "\n")
     sys.exit()
 if mode == "spent":
     import datetime, math
@@ -68,7 +74,7 @@ if mode == "spent":
     if not os.access(path if os.path.exists(path) else os.path.dirname(path), os.W_OK):
         sys.exit("runs.jsonl cannot be appended to, so spend would go unrecorded")
     since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-    total = missing = 0
+    total = missing = partial = 0
     try:
         f = open(path, encoding="utf-8", errors="replace")
     except FileNotFoundError:
@@ -88,9 +94,11 @@ if mode == "spent":
         # NaN, infinite or negative costs are unknown, like missing ones: never subtracted or poisoning the sum.
         if isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) and c >= 0:
             total += c
+            partial += r.get("cost_complete") is False
         else:
             missing += 1
-    note = f"; {missing} runs without a cost counted as 0" if missing else ""
+    note = (f"; {missing} runs without a cost counted as 0" if missing else "") + (
+        f"; {partial} runs with a stage that reported no cost" if partial else "")
     reached = total >= float(a[0])
     print(f"weekly budget{' reached' if reached else ''}: ${total:.2f} of ${a[0]} in the last 7 days{note}")
     sys.exit(3 if reached else 0)
@@ -103,14 +111,18 @@ rec["instruction_change"] = None if rec["instruction_change"] is None else rec["
 rec["gates"] = lines(gates)
 use = [json.loads(x) for x in lines(calls)]
 rec["calls"] = len(use)
+rec["stages"] = [{k: v for k, v in u.items() if k not in ("max_turns", "stop")} for u in use]
 rec["max_turns_hit"] = sum(u.get("max_turns") is True for u in use)
 stops = [u["stop"] for u in use if u.get("stop")]
 if stops and not rec.get("reason") and rec["outcome"] == "failed":
     rec["reason"] = stops[0]
-for k, n in (("turns", "turns"), ("input_tokens", "input_tokens"), ("cache_write_tokens", "cache_creation_input_tokens"),
-             ("cache_read_tokens", "cache_read_input_tokens"), ("output_tokens", "output_tokens"), ("cost_usd", "cost_usd")):
-    v = [u.get(n) for u in use]
-    rec[k] = sum(v) if all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v) else None
+def num(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+for k in ("turns", "input_tokens", "cache_write_tokens", "cache_read_tokens", "output_tokens"):
+    v = [u.get(k) for u in use]
+    rec[k] = sum(v) if all(num(x) for x in v) else None
+cost = [u["cost_usd"] for u in use if num(u.get("cost_usd"))]
+rec["cost_usd"], rec["cost_complete"] = sum(cost) if cost or not use else None, len(cost) == len(use)
 if os.path.isdir(outcomes):
     rec["items"] = []
     for i in sorted(os.listdir(outcomes)):
@@ -148,18 +160,37 @@ max_turns="<turns>" minutes="<minutes>"
 level="<level>"
 # Empty: no weekly limit.
 weekly_usd="<weekly usd>"
-# Allowed models; the first runs every call but the reviewers, which must be among them. Empty: the CLI default.
-models=()
+# Per stage <cli>:<model>[@effort]; claude:default is the CLI default. A stage without its own runs default.
+declare -A models=([default]=claude:default)
 # Credentials, providers and endpoints that would override the subscription login.
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
   ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
   CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
   CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
-caps=(--max-turns "$max_turns") model=()
+caps=(--max-turns "$max_turns")
 [[ $weekly_usd =~ ^([0-9]+(\.[0-9]+)?)?$ ]] || block "weekly budget $weekly_usd is not empty or a number of USD"
-model_re='^[A-Za-z0-9][][A-Za-z0-9._:-]*$'
-for m in ${models[@]+"${models[@]}"}; do [[ $m =~ $model_re ]] || block "model $m is not a model name"; done
-[ ${#models[@]} = 0 ] || model=(--model "${models[0]}")
+model_re='^[a-z]+:[A-Za-z0-9][][A-Za-z0-9._:-]*(@[a-z]+)?$'
+check_model() {
+  [[ $1 =~ $model_re ]] || block "model $1 is not <cli>:<model>[@effort]"
+  [ "${1%%:*}" = claude ] || block "model $1: CLI ${1%%:*} is not supported yet, only claude"
+  [[ $1 != *@* || ${1##*@} =~ ^(low|medium|high|xhigh|max)$ ]] || block "model $1: effort ${1##*@} is not low, medium, high, xhigh or max"
+}
+for m in "${!models[@]}"; do
+  [[ $m =~ ^(default|analyze|edit|spec|reproduce|fix|verify)$ ]] || block "models: $m is not a stage"
+  check_model "${models[$m]}"
+done
+[ -n "${models[default]:-}" ] || block "models has no default"
+# Sets margs to the claude flags of the pick $1.
+model_args() {
+  local m=${1#*:}
+  margs=()
+  [ "${m%@*}" = default ] || margs+=(--model "${m%@*}")
+  [[ $m != *@* ]] || margs+=(--effort "${m##*@}")
+}
+pick() { echo "${models[$1]:-${models[default]}}"; }
+# Agent fetch and write (fix-issues triage.md) run the default pick.
+model_args "${models[default]}"
+model=(${margs[@]+"${margs[@]}"})
 if [ -n "$weekly_usd" ]; then
   rc=0
   python3 -I -c "$record_py" spent "$weekly_usd" > "$view/spent" 2> "$view/spent.err" || rc=$?
@@ -186,6 +217,7 @@ for s in ${skills[@]+"${skills[@]}"}; do
       consumed+=("$s" "$s/*" "${real#"$snap"/}" "${real#"$snap"/}/*") ;;
   esac
   d="$view/skills/$(basename "$s")"
+  [ ! -e "$d" ] || block "skill $s: another skill is named $(basename "$s")"
   mkdir "$d"
   (cd "$real" && find . -type f ! -path '*/.*' \( -name '*.md' -o -name '*.py' \) -print0 |
     tar --null -T - -cf -) | tar -x -C "$d"
@@ -193,6 +225,28 @@ done
 
 # User guidance after the default prompt, before the record format; setup never writes these files.
 overlay() { local f=.factory/automations/$entry.$1.local.md; [ ! -f "$f" ] || { echo; cat "$f"; echo; }; }
+
+# $1 stage, $2 its pick, $3 tools (none: tool-less; Bash: runs as the runner, else confined to $4), $4 working
+# directory, $5 the output JSON, $6 the prompt. Stdin goes to the call, the result to stdout.
+run_model() {
+  local a t=$minutes iso=restricted rc=0
+  if [ "$1" = review ]; then [[ " ${reviewers[*]} " == *" $2 "* ]]; else [ "$2" = "$(pick "$1")" ]; fi ||
+    block "model $2 is not picked for $1"
+  model_args "$2"
+  case $3 in
+    # No setting sources: tracked project settings in the checkout could switch auth or permissions.
+    *Bash*) iso=environment a=(--safe-mode --setting-sources '' --strict-mcp-config --no-session-persistence
+      --tools "$3" --allowedTools "$3" --permission-mode dontAsk "${caps[@]}") ;;
+    "") t=5 a=(--restricted --safe-mode --tools "" --strict-mcp-config --no-session-persistence --permission-mode dontAsk
+      --max-turns 3) ;;
+    *) a=(--restricted --safe-mode --tools "$3" --strict-mcp-config --no-session-persistence --permission-mode dontAsk
+      "${caps[@]}") ;;
+  esac
+  (cd "$4" && timeout "${t}m" claude -p "${a[@]}" ${margs[@]+"${margs[@]}"} --output-format json "$6") |
+    head -c $((8 * summary_cap + 1)) > "$5" || rc=$?
+  python3 -I -c "$record_py" json "$5" "$calls" "$1" "$2" "$iso" "$rc" || exit 1
+  return "$rc"
+}
 
 fetch() { :; }
 
@@ -202,10 +256,8 @@ analyze() {
   prompt+="
 Date: $day
 Snapshot: $ref at $(git rev-parse --short "$ref")"
-  (cd "$view" && claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk "${caps[@]}" ${model[@]+"${model[@]}"} --output-format json \
-    "$prompt" < /dev/null) > "$view/analyze.json" || rc=$?
-  python3 -I -c "$record_py" json "$view/analyze.json" "$calls" > "$view/report.md"
+  run_model analyze "$(pick analyze)" Read,Grep,Glob "$view" "$view/analyze.json" "$prompt" < /dev/null \
+    > "$view/report.md" || rc=$?
   [ "$rc" = 0 ] || exit "$rc"
   test -s "$view/report.md"
   mv "$view/report.md" "$out/$day.md"
@@ -442,12 +494,7 @@ existing test file you changed, deleted or renamed (old path):
 test-change: <path from the repo root>: <one-line reason>. Prefer existing code and the standard
 library; add a package only for substantial functionality, with one line per new package:
 dependency: <name> <why not in-house>."
-  # No setting sources: tracked project settings in the checkout could switch auth or permissions.
-  (cd "$work" && timeout "${minutes}m" claude -p --safe-mode --setting-sources '' --strict-mcp-config \
-    --no-session-persistence --tools "$tools" --allowedTools "$tools" "${caps[@]}" ${model[@]+"${model[@]}"} \
-    --permission-mode dontAsk --output-format json "$prompt" < /dev/null) | head -c $((8 * summary_cap + 1)) \
-    > "$view/edit.json" || rc=$?
-  python3 -I -c "$record_py" json "$view/edit.json" "$calls" > "$view/summary.md"
+  run_model edit "$(pick edit)" "$tools" "$work" "$view/edit.json" "$prompt" < /dev/null > "$view/summary.md" || rc=$?
   [ "$rc" = 0 ] || [ "$(wc -c < "$view/edit.json")" -gt $((8 * summary_cap)) ]
   [ "$(wc -c < "$view/summary.md")" -le "$summary_cap" ] || block "summary over $summary_cap bytes"
   if [[ $(tail -n1 "$view/summary.md") =~ ^escalated:\ (credentials|prod-access|ambiguous|out-of-scope)$ ]]; then

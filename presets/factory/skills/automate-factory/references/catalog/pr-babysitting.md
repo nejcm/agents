@@ -41,7 +41,7 @@
   ```
 
   (`gh pr checks` exits non-zero when a check failed; that is data, not an error.)
-- **Choices**: schedule; for `comment` or `pr`, the PR number; PRs in scope: all open, or one author's (`--author <login>` added to
+- **Choices**: for `comment` or `pr`, the PR number; PRs in scope: all open, or one author's (`--author <login>` added to
   `gh pr list` with the login the user gives, so the filter applies at query time; never `@me`).
 
 ## Prompt

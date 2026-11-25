@@ -172,7 +172,7 @@ agent_fetch_deferred() {
 MCP: `agent_fetch_new lin "mcp__linear__list_issues,mcp__linear__get_issue" < /dev/null`. CLI:
 the recorded command, with `$since` from `since_last`, piped into `agent_fetch_new err-<source>`.
 `issue-pipeline` at `draft-pr` also runs `agent_fetch_deferred <prefix> [tools]` per source, after
-`agent_fetch_new`, the CLI command piped in the same way; it skips IDs already fetched. The attended run sets `max_turns` from the profile (and `model=(--model <first allowed model>)` when the profile lists allowed models) and uses
+`agent_fetch_new`, the CLI command piped in the same way; it skips IDs already fetched. The attended run sets `max_turns` from the profile (and `model=(--model <model> --effort <effort>)` from the entry's `default` pick, without `--model` for `claude:default` and without `--effort` for no effort) and uses
 `agent_fetch <prefix> "$view/input/items" "Fetch: only items <ids>." ...`.
 `fetch_context` still runs for PRs and commits. Missing fetch files: write and confirm them as
 automate-factory's step 5 does, before the first fetch.

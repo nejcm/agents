@@ -21,7 +21,7 @@
 
   Analyze flags drift signals only. pstack's maintenance needs live verification, so it runs in
   the attended follow-up, never here.
-- **Choices**: schedule.
+- **Choices**: none.
 
 ## Prompt
 

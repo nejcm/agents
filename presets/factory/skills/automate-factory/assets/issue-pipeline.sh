@@ -1,16 +1,11 @@
 # issue-pipeline at draft-pr: inserted into run.sh after publish; run.sh then calls pipeline.
 trust=("<trust prefix>") label="<label>" run_minutes="<run minutes>" app="<app>" cap="<cap>"
 flow="<flow>" verify_fixed="<verify-fixed>"
-# Reviewers: Claude models other than the edit's. merge_level draft, ready or merge (needs 2+ reviewers).
-reviewers=(sonnet) merge_level="<merge level>"
+# Reviewers: <cli>:<model>[@effort] picks, best other than the fix's. merge_level draft, ready or merge (needs 2+ reviewers).
+reviewers=(claude:sonnet) merge_level="<merge level>"
 # Disclosures that keep a PR draft and unmerged at any merge_level: test-change, dependency, refactor.
 needs_human=(test-change dependency refactor)
-for m in "${reviewers[@]}"; do
-  [[ $m =~ $model_re ]] || block "reviewer $m is not a model name"
-  ok=${#models[@]}
-  for a in ${models[@]+"${models[@]}"}; do [ "$a" != "$m" ] || ok=0; done
-  [ "$ok" = 0 ] || block "reviewer $m is not in models"
-done
+for m in "${reviewers[@]}"; do check_model "$m"; done
 fx=$PWD/.factory/reports/fix-issues
 items=$fx/items
 
@@ -54,11 +49,8 @@ stage() {
   cp -R "${@:6}" "$check/"
   prompt="$(cat "$runview/skills/fix-issues/references/$3" && overlay "$1" && cat "${bans[@]}")
 Stage: $1."
-  (cd "$2" && check=$check evidence=$evidence timeout "${minutes}m" claude -p --safe-mode --setting-sources '' \
-    --strict-mcp-config --no-session-persistence --tools "$4" --allowedTools "$4" "${caps[@]}" ${model[@]+"${model[@]}"} \
-    --permission-mode dontAsk --output-format json "$prompt" < /dev/null) > "$item/$1.json" 2> "$evidence/stdout.txt" ||
-    rc=$?
-  python3 -I -c "$record_py" json "$item/$1.json" "$calls" >> "$evidence/stdout.txt"
+  check=$check evidence=$evidence run_model "$1" "$(pick "$1")" "$4" "$2" "$item/$1.json" "$prompt" < /dev/null \
+    > "$evidence/stdout.txt" 2>&1 || rc=$?
   [ "$rc" = 0 ] || ran "$rc"
 }
 
@@ -68,10 +60,8 @@ spec_item() {
   { cat "$runview/input/items/$id.json"; echo
     awk -v h="## $id" '$0 == h {p = 1} p {print} p && /^fix-issues: / {exit}' "$report"; echo
     cat "$features/$feature.md"; } > "$item/spec-input.md"
-  (cd "$runview" && timeout 5m claude -p --restricted --safe-mode --tools "" --strict-mcp-config \
-    --no-session-persistence --permission-mode dontAsk --max-turns 3 ${model[@]+"${model[@]}"} --output-format json \
-    "$prompt" < "$item/spec-input.md") > "$item/spec.json" || rc=$?
-  python3 -I -c "$record_py" json "$item/spec.json" "$calls" > "$item/spec-draft.md"
+  run_model spec "$(pick spec)" "" "$runview" "$item/spec.json" "$prompt" < "$item/spec-input.md" \
+    > "$item/spec-draft.md" || rc=$?
   [ "$rc" = 0 ] || ran "$rc"
   python3 -I "$runview/skills/fix-issues/scripts/check_items.py" --spec "$features" "$feature" \
     < "$item/spec-draft.md" > "$item/spec.md"
@@ -156,10 +146,8 @@ or review: verdict=changes."
   : > "$item/review.md"
   for m in "${reviewers[@]}"; do
     rc=0
-    (cd "$d" && timeout "${minutes}m" claude -p --restricted --safe-mode --tools "Read,Grep,Glob" --strict-mcp-config \
-      --no-session-persistence --permission-mode dontAsk --model "$m" "${caps[@]}" --output-format json \
-      "$prompt" < /dev/null) > "$item/review-$m.json" || rc=$?
-    python3 -I -c "$record_py" json "$item/review-$m.json" "$calls" > "$item/review-$m.md"
+    run_model review "$m" Read,Grep,Glob "$d" "$item/review-$m.json" "$prompt" < /dev/null > "$item/review-$m.md" ||
+      rc=$?
     [ "$rc" = 0 ] || ran "$rc"
     case $(tail -n 1 "$item/review-$m.md") in
       "review: verdict=approve") v=approve ;;

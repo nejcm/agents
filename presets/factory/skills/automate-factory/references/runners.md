@@ -27,10 +27,12 @@ Copy [`../assets/run.sh`](../assets/run.sh) to `.factory/automations/<entry>.sh`
 with the default branch, `<level>` with the chosen write level, `<owner/repo>` with
 `gh repo view --json nameWithOwner`, `<turns>` and `<minutes>` (script, unit and cron line) with
 the profile's per-run caps (see [Budgets](../SKILL.md#rules)), `<weekly usd>` with its per-week
-budget in USD (empty for none), `models=()` with its allowed models (first the one for every call;
-empty for the CLI default), `skills` with the skill dirs the
-prompt loads (a project skill as its repo-relative path, so it is read from the tracked snapshot;
-an installed one as its absolute resolved dir) and the step functions from the entry, `chmod +x`.
+budget in USD (empty for none), `models` with the entry's [model picks](#models), `skills` with the
+skill dirs the prompt loads plus the entry's extra skills (a project skill as its repo-relative
+path, so it is read from the tracked snapshot; an installed one as its absolute resolved dir; no
+two with the same directory name), and the step functions from the entry, `chmod +x`. Each extra
+skill also gets one line at the end of the entry's prompt and edit prompt: `Also follow
+skills/<name>/SKILL.md where it applies.`
 These values come from the profile and the entry's choices; the profile is the source of truth,
 so a changed value regenerates the entry ([re-run](../SKILL.md#re-run)).
 `repo/` and fetch's `git` reads use the local `<base>` branch, as fresh as the user's last pull;
@@ -57,12 +59,15 @@ SyslogIdentifier=factory-<repo>-<entry>
 Description=factory <entry> for <repo>
 
 [Timer]
-OnCalendar=Mon *-*-* 07:00:00
+OnCalendar=<schedule>
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 ```
+
+`<schedule>`: the entry's schedule ([per-entry settings](../SKILL.md#steps)), as an `OnCalendar`
+expression for the timer or the five cron fields for the cron line.
 
 For `issue-pipeline` at `draft-pr`, `<minutes>` in the unit's `TimeoutStartSec` and the cron
 `timeout` is the entry's `run_minutes` plus 10; the script keeps the per-stage `<minutes>`.
@@ -75,12 +80,29 @@ User timers stop at logout unless `loginctl enable-linger "$USER"`; say so, do n
 
 ```crontab
 PATH=<tool dirs>:/usr/local/bin:/usr/bin:/bin
-0 7 * * 1 timeout <minutes>m <repo-root>/.factory/automations/<entry>.sh >> <repo-root>/.factory/automations/<entry>.log 2>&1; echo "exit $?" >> <repo-root>/.factory/automations/<entry>.log
+<schedule> timeout <minutes>m <repo-root>/.factory/automations/<entry>.sh >> <repo-root>/.factory/automations/<entry>.log 2>&1; echo "exit $?" >> <repo-root>/.factory/automations/<entry>.log
 ```
 
 Propose `.factory/automations/*.log` for `.gitignore`. Apply crontab changes only after the user
 confirms, with `crontab -e` or by editing the output of `crontab -l` and piping it back to
 `crontab -`.
+
+## Models
+
+Each pick is `<cli>:<model>[@effort]`: `claude:opus@high` runs `claude --model opus --effort
+high`; `claude:default` passes no `--model` (the CLI default), and no `@effort` passes no
+`--effort`. Efforts: `low`, `medium`, `high`, `xhigh`, `max`. Only the `claude` CLI is supported;
+any other CLI fails the run before any call. Per entry, a `default` and optional per-stage
+overrides fill `declare -A models=([default]=<pick> [<stage>]=<pick> ...)`; a stage without its own
+runs `default`. Stages: `analyze` and, at `draft-pr` and `pr`, `edit`; `issue-pipeline` at
+`draft-pr` adds `spec`, `reproduce`, `fix`, `verify`, and `review` as its `reviewers=(...)` list,
+in place of `edit`. Agent fetch and write run `default`. The picks are the allowed set: `run_model`
+builds every call from them and refuses a model not picked for its stage, an unknown stage or an
+invalid pick fails the run before any call, and a pending merge's recorded verdicts must match the
+current `reviewers`. `weekly-agent-analytics` has no model.
+Every counted call (analyze, edit, spec, each stage, each reviewer) runs under its timeout
+(`<minutes>`; 5 for the tool-less spec-writer) and keeps at most `8 * summary_cap` bytes of its JSON
+output: a longer output is cut there and fails the call (a stage then records `runner-error`).
 
 ## Prompt overlays
 
@@ -138,13 +160,19 @@ Every run past the pause and Git config checks appends one line to
 `usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
 disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
-`cache_read_tokens`, `output_tokens`, `cost_usd`. `issue-pipeline` adds
+`cache_read_tokens`, `output_tokens`, `cost_usd` (the sum of the costs the calls reported, `null` when none did) with
+`cost_complete` (`false` when a call reported no cost), and `stages`, one per call in order: `stage`,
+`cli`, `model` (`default` for the CLI default), `family` (from the model name: `claude`, `opus`,
+`sonnet`, `haiku`, `fable` are `anthropic`, `gpt` and `o<digit>` `openai`, `gemini` `google`, else
+`unknown`), `effort`, `isolation` (`restricted`: confined to its directory, no shell;
+`environment`: a shell as the runner, bounded by the environment), `exit`, `turns`, the four token
+counts and `cost_usd`, each `null` when not reported. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
 commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`, `scope`, `weighted_lines`, `instruction_change`, `reviews`
-(`model`, `family`, `verdict`, `valid`: false when the output had no verdict line)); a revert
+(`model`, the reviewer's pick, `family`, `verdict`, `valid`: false when the output had no verdict line)); a revert
 opened after a red factory merge adds item `revert-<id>`, outcome `escalated`, reason `main-red`. Usage comes from `claude -p --output-format json`
-(`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers; a total is
-`null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
+(`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers; a turn or
+token total is `null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
 `agent-analytics` reads it.
 
 ## Smoke run
