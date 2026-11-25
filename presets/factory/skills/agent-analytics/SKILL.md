@@ -1,6 +1,6 @@
 ---
 name: agent-analytics
-description: Use when the user asks for agent usage numbers for a repo — sessions, tokens, cost, failed tool calls, retries, escalations, sessions per merged PR — from factory run records and local Claude Code, Codex and Cursor transcripts
+description: Use when the user asks for agent usage numbers for a repo — sessions, tokens, cost, failed tool calls, retries, escalations, sessions per merged PR — from factory run records and local Claude Code, Codex, Cursor and Antigravity transcripts
 category: workflow
 disable-model-invocation: true
 ---
@@ -60,13 +60,16 @@ start date. Factory runs keep no transcript, so they are not counted again below
 items and commits stay in the file, never in the report.
 
 **Sessions**: scope is this repo: transcripts whose recorded cwd is the repo root or a path under it
-(worktrees inside the repo included).
+(worktrees inside the repo included). Sessions a host such as T3 Code launches land in the same
+harness dirs and count the same way. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` are read in addition to
+`~/.claude` and `~/.codex`.
 
 | Harness | Source | Counted | Unavailable |
 | ------- | ------ | ------- | ----------- |
-| Claude Code | `~/.claude/projects/<path, non-alphanumerics as ->/*.jsonl`, subagents in `<session>/subagents/` | tokens per API message (deduped by message id), cost from the last `cost-state.totalCostUSD`, `tool_use` calls, `tool_result.is_error`, `system` `api_error` retries, `AskUserQuestion` calls, `pr-link` URLs, `gitBranch` | none |
-| Codex | `~/.codex/sessions/**/rollout-*.jsonl` whose `session_meta.cwd` is in the repo; `thread_source` `subagent`/`guardian_review` count as subagent transcripts | last cumulative `token_count.total_token_usage`, tool calls, `request_user_input*` calls, `session_meta.git.branch` | cost, failed tool calls, retries (tool output carries no structured error) |
+| Claude Code | `~/.claude/projects/<path, non-alphanumerics as ->/*.jsonl`, subagents in `<session>/subagents/`; in the repo's exact dir any recorded cwd in the repo counts (a session moved in from a scratch dir), in prefix dirs the first | tokens per API message (deduped by message id), cost from the last `cost-state.totalCostUSD`, `tool_use` calls, `tool_result.is_error`, `system` `api_error` retries, `AskUserQuestion` calls, `pr-link` URLs, `gitBranch` | none |
+| Codex | `~/.codex/{sessions,archived_sessions}/**/rollout-*.jsonl` whose `session_meta.cwd` is in the repo; `thread_source` `subagent`/`guardian_review` count as subagent transcripts (T3 Code marks the threads it delegates `subagent`) | last cumulative `token_count.total_token_usage`, tool calls, `request_user_input*` calls, `session_meta.git.branch` | cost, failed tool calls, retries (tool output carries no structured error) |
 | Cursor | `~/.cursor/projects/<path, non-alphanumeric runs as ->/agent-transcripts/**/*.jsonl` | sessions, `tool_use` calls | tokens, cost, failed tool calls, retries, escalations, PR links (no usage or result fields) |
+| Antigravity | SQLite `conversations/*.db` (read-only) under `~/.gemini/antigravity-cli/` and T3 Code's `~/.t3/userdata/providers/antigravity/*/antigravity-acp/`, whose workspace URI (`trajectory_metadata_blob`) is in the repo; column shown only when found | tokens per `gen_metadata` record (protobuf usage fields) | cost, tool calls, failed tool calls, retries, escalations, PR links, subagents (not decoded) |
 
 - **Cost** is the harness's own estimate (Claude Code `cost-state`), never derived from a price
   table. The report says how many sessions reported it.
@@ -80,7 +83,7 @@ items and commits stay in the file, never in the report.
   outside the repo is dropped. Unreadable files are skipped and counted, never named.
 - A metric with no reading (no usage record, no cost snapshot) is unavailable, not zero.
 - **Format drift**: a harness with 5+ sessions in which an expected record shape (usage records,
-  tool calls, `is_error` flags, `token_count`) was recognised zero times gets a drift warning, its
+  tool calls, `is_error` flags, `token_count`, Antigravity `gen_metadata` usage) was recognised zero times gets a drift warning, its
   dependent metrics show "unverified" instead of 0, and the script exits 3.
 - Every report lists coverage per harness and the metrics it could not count.
 
@@ -99,7 +102,8 @@ items and commits stay in the file, never in the report.
    the parser reads (top level, `message`, its `content` blocks, `usage`, `payload`, `info`,
    `total_token_usage`, `git`) and prints their keys and value types; every other object or list
    prints as its type, unknown `type` values and ID-like keys as `?`. Never read the file any
-   other way.
+   other way. Antigravity databases are protobuf in SQLite; `--shape` does not read them, so an
+   Antigravity drift stays "unverified" until the parser is updated from a synthetic fixture.
 2. Find the new name or nesting for the missing shape. Extend the parser to accept it and keep the
    old shape supported.
 3. Add a synthetic fixture for the new shape (made-up values) and a test in [`tests/`](tests/);

@@ -101,7 +101,7 @@ ulis install --global --source . --preset react-web --yes
 - `setup-factory` — explores a repo, interviews only for gaps, runs the app for real, generates a
   verify skill, and writes `.factory/profile.md` in that repo
 - `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from the factory's
-  run records, then local Claude Code, Codex and Cursor transcripts
+  run records, then local Claude Code, Codex, Cursor and Antigravity transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
   catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
   you, so run them in an isolated VM or container holding only a repo-scoped token.

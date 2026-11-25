@@ -22,10 +22,13 @@ Inward-facing: how agents worked this week and which skills or prompts to fix.
     root=$(pwd -P) enc=$(pwd -P | sed 's/[^A-Za-z0-9]/-/g')
     mkdir "$view/input/sessions"
     {
-      [ ! -d "$HOME/.claude/projects" ] ||
-        find "$HOME/.claude/projects" -maxdepth 2 -path "*/projects/$enc*/*.jsonl" -mtime -7
-      [ ! -d "$HOME/.codex/sessions" ] ||
-        find "$HOME/.codex/sessions" -name 'rollout-*.jsonl' -mtime -7
+      for d in ${CLAUDE_CONFIG_DIR:+"$CLAUDE_CONFIG_DIR"} "$HOME/.claude"; do
+        [ ! -d "$d/projects" ] || find "$d/projects" -maxdepth 2 -path "*/projects/$enc*/*.jsonl" -mtime -7
+      done
+      for d in ${CODEX_HOME:+"$CODEX_HOME/sessions" "$CODEX_HOME/archived_sessions"} \
+        "$HOME/.codex/sessions" "$HOME/.codex/archived_sessions"; do
+        [ ! -d "$d" ] || find "$d" -name 'rollout-*.jsonl' -mtime -7
+      done
     } | while read -r f; do
       cwd=$(grep -o -m1 '"cwd": *"[^"]*"' "$f" | head -n1 | cut -d'"' -f4) || true
       case "$cwd" in "$root" | "$root"/*) cp "$f" "$view/input/sessions/" ;; esac

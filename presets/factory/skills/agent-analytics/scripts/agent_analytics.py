@@ -3,18 +3,25 @@
 # Reads only counter and structural fields; never prints message text or paths outside the repo.
 import argparse
 import collections
+import contextlib
 import datetime
 import glob
 import json
 import os
+import pathlib
 import re
+import sqlite3
 import sys
+import urllib.parse
 
-HARNESSES = ("Claude Code", "Codex", "Cursor")
+HARNESSES = ("Claude Code", "Codex", "Cursor", "Antigravity")
+# Shown as a table column only when found.
+OPTIONAL_HARNESSES = {"Antigravity"}
 UNAVAILABLE = {
     "Claude Code": set(),
     "Codex": {"cost", "failed", "retries"},
     "Cursor": {"tokens", "cost", "failed", "retries", "escalations", "links"},
+    "Antigravity": {"cost", "tool_calls", "failed", "retries", "escalations", "links"},
 }
 ESCALATION_TOOLS = {
     "Claude Code": {"AskUserQuestion"},
@@ -30,6 +37,7 @@ EXPECTED = {
     "Codex": (("token_count records", "tokens_seen", {"tokens"}),
               ("tool call records", "tool_calls", {"tool_calls", "escalations"})),
     "Cursor": (("tool_use blocks", "tool_calls", {"tool_calls"}),),
+    "Antigravity": (("gen_metadata usage records", "tokens_seen", {"tokens"}),),
 }
 FATES = ("open", "merged", "factory-merged", "closed", "reverted")
 RUN_METRICS = ("turns", "input_tokens", "cache_write_tokens", "cache_read_tokens", "output_tokens", "cost_usd")
@@ -96,6 +104,11 @@ def first_cwd(recs):
     return next((r["cwd"] for r in recs if text(r.get("cwd"))), None)
 
 
+def config_dirs(home, var, name):
+    dirs = [os.path.expanduser(os.environ[var])] if text(os.environ.get(var)) else []
+    return list(collections.OrderedDict((os.path.realpath(d), d) for d in dirs + [os.path.join(home, name)]).values())
+
+
 def files(pattern, since, stats, recursive=False):
     out = []
     for path in glob.glob(pattern, recursive=recursive):
@@ -115,7 +128,7 @@ def blocks(rec):
 
 def new_session():
     return {"usage": {}, "tools": {}, "failed": set(), "retries": set(), "cost": None,
-            "urls": set(), "branches": set(), "child": False, "total": None, "error_flags": 0}
+            "urls": set(), "branches": set(), "child": False, "total": None, "error_flags": 0, "subagents": set()}
 
 
 def claude_records(recs, path, acc):
@@ -154,16 +167,18 @@ def claude(home, repo, since):
     roots = repo_roots(repo)
     sessions = collections.OrderedDict()
     seen = set()
-    for root in roots:
+    for root, config in ((r, c) for r in roots for c in config_dirs(home, "CLAUDE_CONFIG_DIR", ".claude")):
         enc = re.sub(r"[^A-Za-z0-9]", "-", root)
-        for d in glob.glob(os.path.join(home, ".claude", "projects", enc + "*")):
+        for d in glob.glob(os.path.join(config, "projects", enc + "*")):
             name = os.path.basename(d)
             if (name != enc and not name.startswith(enc + "-")) or d in seen:
                 continue
             seen.add(d)
             for path in files(os.path.join(d, "*.jsonl"), since, s):
                 recs = load(path, s)
-                if not recs or not in_repo(first_cwd(recs), repo):
+                # A session started elsewhere (e.g. a scratch dir) and moved into the repo is filed under its exact dir.
+                cwds = [r.get("cwd") for r in recs or []] if name == enc else [first_cwd(recs or [])]
+                if not any(in_repo(c, repo) for c in cwds):
                     continue
                 sid = next((r["sessionId"] for r in recs if text(r.get("sessionId"))), path)
                 acc = sessions.setdefault(sid, new_session())
@@ -172,11 +187,12 @@ def claude(home, repo, since):
                     sub_recs = load(sub, s)
                     cwd = first_cwd(sub_recs or [])
                     if sub_recs and (cwd is None or in_repo(cwd, repo)):
-                        s["subagents"] += 1
+                        acc["subagents"].add(os.path.basename(sub))
                         claude_records(sub_recs, sub, acc)
     for acc in sessions.values():
         s["found"] = True
         s["sessions"] += 1
+        s["subagents"] += len(acc["subagents"])
         for u in acc["usage"].values():
             s["tokens_seen"] = True
             for key, value in zip(TOKEN_KEYS, u):
@@ -196,7 +212,9 @@ def claude(home, repo, since):
 def codex(home, repo, since):
     s = new_stats()
     sessions = collections.OrderedDict()
-    for path in files(os.path.join(home, ".codex", "sessions", "**", "rollout-*.jsonl"), since, s, True):
+    paths = [p for d in config_dirs(home, "CODEX_HOME", ".codex") for sub in ("sessions", "archived_sessions")
+             for p in files(os.path.join(d, sub, "**", "rollout-*.jsonl"), since, s, True)]
+    for path in paths:
         recs = load(path, s)
         if not recs or recs[0].get("type") != "session_meta" or not isinstance(recs[0].get("payload"), dict):
             continue
@@ -252,6 +270,80 @@ def cursor(home, repo, since):
             s["found"] = True
             s["subagents" if os.path.basename(os.path.dirname(path)) == "subagents" else "sessions"] += 1
             s["tool_calls"] += sum(b.get("type") == "tool_use" for rec in recs for b in blocks(rec))
+    return s
+
+
+def varint(data, i):
+    value = shift = 0
+    while True:
+        value |= (data[i] & 0x7F) << shift
+        i += 1
+        if data[i - 1] < 0x80:
+            return value, i
+        shift += 7
+        if shift > 63:
+            raise ValueError("varint")
+
+
+def pb(data):
+    fields, i = {}, 0
+    while i < len(data):
+        key, i = varint(data, i)
+        if key & 7 == 0:
+            value, i = varint(data, i)
+        elif key & 7 == 2:
+            size, i = varint(data, i)
+            value, i = bytes(data[i:i + size]), i + size
+            if i > len(data):
+                raise ValueError("truncated")
+        elif key & 7 in (1, 5):
+            i += 8 if key & 7 == 1 else 4
+            continue
+        else:
+            raise ValueError("wire type")
+        fields.setdefault(key >> 3, []).append(value)
+    return fields
+
+
+def workspace(meta):
+    uri = (pb(meta).get(1) or [b""])[0]
+    return urllib.parse.unquote(uri[len(b"file://"):].decode()) if uri.startswith(b"file://") else None
+
+
+def antigravity(home, repo, since):
+    s = new_stats()
+    sessions = collections.OrderedDict()
+    # T3 Code runs agy over ACP with a per-install data dir instead of ~/.gemini; no env var points there.
+    for pattern in (os.path.join(home, ".gemini", "antigravity-cli", "conversations", "*.db"),
+                    os.path.join(home, ".t3", "userdata", "providers", "antigravity", "*", "antigravity-acp",
+                                 "conversations", "*.db")):
+        for path in files(pattern, since, s):
+            try:
+                uri = pathlib.Path(os.path.abspath(path)).as_uri() + "?mode=ro"
+                with contextlib.closing(sqlite3.connect(uri, uri=True)) as db:
+                    meta = db.execute("SELECT data FROM trajectory_metadata_blob").fetchone()
+                    if not any(in_repo(workspace(m), repo) for m in pb(meta[0]).get(1, [])):
+                        continue
+                    gens = db.execute("SELECT idx, data FROM gen_metadata").fetchall()
+            except (sqlite3.Error, ValueError, IndexError, TypeError):
+                s["unreadable"] += 1
+                continue
+            acc = sessions.setdefault(os.path.basename(path)[:-len(".db")], {})
+            for idx, data in gens:
+                try:
+                    usage = pb(pb(pb(data)[1][0])[4][0])
+                except (ValueError, IndexError, KeyError, TypeError):
+                    continue
+                readings = [(usage.get(f) or [None])[0] for f in (2, 4, 5, 3)]
+                if any(is_num(r) for r in readings):
+                    acc[idx] = tuple(num(r) for r in readings)
+    for acc in sessions.values():
+        s["found"] = True
+        s["sessions"] += 1
+        for u in acc.values():
+            s["tokens_seen"] = True
+            for key, value in zip(TOKEN_KEYS, u):
+                s[key] += value
     return s
 
 
@@ -441,6 +533,7 @@ def render(repo, since_label, stats, merged, runs=None):
     drifted = {name: drift(name, stats[name]) for name in HARNESSES}
     unverified = {name: set().union(*drifted[name].values()) for name in HARNESSES}
     missing = {name: unavailable(name, stats[name]) - unverified[name] for name in HARNESSES}
+    shown = [name for name in HARNESSES if name not in OPTIONAL_HARNESSES or stats[name]["found"]]
     out = [
         f"# Agent analytics: {os.path.basename(repo.rstrip('/'))}",
         "",
@@ -452,13 +545,13 @@ def render(repo, since_label, stats, merged, runs=None):
         "",
         "From transcript counter fields. Totals sum the harnesses where a metric is available.",
         "",
-        "| Metric | " + " | ".join(HARNESSES) + " | Total |",
-        "| --- |" + " ---: |" * (len(HARNESSES) + 1),
+        "| Metric | " + " | ".join(shown) + " | Total |",
+        "| --- |" + " ---: |" * (len(shown) + 1),
     ]
     for label, metric, key in rows:
         fmt = (lambda v: f"{v:.2f}") if metric == "cost" else (lambda v: f"{v:,}")
         cells, values = [], []
-        for name in HARNESSES:
+        for name in shown:
             if not stats[name]["found"]:
                 cells.append("not found")
             elif metric in unverified[name]:
@@ -542,6 +635,7 @@ def main(argv=None):
         "Claude Code": claude(args.home, args.repo, since),
         "Codex": codex(args.home, args.repo, since),
         "Cursor": cursor(args.home, args.repo, since),
+        "Antigravity": antigravity(args.home, args.repo, since),
     }
     since_label = f"transcripts modified since {args.since}" if args.since else "all local transcripts"
     runs = factory_runs(args.repo, args.since)

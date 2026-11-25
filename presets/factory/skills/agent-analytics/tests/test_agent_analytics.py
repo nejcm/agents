@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -40,6 +41,31 @@ def write(home, rel, recs, raw=""):
 def claude_msg(mid, tokens, cwd=REPO, sid="s", content=()):
     msg = {"id": mid, "usage": {"input_tokens": tokens}, "content": list(content)}
     return {"type": "assistant", "cwd": cwd, "sessionId": sid, "message": msg}
+
+
+def pb(num, value):
+    def varint(n):
+        out = b""
+        while n > 0x7F:
+            out, n = out + bytes([n & 0x7F | 0x80]), n >> 7
+        return out + bytes([n])
+    if isinstance(value, int):
+        return varint(num << 3) + varint(value)
+    return varint(num << 3 | 2) + varint(len(value)) + value
+
+
+def agy_db(home, rel, workspace, gens):
+    path = os.path.join(home, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE trajectory_metadata_blob (data BLOB)")
+        db.execute("CREATE TABLE gen_metadata (idx INTEGER, data BLOB)")
+        db.execute("INSERT INTO trajectory_metadata_blob VALUES (?)", (pb(1, pb(1, workspace.encode())),))
+        for i, (inp, out, cached) in enumerate(gens):
+            usage = pb(2, inp) + pb(3, out) + pb(5, cached)
+            db.execute("INSERT INTO gen_metadata VALUES (?, ?)", (i, pb(1, pb(4, usage))))
+    db.close()
+    return path
 
 
 def row(report, label):
@@ -277,6 +303,58 @@ class RobustnessTest(unittest.TestCase):
                {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {}}}}])
         write(self.home, ".codex/sessions/b/rollout-1.jsonl", [{"type": "session_meta", "payload": {"id": "d", "cwd": REPO}}])
         self.assertIn("| Input tokens (uncached) | unavailable | unavailable |", run(home=self.home))
+
+
+class SourcesTest(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home)
+
+    def test_codex_reads_archived_sessions_and_codex_home_once_per_session(self):
+        meta = {"type": "session_meta", "payload": {"id": "c", "cwd": REPO}}
+        usage = {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {
+            "input_tokens": 5, "output_tokens": 2, "total_tokens": 7}}}}
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl", [meta, usage])
+        write(self.home, ".codex/archived_sessions/rollout-1.jsonl", [meta, usage])
+        write(self.home, "alt/archived_sessions/rollout-2.jsonl",
+              [{"type": "session_meta", "payload": {"id": "d", "cwd": REPO}}, usage])
+        with unittest.mock.patch.dict(os.environ, {"CODEX_HOME": os.path.join(self.home, "alt")}):
+            s = aa.codex(self.home, REPO, None)
+        self.assertEqual((s["sessions"], s["input"], s["output"]), (2, 10, 4))
+
+    def test_claude_config_dir_is_read_and_deduped_with_default(self):
+        for config in (".claude", "alt"):
+            write(self.home, f"{config}/projects/-work-demo/s.jsonl", [claude_msg("m", 3, sid="S")])
+            write(self.home, f"{config}/projects/-work-demo/s/subagents/a.jsonl", [claude_msg("n", 4, sid="S")])
+        write(self.home, "alt/projects/-work-demo/t.jsonl", [claude_msg("o", 5, sid="T")])
+        with unittest.mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": os.path.join(self.home, "alt")}):
+            s = aa.claude(self.home, REPO, None)
+        self.assertEqual((s["sessions"], s["subagents"], s["input"]), (2, 1, 12))
+
+    def test_claude_session_moved_into_repo_counts_only_in_its_exact_dir(self):
+        moved = [claude_msg("m", 1, cwd="/scratch/x", sid="a"), claude_msg("n", 2, sid="a")]
+        write(self.home, ".claude/projects/-work-demo/a.jsonl", moved)
+        write(self.home, ".claude/projects/-work-demo-x/b.jsonl",
+              [claude_msg("o", 4, cwd="/work/demo-x", sid="b"), claude_msg("p", 8, sid="b")])
+        s = aa.claude(self.home, REPO, None)
+        self.assertEqual((s["sessions"], s["input"]), (1, 3))
+
+    def test_antigravity_counts_repo_conversations_once_across_roots(self):
+        t3 = ".t3/userdata/providers/antigravity/h/antigravity-acp/conversations"
+        agy_db(self.home, f"{t3}/a.db", "file:///work/demo", [(10, 3, 20), (1, 1, 0)])
+        agy_db(self.home, ".gemini/antigravity-cli/conversations/a.db", "file:///work/demo", [(10, 3, 20), (1, 1, 0)])
+        agy_db(self.home, f"{t3}/b.db", "file:///work/demo/sub%20dir", [(5, 1, 0)])
+        agy_db(self.home, f"{t3}/c.db", "file:///work/demo-other", [(99, 99, 99)])
+        write(self.home, f"{t3}/d.db", [], raw="not sqlite")
+        s = aa.antigravity(self.home, REPO, None)
+        self.assertEqual((s["sessions"], s["input"], s["cache_read"], s["output"]), (2, 16, 20, 5))
+        self.assertEqual(s["unreadable"], 1)
+        report = run(home=self.home)
+        self.assertNotIn(self.home, report)
+        self.assertIn("| Metric | Claude Code | Codex | Cursor | Antigravity | Total |", report)
+        self.assertIn("| Sessions | not found | not found | not found | 2 | 2 |", report)
+        self.assertIn("| Tool calls | not found | not found | not found | unavailable | unavailable |", report)
+        self.assertNotIn("Antigravity |", run())
 
 
 class DriftTest(unittest.TestCase):
