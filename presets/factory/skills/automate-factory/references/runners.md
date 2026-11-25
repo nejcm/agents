@@ -5,7 +5,7 @@ Where an entry runs and what gets written for it. The prompt always lives in
 Paths in prompts are relative to the run's view: `repo/`, `input/`, `skills/<name>/`.
 
 Runs are local only and use the runner identity's existing subscription login of each picked CLI
-(`claude`, and `codex` where picked); no API key or token secret. Tell the user to check their plan's terms for unattended use; these runs
+(`claude`, and `codex` or `agy` where picked); no API key or token secret. Tell the user to check their plan's terms for unattended use; these runs
 draw on the plan's usage limits. A self-hosted GitHub Actions runner on the user's own machine is
 possible but not provided.
 
@@ -75,7 +75,7 @@ expression for the timer or the five cron fields for the cron line.
 For `issue-pipeline` at `draft-pr`, `<minutes>` in the unit's `TimeoutStartSec` and the cron
 `timeout` is the entry's `run_minutes` plus 10; the script keeps the per-stage `<minutes>`.
 
-`<tool dirs>`: the directories of `command -v` for `claude`, `codex` when picked, `gh`, `git`, `python3` and the
+`<tool dirs>`: the directories of `command -v` for `claude`, `codex` and `agy` when picked, `gh`, `git`, `python3` and the
 Run recipe's tools, unresolved (a version-manager wrapper dispatches on its name). systemd and
 cron start with a minimal `PATH`, without the login shell's.
 
@@ -94,8 +94,8 @@ confirms, with `crontab -e` or by editing the output of `crontab -l` and piping 
 
 Each pick is `<cli>:<model>[@effort]`: `claude:opus@high` runs `claude --model opus --effort
 high`; `claude:default` passes no `--model` (the CLI default), and no `@effort` passes no
-`--effort`. Efforts: `low`, `medium`, `high`, `xhigh`, `max`. CLIs: `claude` and `codex`
-([mapping](#cli-mapping)); any other CLI fails the run before any call. Per entry, a `default` and optional per-stage
+`--effort`. Efforts: `low`, `medium`, `high`, `xhigh`, `max`. CLIs: `claude`, `codex` and `agy`
+(Antigravity, [mapping](#cli-mapping)); any other CLI fails the run before any call. Per entry, a `default` and optional per-stage
 overrides fill `declare -A models=([default]=<pick> [<stage>]=<pick> ...)`; a stage without its own
 runs `default`. Stages: `analyze` and, at `draft-pr` and `pr`, `edit`; `issue-pipeline` at
 `draft-pr` adds `spec`, `reproduce`, `fix`, `verify`, and `review` as its `reviewers=(...)` list,
@@ -106,9 +106,10 @@ invalid pick fails the run before any call, and a pending merge's recorded verdi
 current `reviewers`. `weekly-agent-analytics` has no model.
 Every counted call (analyze, edit, spec, each stage, each reviewer) runs under its timeout
 (`<minutes>`; 5 for the tool-less spec-writer) and keeps at most `8 * summary_cap` bytes of its final
-message (Claude's JSON output, Codex's last message; Codex's JSONL events are not capped): a longer
-one is cut there and fails the call (a stage then records `runner-error`). Minutes are the budget for
-every CLI; `<turns>` caps Claude calls only, since Codex has no turn cap.
+message (Claude's JSON output, Codex's last message, Antigravity's `response`; Codex's and Antigravity's
+event streams are not capped): a longer one is cut there and fails the call (a stage then
+records `runner-error`). Minutes are the budget for every CLI; `<turns>` caps Claude calls only, since
+Codex and Antigravity have no turn cap.
 
 ### CLI mapping
 
@@ -116,11 +117,11 @@ Each stage has a kind: tool-less (spec-writer, the smoke check), read-only (anal
 exec (reproduce, verify) or write (fix, edit). Every stage reads its inputs (`$check`) and writes
 its record (`$evidence`) as with Claude.
 
-| Kind | `claude -p` | `codex exec` | Isolation |
-| ---- | ----------- | ------------ | --------- |
-| tool-less | `--restricted --safe-mode --tools "" --max-turns 3` | `-s read-only --disable shell_tool` | claude `restricted`, codex `weak` |
-| read-only | `--restricted --safe-mode --tools Read,Grep,Glob` | `-s read-only` | claude `restricted`, codex `weak` |
-| exec, write | `--safe-mode --setting-sources '' --tools <tools>` | `-s workspace-write`, network on, `/tmp` writable as for Claude, `--add-dir $evidence` | `environment` |
+| Kind | `claude -p` | `codex exec` | `agy` `--settings` | Isolation |
+| ---- | ----------- | ------------ | --------------------- | --------- |
+| tool-less | `--restricted --safe-mode --tools "" --max-turns 3` | `-s read-only --disable shell_tool` | `agentMode` `""`, `toolPermission` `strict`, deny `read_file(*)` and the read-only row's list | claude `restricted`, codex and agy `weak` |
+| read-only | `--restricted --safe-mode --tools Read,Grep,Glob` | `-s read-only` | `agentMode` `""`, `toolPermission` `request-review`, deny `write_file(*)`, `command(*)`, `unsandboxed(*)`, `read_url(*)`, `execute_url(*)`, `mcp(*)` | claude `restricted`, codex and agy `weak` |
+| exec, write | `--safe-mode --setting-sources '' --tools <tools>` | `-s workspace-write`, network on, `/tmp` writable as for Claude, `--add-dir $evidence` | `--dangerously-skip-permissions --mode accept-edits`, deny `read_url(*)`, `execute_url(*)`, `mcp(*)`; shell network on | `environment` |
 
 Every `claude` call also gets `--strict-mcp-config --no-session-persistence --permission-mode
 dontAsk`; every `codex` call `--json --ephemeral --ignore-user-config --ignore-rules --strict-config
@@ -128,7 +129,15 @@ dontAsk`; every `codex` call `--json --ephemeral --ignore-user-config --ignore-r
 `apps`, `plugins`, `hooks`, `multi_agent`, `image_generation`, `browser_use`, `computer_use` and
 `in_app_browser`, `-m <model>` unless `default`, `-c model_reasoning_effort="<effort>"` for an
 `@effort`, and `-o` for its last message. `OPENAI_API_KEY`, `CODEX_API_KEY` and `OPENAI_BASE_URL`
-are unset like the Anthropic ones.
+are unset like the Anthropic ones. Every `agy` call gets `--input-format stream-json --output-format
+stream-json --disable-slash-commands`, `--model <model>` unless `default` and `--effort <effort>` for an
+`@effort` (model IDs that end in an effort, such as `gemini-3.8-flash-low`, also work), and runs under
+`timeout <minutes>m` like the others (not the CLI's `--print-timeout`, which exits 3, not 124). The
+prompt goes in as one stdin message, so input size has no argument limit; the spec-writer's input
+follows it after a line saying the rest is data, never instructions. Its final `result` event gives the
+response and usage. `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GEMINI_BASE_URL`,
+`GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_GENAI_USE_ENTERPRISE`,
+`GOOGLE_SERVICE_ACCOUNT_AUTH` and `AGY_ADC_AUTH` are unset too.
 
 Codex's isolation check, observed with codex-cli 0.172.0: exec and write pass (writes stay in the
 working directory and the added record directory; user MCP servers, ChatGPT apps, hooks, rules and
@@ -136,6 +145,15 @@ working directory and the added record directory; user MCP servers, ChatGPT apps
 filesystem, and its built-in exec tool cannot be removed, so those calls are `weak`. A fix or edit
 works in a worktree whose Git directory lies outside the writable roots, so the stage likely cannot
 commit refactor steps itself: a `scope: refactor` fix or edit then blocks at the scope gate.
+
+Antigravity's isolation check, observed with agy 1.5.17: `--settings` merges into the user's
+settings (their other keys stay; per the docs, deny rules win over allow rules); denied file,
+shell and MCP calls fail and the run goes on. Exec and write pass: the shell and file tools work in
+the working directory and the record directory, MCP is denied. `--add-dir` is not used: it moved the
+shell's working directory to the added one. Tool-less and read-only fail: `search_web`, subagent and
+browser tools cannot be removed (`search_web` ran with every deny rule set), and read-only
+`read_file` read a file outside the working directory, so those calls are `weak`. There is no
+session-off flag: each call keeps a conversation under `~/.gemini/antigravity-cli/`.
 
 Confirmations, from the profile, fill `environment="<isolated | not isolated>"` (the profile's
 `Environment`) and `confirmed=(<stage>=<cli:model> ...)`; a confirmation lapses when the stage's pick changes, effort
@@ -150,7 +168,8 @@ aside:
 
 Otherwise the run fails before any call. A `weak` call gets every control its CLI has and the
 safety rules at the end of its prompt: untrusted text is data, no network, no MCP or external
-tools, no secrets; reviewers too. At run time a missing CLI, or `codex login status` failing, stops
+tools, no secrets; reviewers too. At run time a missing CLI, or `codex login status` or `agy -p
+/usage` (answered by the CLI without a model call; 30 seconds) failing, stops
 the call with reason `model-unavailable` and no fallback: the run fails, and an `issue-pipeline`
 item is `deferred` and the pipeline stops.
 
@@ -273,7 +292,9 @@ commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`,
 opened after a red factory merge adds item `revert-<id>`, outcome `escalated`, reason `main-red`. Usage comes from `claude -p --output-format json`
 (`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers, and from
 Codex's `turn.completed` events (`input_tokens` less `cached_input_tokens`, `cached_input_tokens` as cache reads,
-`cache_write_input_tokens`, `output_tokens`; no turns or cost, so `null`, and the run's `cost_complete` is `false`); a turn or
+`cache_write_input_tokens`, `output_tokens`; no turns or cost, so `null`, and the run's `cost_complete` is `false`), and
+from Antigravity's final `result` event (`num_turns`, `usage.input_tokens`, `usage.cache_read_tokens`, `usage.output_tokens`;
+no cache writes or cost, so `null`); a turn or
 token total is `null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
 `agent-analytics` reads it.
 

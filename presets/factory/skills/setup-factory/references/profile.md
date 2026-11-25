@@ -103,7 +103,8 @@ Updated: <YYYY-MM-DD> (baselines) at <short SHA>
 Updated: <YYYY-MM-DD> (automate-factory)
 
 - Runners: systemd user <yes/no>, cron <yes/no>, isolated analyze <Claude Code version / no:
-  reason; managed policy confirmed none <yes/no>>, codex <version, `codex login status` ok / no>
+  reason; managed policy confirmed none <yes/no>>, codex <version, `codex login status` ok / no>,
+  agy <version, `agy -p /usage` ok / no>
 - <entry>: <runner>, schedule <cron-like value>; models default <cli:model[@effort]>[, <stage>
   <cli:model[@effort]> ...]; confirmed <stage>=<cli:model> ... <YYYY-MM-DD> / none (non-Claude picks on exec or
   write stages outside an isolated Environment, and on analyze or spec at weak isolation); extra skills <dirs / none>; trigger <schedule / changes / workflow: <what starts it>>

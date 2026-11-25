@@ -40,7 +40,7 @@ the items the user selected. Skip the phase when there are no gaps.
    CLI's cost estimate (default none; a run at or over it stops before any model call). Models,
    schedules, extra skills and stage skills are per entry, asked by `automate-factory` when it
    places each entry.
-   Runs use the subscription login of each CLI the user picks (`claude`, `codex`), never an API
+   Runs use the subscription login of each CLI the user picks (`claude`, `codex`, `agy`), never an API
    key; a run on a non-Claude CLI reports no cost, so the weekly budget counts only reported cost.
 6. **Review**: who reviews agent PRs, and whether agents may open PRs at all (drafts only, or
    ready ones too). Scheduled runs open PRs only where `automate-factory` sets that write level.
