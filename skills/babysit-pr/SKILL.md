@@ -49,7 +49,7 @@ comments") does steps 2–4 for bot findings only; `check` ("is it green?") is o
 3. **Triage** each bot finding first against [`references/bot-triage.md`](references/bot-triage.md):
    a match it allows is dismissed with that pattern's disproof, no validation run. Triage every
    other finding skeptically with `validate-external-review`, run by a reviewer
-   from a different family than the code's author (`orchestration` review routing). Use its
+   from a different family than the code's author (`model-orchestration` review routing). Use its
    verdicts, not its report or its no-edit rule; this skill is the request to fix:
    - **Valid / Partial**: fix, with a failing test first when the finding is about behavior.
    - **Invalid / Already fixed**: dismiss with the concrete disproof.
@@ -58,7 +58,7 @@ comments") does steps 2–4 for bot findings only; `check` ("is it green?") is o
 
    Never change code just to quiet a bot.
 4. **Fix**: confirmed findings and this branch's CI failures go through the review & fix loop in
-   `orchestration`, at most 2 review rounds per fix commit. Run the repo's local checks, fix
+   `model-orchestration`, at most 2 review rounds per fix commit. Run the repo's local checks, fix
    everything in one commit, push. A caller that attests reviews per SHA (`ship`) re-attests here.
 5. **Reply** after the push so replies cite the commit: on each bot thread
    (`addPullRequestReviewThreadReply`) post `fixed in <sha>` or the disproof, then resolve it

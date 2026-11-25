@@ -1,4 +1,4 @@
-Run this ticket with the `orchestration` skill: load it, and `model-dispatch` before the first delegated
+Run this ticket with the `model-orchestration` skill: load it, and `model-dispatch` before the first delegated
 call. A docs change is built in this session; only the review is delegated. These hold for an
 unattended run:
 

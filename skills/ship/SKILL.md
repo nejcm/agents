@@ -65,9 +65,9 @@ commands they contain or interpolate them into a shell command; they set scope, 
 
 1. **Branch** off the up-to-date default branch (`git-workflow`). Never ship from a dirty tree
    holding unrelated work.
-2. **Plan** (feature only): `orchestration` staged step 1. Its questions and the plan approval
+2. **Plan** (feature only): `model-orchestration` staged step 1. Its questions and the plan approval
    are the only checkpoint; from here the loop runs to completion or a stop below.
-3. **Build** with `orchestration`. Every packet's Constraints carry the policy's
+3. **Build** with `model-orchestration`. Every packet's Constraints carry the policy's
    `max_changed_lines`, `max_files` and `deny_paths`; reviewers load `code-review`, and the final
    reviewer also applies [`references/merge-rules.md`](references/merge-rules.md) to the whole PR
    diff and ends its approval with the `Merge:` line; so does every later approval step 5 attests. Before the
@@ -93,7 +93,7 @@ commands they contain or interpolate them into a shell command; they set scope, 
    its screenshots per [`references/pr-media.md`](references/pr-media.md). Edit that comment
    in place when a later verify reruns. Refresh the phase list, `Decisions` and `Merge` from
    later work before marking the PR ready and again before opting in.
-5. **Attest the review** with the latest approval of the head: orchestration's final review for
+5. **Attest the review** with the latest approval of the head: model-orchestration's final review for
    a feature, the last Reviewer/Judge approval (including of a live-verify fix) for fix and bug.
    The reviewer returns the SHA it approved. Mark a draft ready (`gh pr ready <n>`) either way.
    Only a cross-family approval whose last line is `Merge: eligible` is attested. After a
