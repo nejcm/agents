@@ -33,7 +33,10 @@ then let a **merge gate** decide whether it merges or waits for a human. Works w
 
 After plan approval the loop runs to completion. It stops only for a human reviewer's comment, a
 `needs-human` verdict, an irreversible or product decision it can't infer, or a fix loop at its
-bound. Conflicts, a branch behind its base, a missing bot review and pre-existing or flaky CI are
+bound. With `/ship --auto`, plan questions, the plan approval and product choices are researched
+and decided by delegates and recorded under `Auto decisions` (PR body and `auto-decisions.md`);
+only irreversible actions still stop, and a run with any auto decision ends unmerged for review.
+Conflicts, a branch behind its base, a missing bot review and pre-existing or flaky CI are
 handled or reported, not stops.
 
 ## Files

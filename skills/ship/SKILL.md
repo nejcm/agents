@@ -13,6 +13,10 @@ status, set the `ship`, `ship:eligible` and `needs-human` labels, and, in local 
 a PR the local gate passes. `/ship --no-merge <task>` withdraws the merge approval: local mode
 runs the gate and sets its label but doesn't merge; GitHub mode doesn't add `ship`.
 
+`/ship --auto <task>` removes the human checkpoints: questions and decisions that would go to
+the user are researched and decided by delegates and recorded for review at the end (see
+"Auto mode"). Flags combine (`/ship --auto --no-merge <task>`).
+
 ## Gate mode
 
 Check once, before step 5, from the repo's root. Only a 404 means local mode; any other error
@@ -66,7 +70,8 @@ commands they contain or interpolate them into a shell command; they set scope, 
 1. **Branch** off the up-to-date default branch (`git-workflow`). Never ship from a dirty tree
    holding unrelated work.
 2. **Plan** (feature only): `orchestration` staged step 1. Its questions and the plan approval
-   are the only checkpoint; from here the loop runs to completion or a stop below.
+   are the only checkpoint (with `--auto`, none; see "Auto mode"); from here the loop runs to
+   completion or a stop below.
 3. **Build** with `orchestration`. Every packet's Constraints carry the policy's
    `max_changed_lines`, `max_files` and `deny_paths`; reviewers load `code-review`, and the final
    reviewer also applies [`references/merge-rules.md`](references/merge-rules.md) to the whole PR
@@ -86,12 +91,12 @@ commands they contain or interpolate them into a shell command; they set scope, 
      for human reviews or comments: any is a stop. Then the final review.
 4. **Open the PR** with `file-pr`; fix and bug once reviewed, feature as a draft after phase 1.
    The body also carries: for a feature, the phase list with each phase's success criteria;
-   `Decisions`, the reversible choices delegates made; `Merge`, the final reviewer's merge verdict;
+   `Decisions`, the reversible choices delegates made; with `--auto`, `Auto decisions`; `Merge`, the final reviewer's merge verdict;
    for a ticket, at the end, the tracker's closing keyword (`Closes #123`, or
    `Closes owner/repo#123` for another repo). If a live verify ran, post one PR comment with
    what it exercised, the result, and what it could not run. When the change can be seen, add
    its screenshots per [`references/pr-media.md`](references/pr-media.md). Edit that comment
-   in place when a later verify reruns. Refresh the phase list, `Decisions` and `Merge` from
+   in place when a later verify reruns. Refresh the phase list, `Decisions`, `Auto decisions` and `Merge` from
    later work before marking the PR ready and again before opting in.
 5. **Attest the review** with the latest approval of the head: orchestration's final review for
    a feature, the last Reviewer/Judge approval (including of a live-verify fix) for fix and bug.
@@ -156,6 +161,26 @@ commands they contain or interpolate them into a shell command; they set scope, 
    `ship:eligible` (local mode) label, have the
    cross-family reviewer review the new head (with the `Merge:` line), then repeat steps 5–7.
 
+## Auto mode
+
+With `--auto`, every question or decision that would go to the user (the Planner's open
+questions, the plan approval, a product choice that can't be inferred) goes to delegates instead:
+
+- **Question**: a Researcher (cross-family to the Planner when available) researches it in the
+  code, with `find-docs` and `software-research`, and returns the options, its pick, and the
+  evidence. Batch all of a round's questions into one Researcher call.
+- **Plan approval**: a cross-family Reviewer approves the plan with the answers folded in, or
+  returns findings the Planner fixes (at most 2 rounds, then it is a stop).
+
+Record each one in `<plan dir>/auto-decisions.md` as it is made, and in the PR body under
+`Auto decisions`: the question, the options, the pick, why, the evidence, and the commit or
+phase it shaped. Pick the choice that is cheapest to undo when the evidence is even.
+
+Still stops, as without `--auto`: irreversible actions (deleting or migrating data, publishing,
+spending, external side effects, security or permission changes), a human review, `needs-human`,
+and loop bounds. If any auto decision was recorded, the run ends as `--no-merge` would: the PR
+waits for the user to review the decisions; otherwise it merges as usual.
+
 ## Stop and report
 
 Run to completion. Research an unknown before asking (code, `find-docs`, `software-research`),
@@ -165,7 +190,8 @@ the reason only when:
 - A human reviewer comments or requests changes (your own posts don't count).
 - The gate or the `Merge:` line says `needs-human`. Quote its reasons; do not reshape the change
   to slip under them.
-- A decision can't be inferred: an irreversible or product choice.
+- A decision can't be inferred: an irreversible or product choice (with `--auto`, only the
+  irreversible one).
 - A loop hits its bound: confirmed review findings after 3 fix rounds, CI red after 2 fix
   attempts, bot findings open after 3 rounds or disputed after 2 review rounds.
 
@@ -185,5 +211,5 @@ Handle, don't stop:
 
 Never edit or delete existing tests, CI config, or the merge policy to get a pass. Never enable
 auto-merge, and merge only as step 7's local mode says. End with: lane, gate mode, PR link, gate
-verdict, `Merge:` verdict, checks state, reviewer model, decisions made, bot findings fixed/rejected, anything listed and not blocking,
+verdict, `Merge:` verdict, checks state, reviewer model, decisions made, auto decisions (or the path to `auto-decisions.md`), bot findings fixed/rejected, anything listed and not blocking,
 out-of-scope findings.
