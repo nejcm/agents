@@ -36,7 +36,15 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    - schedule: any cron-like value, default the entry's `Trigger`;
    - models: a `default` pick and optional per-stage picks, `<cli>:<model>[@effort]` with the
      effort inside the pick, default `claude:default`, only the stages the entry and level run
-     ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`;
+     ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`. CLIs `claude`
+     and `codex`, any stage; for `issue-pipeline` reviewers, recommend one Claude plus one
+     other-family pick. When a non-Claude pick is made, say its runs report no cost (the weekly
+     budget counts only reported cost) and ask, per affected stage, for the recorded confirmation
+     in [CLI mapping](references/runners.md#cli-mapping): an exec or write stage outside an
+     isolated `Environment` (warn that the machine is then the only boundary), and analyze or spec
+     at `weak` isolation (say the prompt's safety rules are best effort against injection). A
+     confirmation covers that stage and pick only, so a changed pick asks again. A declined
+     confirmation leaves that pick out, never swapped for another model;
    - extra skills: skill dirs the entry's analyze and edit steps, and `issue-pipeline`'s
      reproduce, fix and verify stages and reviewers, also read (not the tool-less spec-writer),
      default none, each with a directory name no other skill of the entry has;
@@ -69,12 +77,14 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    For a `comment` post to a destination other than GitHub, the source's `Write` line's
    `<prefix>.post.sh`, or its MCP write tool, per
    [write back](../fix-issues/references/triage.md#write-back).
-6. **Smoke run as the runner** (activation gate): its checkout, identity and tools, in dry-run
-   mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
+6. **Smoke run as the runner** (activation gate): its checkout, identity and tools, one
+   tool-less check call per picked model (the entry is enabled only when every one answered), then
+   dry-run mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
    `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
    A stage skill needs its stage in the smoke run ([runners.md](references/runners.md#smoke-run)).
 7. **Record** each entry in the profile's `Automations` section: runner, schedule, model picks,
+   confirmations,
    extra skills, one `stage` line per stage skill, trigger, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
    `verify_fixed`, `reviewers`,
    `merge_level` and `needs_human`, status
@@ -87,7 +97,7 @@ entries the user names or whose smoke run failed. To change an entry:
 
 1. Regenerate its files (step 5) into a scratch directory from the current profile, never
    writing `*.local.md`: the before copy.
-2. Write the change where it lives: a setting (schedule, model picks, extra skills, stage skills, trigger, write level,
+2. Write the change where it lives: a setting (schedule, model picks and their confirmations, extra skills, stage skills, trigger, write level,
    destination, trust, `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`,
    `merge_level`, `needs_human`, budgets, `weekly_usd`) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the
@@ -103,7 +113,7 @@ entries the user names or whose smoke run failed. To change an entry:
 ## Scope
 
 - Written and activated: one local runner (systemd user timer or cron), under the user's
-  `claude` subscription login.
+  subscription login of each picked CLI (`claude`, `codex`).
 - Write levels: `report`, the default; `comment`; `draft-pr` and `pr`, per
   [`references/safety.md`](references/safety.md#steps).
 - Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external

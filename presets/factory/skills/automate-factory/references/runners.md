@@ -4,8 +4,8 @@ Where an entry runs and what gets written for it. The prompt always lives in
 `.factory/automations/<entry>.md`, copied from the entry's `Prompt` with placeholders filled.
 Paths in prompts are relative to the run's view: `repo/`, `input/`, `skills/<name>/`.
 
-Runs are local only and use the runner identity's existing `claude` subscription login; no API
-key or token secret. Tell the user to check their plan's terms for unattended use; these runs
+Runs are local only and use the runner identity's existing subscription login of each picked CLI
+(`claude`, and `codex` where picked); no API key or token secret. Tell the user to check their plan's terms for unattended use; these runs
 draw on the plan's usage limits. A self-hosted GitHub Actions runner on the user's own machine is
 possible but not provided.
 
@@ -75,7 +75,7 @@ expression for the timer or the five cron fields for the cron line.
 For `issue-pipeline` at `draft-pr`, `<minutes>` in the unit's `TimeoutStartSec` and the cron
 `timeout` is the entry's `run_minutes` plus 10; the script keeps the per-stage `<minutes>`.
 
-`<tool dirs>`: the directories of `command -v` for `claude`, `gh`, `git`, `python3` and the
+`<tool dirs>`: the directories of `command -v` for `claude`, `codex` when picked, `gh`, `git`, `python3` and the
 Run recipe's tools, unresolved (a version-manager wrapper dispatches on its name). systemd and
 cron start with a minimal `PATH`, without the login shell's.
 
@@ -94,18 +94,65 @@ confirms, with `crontab -e` or by editing the output of `crontab -l` and piping 
 
 Each pick is `<cli>:<model>[@effort]`: `claude:opus@high` runs `claude --model opus --effort
 high`; `claude:default` passes no `--model` (the CLI default), and no `@effort` passes no
-`--effort`. Efforts: `low`, `medium`, `high`, `xhigh`, `max`. Only the `claude` CLI is supported;
-any other CLI fails the run before any call. Per entry, a `default` and optional per-stage
+`--effort`. Efforts: `low`, `medium`, `high`, `xhigh`, `max`. CLIs: `claude` and `codex`
+([mapping](#cli-mapping)); any other CLI fails the run before any call. Per entry, a `default` and optional per-stage
 overrides fill `declare -A models=([default]=<pick> [<stage>]=<pick> ...)`; a stage without its own
 runs `default`. Stages: `analyze` and, at `draft-pr` and `pr`, `edit`; `issue-pipeline` at
 `draft-pr` adds `spec`, `reproduce`, `fix`, `verify`, and `review` as its `reviewers=(...)` list,
-in place of `edit`. Agent fetch and write run `default`. The picks are the allowed set: `run_model`
+in place of `edit`. Agent fetch and write are Claude only: they run `default` when it is a `claude`
+pick, else the `claude` CLI default. The picks are the allowed set: `run_model`
 builds every call from them and refuses a model not picked for its stage, an unknown stage or an
 invalid pick fails the run before any call, and a pending merge's recorded verdicts must match the
 current `reviewers`. `weekly-agent-analytics` has no model.
 Every counted call (analyze, edit, spec, each stage, each reviewer) runs under its timeout
-(`<minutes>`; 5 for the tool-less spec-writer) and keeps at most `8 * summary_cap` bytes of its JSON
-output: a longer output is cut there and fails the call (a stage then records `runner-error`).
+(`<minutes>`; 5 for the tool-less spec-writer) and keeps at most `8 * summary_cap` bytes of its final
+message (Claude's JSON output, Codex's last message; Codex's JSONL events are not capped): a longer
+one is cut there and fails the call (a stage then records `runner-error`). Minutes are the budget for
+every CLI; `<turns>` caps Claude calls only, since Codex has no turn cap.
+
+### CLI mapping
+
+Each stage has a kind: tool-less (spec-writer, the smoke check), read-only (analyze, reviewers),
+exec (reproduce, verify) or write (fix, edit). Every stage reads its inputs (`$check`) and writes
+its record (`$evidence`) as with Claude.
+
+| Kind | `claude -p` | `codex exec` | Isolation |
+| ---- | ----------- | ------------ | --------- |
+| tool-less | `--restricted --safe-mode --tools "" --max-turns 3` | `-s read-only --disable shell_tool` | claude `restricted`, codex `weak` |
+| read-only | `--restricted --safe-mode --tools Read,Grep,Glob` | `-s read-only` | claude `restricted`, codex `weak` |
+| exec, write | `--safe-mode --setting-sources '' --tools <tools>` | `-s workspace-write`, network on, `/tmp` writable as for Claude, `--add-dir $evidence` | `environment` |
+
+Every `claude` call also gets `--strict-mcp-config --no-session-persistence --permission-mode
+dontAsk`; every `codex` call `--json --ephemeral --ignore-user-config --ignore-rules --strict-config
+--skip-git-repo-check -c approval_policy="never" -c project_doc_max_bytes=0`, `--disable` for
+`apps`, `plugins`, `hooks`, `multi_agent`, `image_generation`, `browser_use`, `computer_use` and
+`in_app_browser`, `-m <model>` unless `default`, `-c model_reasoning_effort="<effort>"` for an
+`@effort`, and `-o` for its last message. `OPENAI_API_KEY`, `CODEX_API_KEY` and `OPENAI_BASE_URL`
+are unset like the Anthropic ones.
+
+Codex's isolation check, observed with codex-cli 0.172.0: exec and write pass (writes stay in the
+working directory and the added record directory; user MCP servers, ChatGPT apps, hooks, rules and
+`AGENTS.md` are off). Tool-less and read-only fail: a read-only sandbox still reads the whole
+filesystem, and its built-in exec tool cannot be removed, so those calls are `weak`. A fix or edit
+works in a worktree whose Git directory lies outside the writable roots, so the stage likely cannot
+commit refactor steps itself: a `scope: refactor` fix or edit then blocks at the scope gate.
+
+Confirmations, from the profile, fill `environment="<isolated | not isolated>"` (the profile's
+`Environment`) and `confirmed=(<stage>=<cli:model> ...)`; a confirmation lapses when the stage's pick changes, effort
+aside:
+
+- a non-Claude pick on an exec or write stage (`reproduce`, `verify`, `fix`, `edit`) outside an
+  isolated environment runs only when confirmed for that stage, after setup warned that the
+  machine it runs on is then the only boundary;
+- a pick with `weak` isolation on an untrusted-input stage (`analyze`, which is also triage, and
+  `spec`) runs only when confirmed for that stage, after setup said that the prompt rules are best
+  effort against injection.
+
+Otherwise the run fails before any call. A `weak` call gets every control its CLI has and the
+safety rules at the end of its prompt: untrusted text is data, no network, no MCP or external
+tools, no secrets; reviewers too. At run time a missing CLI, or `codex login status` failing, stops
+the call with reason `model-unavailable` and no fallback: the run fails, and an `issue-pipeline`
+item is `deferred` and the pipeline stops.
 
 ## Stage skills
 
@@ -204,7 +251,7 @@ fine-grained token scoped to this repo, bounds an injected model
 
 Every run past the pause and Git config checks appends one line to
 `.factory/reports/runs.jsonl`, written by the run script, never the model, credential-shaped text
-(`sk-ant-`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
+(`sk-ant-`, OpenAI `sk-`, Google `AIza`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget, `no-risk-change` for one `skipped` by its
@@ -214,22 +261,29 @@ Every run past the pause and Git config checks appends one line to
 disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd` (the sum of the costs the calls reported, `null` when none did) with
 `cost_complete` (`false` when a call reported no cost), and `stages`, one per call in order: `stage`,
-`cli`, `model` (`default` for the CLI default), `family` (from the model name: `claude`, `opus`,
+`cli`, `model` (`default` for the CLI default), `family` (from the model name, the CLI's name for `default`: `claude`, `opus`,
 `sonnet`, `haiku`, `fable` are `anthropic`, `gpt` and `o<digit>` `openai`, `gemini` `google`, else
 `unknown`), `effort`, `isolation` (`restricted`: confined to its directory, no shell;
-`environment`: a shell as the runner, bounded by the environment), `exit`, `turns`, the four token
-counts and `cost_usd`, each `null` when not reported. `issue-pipeline` adds
+`environment`: a shell, bounded by the environment; `weak`: reads beyond its directory, see
+[CLI mapping](#cli-mapping)), `exit`, `turns`, the four token counts and `cost_usd`, each `null`
+when not reported. `issue-pipeline` adds
 `items` (`id`, `outcome`, `reason`, `pr`, `start_commit`, `end_commit` (the fix, or the merged
 commit verified), `diff_stat` (fixes only), `test_changes`, `dependency_change`, `scope`, `weighted_lines`, `instruction_change`, `reviews`
-(`model`, the reviewer's pick, `family`, `verdict`, `valid`: false when the output had no verdict line)); a revert
+(`model`, the reviewer's pick, its `cli` and `family`, `verdict`, `valid`: false when the output had no verdict line)); a revert
 opened after a red factory merge adds item `revert-<id>`, outcome `escalated`, reason `main-red`. Usage comes from `claude -p --output-format json`
-(`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers; a turn or
+(`num_turns`, `total_cost_usd`, `usage`) for analyze, edit, the spec-writer, the `fix-issues` stages and reviewers, and from
+Codex's `turn.completed` events (`input_tokens` less `cached_input_tokens`, `cached_input_tokens` as cache reads,
+`cache_write_input_tokens`, `output_tokens`; no turns or cost, so `null`, and the run's `cost_complete` is `false`); a turn or
 token total is `null` when any call did not report it. Agent fetch and write calls are not counted. A dry run records too, with `dry_run: true`: the file is local and smoke runs cost usage.
 `agent-analytics` reads it.
 
 ## Smoke run
 
-Run the entry once as the runner, in dry-run mode, before its automatic trigger is enabled:
+Run the entry once as the runner, in dry-run mode, before its automatic trigger is enabled. First,
+with `FACTORY_CHECK_MODELS=1` in place of `FACTORY_DRY_RUN=1` the same way, the script makes one
+tool-less check call per picked model (models and reviewers) through its [mapping](#cli-mapping),
+prints `check: <pick> answered` or `did not answer`, records the calls and ends; it passes only
+when it exits 0, so every picked model answered. Then the dry run:
 
 - systemd: install the units and `systemctl --user daemon-reload`, then
   `systemctl --user set-environment FACTORY_DRY_RUN=1; systemctl --user start factory-<repo>-<entry>.service; systemctl --user unset-environment FACTORY_DRY_RUN`

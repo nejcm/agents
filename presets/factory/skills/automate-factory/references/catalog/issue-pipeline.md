@@ -69,7 +69,7 @@
   `verify_fixed`, `on` (default) or `off`; `trust`, one array element per `Fetch` line with
   `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
   name of the `gh` line, or empty; `allow` globs; `reviewers`, the `review` stage's
-  [picks](../runners.md#models), best other than the `fix` pick (default `claude:sonnet`), recorded as same family,
+  [picks](../runners.md#models), best other than the `fix` pick (default `claude:sonnet`; setup recommends one Claude plus one other-family pick), each verdict recorded with its CLI and family,
   at least two for `merge`; `merge_level`, `draft` (default), `ready` or `merge`, offered per
   [interview](../../../setup-factory/references/interview.md) only with the entry's agreement
   numbers shown; `needs_human`, the disclosures that keep a PR draft and unmerged, any of

@@ -6,6 +6,7 @@ reviewers=(claude:sonnet) merge_level="<merge level>"
 # Disclosures that keep a PR draft and unmerged at any merge_level: test-change, dependency, refactor.
 needs_human=(test-change dependency refactor)
 for m in "${reviewers[@]}"; do check_model "$m"; done
+for m in spec:none reproduce:exec fix:write verify:exec; do confirm "${m%:*}" "$(pick "${m%:*}")" "${m#*:}"; done
 # A user skill (its directory name in skills) in place of a built-in stage; gates, writes and this script stay.
 declare -A stage_skills=()
 # Skills (directory names in skills) every stage and reviewer also follows.
@@ -193,7 +194,7 @@ or review: verdict=changes."
       *) v=invalid ;;
     esac
     reviews+="$m=$v "
-    { printf '\n- %s (same family): %s\n\n' "$m" "${v/invalid/changes (invalid output)}"
+    { printf '\n- %s (%s): %s\n\n' "$m" "$(python3 -I -c "$record_py" family "$m")" "${v/invalid/changes (invalid output)}"
       [ "$v" = invalid ] || sed '$d' "$item/review-$m.md" | clip 40 | sed 's/^/    /'; } >> "$item/review.md"
     echo "$id review: $m $v"
   done
@@ -698,7 +699,7 @@ pipeline() {
           started=1 o=blocked r=error
           try run_item "$id" "$feature" "$fref" < /dev/null
           [ ! -f "$view/outcomes/$id" ] || read -r o r u < "$view/outcomes/$id"
-          [ "$r" != runner-error ] || halt=runner-error
+          [[ ! $r =~ ^(runner-error|model-unavailable)$ ]] || halt=$r
           [ "${FACTORY_DRY_RUN:-0}" != 1 ] || { echo "dry run: $id $o $r"; o=deferred r=dry-run u=none; }
         fi ;;
       same-feature | cap) o=deferred r=$why ;;
@@ -706,5 +707,6 @@ pipeline() {
     esac
     echo "pipeline: id=$id outcome=$o reason=$r pr=$u" | tee -a "$report"
   done < "$view/select.tsv"
+  [ "$halt" != model-unavailable ] || run_reason=$halt
   [ -z "$halt" ] || { echo "pipeline: stopped on $halt" >&2; exit 1; }
 }

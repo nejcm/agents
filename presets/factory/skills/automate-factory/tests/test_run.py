@@ -91,7 +91,7 @@ class RunShTest(unittest.TestCase):
             f.write(text)
 
     def run_entry(self, level, scen="plain", dry=False, skills="", post="", main="", extra=None, allow="*", dep_files="0",
-                  weekly="", models="", minutes="1"):
+                  weekly="", models="", minutes="1", subs=()):
         with open(RUN_SH) as f:
             script = f.read()
         for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": minutes,
@@ -100,7 +100,7 @@ class RunShTest(unittest.TestCase):
             script = script.replace(k, v)
         for old, new in (("skills=()", f"skills=({skills})"), (MODELS, models if "=(" in models else f"declare -A models=({models})" if models else ""), ("post() { :; }", post),
                          ("      edit\n      publish\n", main),
-                         ("dep_files=0", "dep_files=1" if dep_files == "1" else "")):
+                         ("dep_files=0", "dep_files=1" if dep_files == "1" else ""), *subs):
             if new:
                 self.assertIn(old, script)
                 script = script.replace(old, new)
@@ -829,8 +829,8 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
                         ({"models": "[default]=sonnet"}, f"model sonnet {bad}"),
                         ({"models": '[default]="claude:opus claude:sonnet"'}, f"model claude:opus claude:sonnet {bad}"),
                         ({"models": "[default]=claude:a,b"}, f"model claude:a,b {bad}"),
-                        ({"models": "[default]=claude:default [edit]=codex:gpt-6.1-sol@xhigh"},
-                         "model codex:gpt-6.1-sol@xhigh: CLI codex is not supported yet, only claude"),
+                        ({"models": "[default]=claude:default [edit]=agy:gemini-3@xhigh"},
+                         "model agy:gemini-3@xhigh: CLI agy is not supported yet, only claude and codex"),
                         ({"models": "[default]=claude:opus@huge"},
                          "model claude:opus@huge: effort huge is not low, medium, high, xhigh or max"),
                         ({"models": "[default]=claude:opus [verfy]=claude:opus"}, "models: verfy is not a stage"),

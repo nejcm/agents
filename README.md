@@ -104,7 +104,10 @@ ulis install --global --source . --preset react-web --yes
   run records, then local Claude Code, Codex, Cursor and Antigravity transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
   catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
-  you, so run them in an isolated VM or container holding only a repo-scoped token.
+  you, so run them in an isolated VM or container holding only a repo-scoped token. Each stage
+  runs the model you pick on `claude` or `codex`; a non-Claude CLI runs exec and write stages
+  outside an isolated environment, or untrusted input at weak isolation, only after a recorded
+  confirmation.
   `issue-pipeline` at `draft-pr` turns items from trusted sources into verified draft PRs,
   at most 3 per run by default. They stay unmerged unless the entry's `merge_level` is `merge`:
   then a later run squash-merges a PR only after two or more reviewers approve, CI is green on

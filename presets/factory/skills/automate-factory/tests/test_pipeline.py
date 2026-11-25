@@ -242,7 +242,7 @@ class PipelineTest(unittest.TestCase):
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
                      report_extra="", cap="3", flow="fix", verify_fixed="on", merge_level="draft",
                      reviewers="claude:sonnet", needs_human=None, run_minutes="240", models="", skills="",
-                     stage_skills="", extra_skills=""):
+                     stage_skills="", extra_skills="", subs=()):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -270,6 +270,9 @@ class PipelineTest(unittest.TestCase):
         if models:
             self.assertIn(test_run.MODELS, script)
             script = script.replace(test_run.MODELS, f"declare -A models=({models})")
+        for old, new in subs:
+            self.assertIn(old, script)
+            script = script.replace(old, new)
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging" {skills})')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
         script = script.replace("\nfetch\nanalyze\n", "\n" + pipeline + "\nfetch\nanalyze\n")
@@ -781,15 +784,15 @@ sys.exit(1 if spec else p.returncode)
         [call] = {c for c in self.calls() if "--model" in c and "--tools Read,Grep,Glob" in c and "--restricted" in c}
         self.assertIn("--model sonnet", call)
         bodies = {p["head"]: p["body"] for p in self.gh()["prs"]}
-        self.assertIn("## Shadow review\n\nAdvisory; nothing merges on it.\n\n- claude:sonnet (same family): approve\n\n"
+        self.assertIn("## Shadow review\n\nAdvisory; nothing merges on it.\n\n- claude:sonnet (anthropic): approve\n\n"
                       "    - src/1:1: nit\n", bodies["factory/fix-1"])
-        self.assertIn("- claude:sonnet (same family): changes (invalid output)\n", bodies["factory/fix-2"])
+        self.assertIn("- claude:sonnet (anthropic): changes (invalid output)\n", bodies["factory/fix-2"])
         self.assertNotIn("looks fine", bodies["factory/fix-2"])
         with open(f"{self.repo}/.factory/reports/runs.jsonl") as f:
             [rec] = [json.loads(x) for x in f]
         self.assertEqual([(i["id"], i["scope"], i["weighted_lines"], i["reviews"]) for i in rec["items"]], [
-            ("1", "minimal", 1, [{"model": "claude:sonnet", "family": "same family", "verdict": "approve", "valid": True}]),
-            ("2", "minimal", 1, [{"model": "claude:sonnet", "family": "same family", "verdict": "changes", "valid": False}])])
+            ("1", "minimal", 1, [{"model": "claude:sonnet", "cli": "claude", "family": "anthropic", "verdict": "approve", "valid": True}]),
+            ("2", "minimal", 1, [{"model": "claude:sonnet", "cli": "claude", "family": "anthropic", "verdict": "changes", "valid": False}])])
 
     def test_shadow_review_in_dry_run_writes_nothing(self):
         self.gh_state({1: {}}, [])
@@ -961,7 +964,7 @@ sys.exit(1 if spec else p.returncode)
     def test_reviewers_must_be_valid_claude_picks_before_any_call(self):
         for reviewers, msg in (('"claude:haiku sonnet"', "model claude:haiku sonnet is not <cli>:<model>[@effort]"),
                                ("sonnet", "model sonnet is not <cli>:<model>[@effort]"),
-                               ("claude:sonnet codex:gpt-6.1-sol", "model codex:gpt-6.1-sol: CLI codex is not supported yet, only claude")):
+                               ("claude:sonnet agy:gemini-3", "model agy:gemini-3: CLI agy is not supported yet, only claude and codex")):
             with self.subTest(reviewers):
                 self.gh_state({1: {}}, [])
                 r = self.run_pipeline({"1": {}}, reviewers=reviewers)

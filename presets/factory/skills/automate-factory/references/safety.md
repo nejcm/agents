@@ -26,7 +26,8 @@ in its environment.
 
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
-  `run_minutes`, `cap`, budgets (`weekly_usd`), per-entry model picks, extra skills and
+  `run_minutes`, `cap`, budgets (`weekly_usd`), per-entry model picks with their recorded
+  [confirmations](runners.md#cli-mapping), extra skills and
   [stage skills](runners.md#stage-skills), `ceiling`,
   the [change trigger](runners.md#change-triggers) with `Risk paths` and `Feature paths`,
   `issue-pipeline` `reviewers`, `merge_level` and `needs_human`.
@@ -64,6 +65,16 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   other sessions stay out of reach; `--safe-mode` drops hooks, plugins, skills and `CLAUDE.md`.
   Managed (policy) settings still apply: if they define hooks, analyze is unavailable on that
   runner. A runner that cannot run this command is not offered an entry with untrusted input.
+- **Other CLIs**: the user may pick any supported CLI for any stage ([CLI
+  mapping](runners.md#cli-mapping)); the runner never overrides that choice and never falls back
+  to another model (a missing or logged-out CLI stops the call `model-unavailable`). A CLI that
+  fails the analyze isolation above (`codex`: its read-only sandbox reads the whole filesystem)
+  runs analyze or the spec-writer only after the user's recorded confirmation; it then gets every
+  control the CLI has, the safety rules in its prompt (best effort against injection, not a
+  boundary), and the stage is recorded `isolation: weak`. A non-Claude CLI on an exec or write
+  stage outside an isolated `Environment` also needs a recorded confirmation: the machine it runs
+  on is then the only boundary. Without the confirmation the run fails before any call. Agent fetch
+  and agent write stay on Claude.
 - **Agent fetch**: for sources without a script fetch, per `fix-issues`
   [triage.md](../../fix-issues/references/triage.md#agent-fetch). The MCP server holds the
   credential, out of the model's reach, and the agent can call only the allowlisted read tools of
@@ -84,7 +95,7 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   spec, written only for items from a source the user marked trusted or carrying the maintainer's
   label. Residuals, accepted: a stranger can edit a labelled public issue after the label, so the
   spec tops the draft for the reviewer; on a public repo the body carries clipped stage records,
-  checked only for `sk-ant-` text.
+  checked only for `sk-ant-`, OpenAI `sk-` and Google `AIza` key text.
 - **Write levels**: each automation has one, chosen at setup and written into its run script:
   `report` (default, no writes), `comment` (post), `draft-pr` or `pr` (edit, gates, publish).
   An entry offers only the levels in its `Write levels`.
@@ -113,7 +124,7 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   blank; added test lines carry no skip or focus marker; every new package has a `dependency`
   line; exactly one valid `scope` line; the commits descend linearly from the start and touch no
   path the final diff leaves unchanged; the fixed test command passes in the checkout; no
-  credential-shaped text (`sk-ant-`) in the diff, commit messages, summary or disclosure sections.
+  credential-shaped text (`sk-ant-`, OpenAI `sk-`, Google `AIza` keys) in the diff, commit messages, summary or disclosure sections.
   Inside `allow`, a changed path must stay a regular or executable file at the start and the
   commit: a symlink could point a test, CI or reviewer at a path outside `allow`, and a
   submodule at code no gate saw.

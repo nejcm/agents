@@ -195,6 +195,17 @@ class ReportTest(unittest.TestCase):
         self.assertIn("Review: approved 4 of 5 reviewed PRs; human outcome known for 3, agreeing 2; misses 1 "
                       "(approved, then closed or reverted). Merged of resolved PRs: minimal 3 of 3, refactor 0 of 2.", report)
 
+    def test_review_agreement_is_also_reported_per_reviewer_family(self):
+        def item(n, reviews):
+            return {"outcome": "fixed", "pr": f"https://github.com/o/r/pull/{n}", "scope": "minimal",
+                    "reviews": [{"family": f, "verdict": v} for f, v in reviews]}
+        items = [item(1, [("anthropic", "approve"), ("openai", "changes")]), item(2, [("anthropic", "approve"), ("openai", "changes")]),
+                 item(3, [("anthropic", "approve"), ("Bad Family!", "approve")]), item(4, [("openai", "approve")])]
+        u = "https://github.com/o/r/pull/"
+        fates = f"{u}1 merged 0 {'a' * 40} t\n{u}2 closed 0 - t\n{u}3 reverted 0 {'b' * 40} t\n{u}4 factory-merged 0 {'c' * 40} t\n"
+        report = self.runs([{"entry": "issue-pipeline", "outcome": "ok", "items": items}], fates)
+        self.assertIn(" Reviewer agreement by family: anthropic 1 of 3, openai 1 of 2, unknown 0 of 1.", report)
+
     def test_corrupt_counters_and_scope_do_not_abort_or_reach_the_totals(self):
         bad = {"entry": "e", "outcome": "ok", "cost_usd": float("nan"), "turns": -4, "weighted_lines": float("inf"),
                "test_changes": float("nan"), "items": [{"pr": "https://github.com/o/r/pull/1", "scope": ["minimal"],

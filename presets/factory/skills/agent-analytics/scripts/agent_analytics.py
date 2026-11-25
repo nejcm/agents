@@ -385,7 +385,8 @@ def pr_fates(repo):
 
 
 def agreement(prs, fates):
-    reviewed = [(ok, scope, fates.get(pr)) for pr, (ok, has, scope) in prs.items() if has]
+    reviewed = [(ok, scope, fates.get(pr)) for pr, (ok, has, scope, _) in prs.items() if has]
+    by = collections.defaultdict(lambda: [0, 0])
     approved = sum(ok for ok, _, _ in reviewed)
     known = agree = misses = 0
     for ok, _, fate in reviewed:
@@ -396,14 +397,18 @@ def agreement(prs, fates):
             agree += ok != bad
         misses += ok and f in ("closed", "reverted")
     merged = {s: [0, 0] for s in ("minimal", "refactor")}
-    for pr, (_, _, scope) in prs.items():
-        f = (fates.get(pr) or (None,))[0]
+    for pr, (_, _, scope, families) in prs.items():
+        f, asked = fates.get(pr) or (None, False)
+        for name, ok in families if asked or f in ("merged", "closed", "reverted") else []:
+            by[name][0] += ok != (asked or f in ("closed", "reverted"))
+            by[name][1] += 1
         if scope in merged and f in ("merged", "factory-merged", "closed", "reverted"):
             merged[scope][0] += f in ("merged", "factory-merged")
             merged[scope][1] += 1
     return (f"Review: approved {approved} of {len(reviewed)} reviewed PRs; human outcome known for {known}, "
             f"agreeing {agree}; misses {misses} (approved, then closed or reverted). Merged of resolved PRs: "
-            f"minimal {merged['minimal'][0]} of {merged['minimal'][1]}, refactor {merged['refactor'][0]} of {merged['refactor'][1]}.")
+            f"minimal {merged['minimal'][0]} of {merged['minimal'][1]}, refactor {merged['refactor'][0]} of {merged['refactor'][1]}."
+            + (" Reviewer agreement by family: " + ", ".join(f"{n} {a} of {k}" for n, (a, k) in sorted(by.items())) + "." if by else ""))
 
 
 def factory_runs(repo, since):
@@ -434,7 +439,9 @@ def factory_runs(repo, since):
             pr, rv = (i.get("pr"), i.get("reviews")) if isinstance(i, dict) else (None, None)
             if isinstance(pr, str) and re.search(r"/pull/[0-9]+$", pr):
                 rv = [x for x in rv if isinstance(x, dict)] if isinstance(rv, list) else []
-                r["prs"][pr] = (bool(rv) and all(x.get("verdict") == "approve" for x in rv), bool(rv), text(i.get("scope")))
+                r["prs"][pr] = (bool(rv) and all(x.get("verdict") == "approve" for x in rv), bool(rv), text(i.get("scope")),
+                                [(x["family"] if re.fullmatch(r"[a-z]{1,20}", str(x.get("family"))) else "unknown",
+                                  x.get("verdict") == "approve") for x in rv])
         for u in [rec] + [i for i in items if isinstance(i, dict)]:
             if u.get("outcome") == "escalated":
                 why = u.get("reason")

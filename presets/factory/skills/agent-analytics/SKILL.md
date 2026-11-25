@@ -57,7 +57,8 @@ tokens and cost (the CLI's own estimate; runs whose cost misses a call that repo
 counted), and for reviewed PRs, joined with
 `.factory/reports/fix-issues/fates.tsv`: reviewer approve rate, agreement with the human outcome
 (a human merge is agreement with approve; closed, reverted or a change request with changes; a
-factory merge is not a human outcome), misses
+factory merge is not a human outcome), the same agreement per reviewer family (from each
+verdict's recorded `family`), misses
 (approved, then closed or reverted) and merge rates by scope; a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the UTC date of the record's
 start date. Factory runs keep no transcript, so they are not counted again below. Gate messages,
 items and commits stay in the file, never in the report.
