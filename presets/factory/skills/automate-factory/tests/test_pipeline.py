@@ -964,7 +964,7 @@ sys.exit(1 if spec else p.returncode)
     def test_reviewers_must_be_valid_claude_picks_before_any_call(self):
         for reviewers, msg in (('"claude:haiku sonnet"', "model claude:haiku sonnet is not <cli>:<model>[@effort]"),
                                ("sonnet", "model sonnet is not <cli>:<model>[@effort]"),
-                               ("claude:sonnet agent:gpt-5.6-sol", "model agent:gpt-5.6-sol: CLI agent is not supported yet, only claude, codex and agy")):
+                               ("claude:sonnet nope:gpt-5.6-sol", "model nope:gpt-5.6-sol: CLI nope is not supported yet, only claude, codex, agy and agent")):
             with self.subTest(reviewers):
                 self.gh_state({1: {}}, [])
                 r = self.run_pipeline({"1": {}}, reviewers=reviewers)

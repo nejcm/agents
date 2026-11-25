@@ -37,7 +37,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    - models: a `default` pick and optional per-stage picks, `<cli>:<model>[@effort]` with the
      effort inside the pick, default `claude:default`, only the stages the entry and level run
      ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`. CLIs `claude`,
-     `codex` and `agy` (Antigravity), any stage; for `issue-pipeline` reviewers, recommend one Claude plus one
+     `codex`, `agy` (Antigravity) and `agent` (Cursor; effort in the model ID), any stage. For an
+     `agent:<model>` pick, tell the user that Cursor saves each run's model as their own default
+     model, so `agent:default` then means whatever the last `agent:<model>` run left; for `issue-pipeline` reviewers, recommend one Claude plus one
      other-family pick. When a non-Claude pick is made, say its runs report no cost (the weekly
      budget counts only reported cost) and ask, per affected stage, for the recorded confirmation
      in [CLI mapping](references/runners.md#cli-mapping): an exec or write stage outside an
@@ -113,7 +115,7 @@ entries the user names or whose smoke run failed. To change an entry:
 ## Scope
 
 - Written and activated: one local runner (systemd user timer or cron), under the user's
-  subscription login of each picked CLI (`claude`, `codex`, `agy`).
+  subscription login of each picked CLI (`claude`, `codex`, `agy`, `agent`).
 - Write levels: `report`, the default; `comment`; `draft-pr` and `pr`, per
   [`references/safety.md`](references/safety.md#steps).
 - Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external

@@ -69,7 +69,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   mapping](runners.md#cli-mapping)); the runner never overrides that choice and never falls back
   to another model (a missing or logged-out CLI stops the call `model-unavailable`). A CLI that
   fails the analyze isolation above (`codex`: its read-only sandbox reads the whole filesystem;
-  `agy`: read-only still reads outside its directory and keeps web search)
+  `agy`: read-only still reads outside its directory and keeps web search; `agent`: ask mode still
+  reads outside its directory and keeps subagents)
   runs analyze or the spec-writer only after the user's recorded confirmation; it then gets every
   control the CLI has, the safety rules in its prompt (best effort against injection, not a
   boundary), and the stage is recorded `isolation: weak`. A non-Claude CLI on an exec or write
