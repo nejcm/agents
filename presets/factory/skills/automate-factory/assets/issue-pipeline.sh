@@ -20,12 +20,18 @@ row() { [ ! -f "$1" ] || awk -v k="$2" '$1 == k {v = $2} END {print v}' "$1"; }
 finish() { outcome=$1 reason=$2; exit 0; }
 ran() { [ "$1" = 124 ] || { outcome=deferred reason=runner-error; exit 1; }; }
 time_for() { [ $((run_minutes * 60 - SECONDS)) -ge $(($1 * 60)) ]; }
-# Refactor test runs are known only after the fix; verify and the reviewers are still ahead.
+# Optional test runs (refactor commits, old tests, new tests on base) are known only after the fix;
+# verify and the reviewers are still ahead.
 reserve() { time_for $((($1 + 1 + ${#reviewers[@]}) * minutes)) || finish deferred run-time; }
 
 take() {
   [ -f "$1" ] && [ ! -L "$1" ] && [ "$(wc -c < "$1")" -le "$summary_cap" ] || exit 1
   cp "$1" "$2"
+}
+
+ledgers() {
+  local p
+  for p in pushed linked tickets merges fates; do ledger_ok "$fx/$p.tsv"; done
 }
 
 preflight() {
@@ -36,16 +42,17 @@ preflight() {
   mkdir -p "$fx/tmp" "$items"
   [ -e "$fx/.gitignore" ] || (set -C; printf '*\n' > "$fx/.gitignore")
   [ "$(cat "$fx/.gitignore")" = '*' ] && git check-ignore -q "$fx/tmp/x/spec.md" || block "$fx is not ignored"
-  for p in merges.tsv fates.tsv; do ledger_ok "$fx/$p"; done
+  ledgers
 }
 
 # $1 stage, $2 its directory, $3 reference, $4 tools, $5 commit of the verify skill, then inputs.
 stage() {
-  local check=$item/check/$1 evidence=$item/evidence/$1 prompt rc=0
+  local check=$item/check/$1 evidence=$item/evidence/$1 bans=("$item/bans.md") prompt rc=0
+  [ "$1" != fix ] || bans+=("$item/bans.fix.md")
   mkdir -p "$check" "$evidence"
   git archive "$5" ".cursor/skills/verify-$app" | tar -x -C "$check"
   cp -R "${@:6}" "$check/"
-  prompt="$(cat "$runview/skills/fix-issues/references/$3" && overlay "$1" && cat "$item/bans.md")
+  prompt="$(cat "$runview/skills/fix-issues/references/$3" && overlay "$1" && cat "${bans[@]}")
 Stage: $1."
   (cd "$2" && check=$check evidence=$evidence timeout "${minutes}m" claude -p --safe-mode --setting-sources '' \
     --strict-mcp-config --no-session-persistence --tools "$4" --allowedTools "$4" "${caps[@]}" ${model[@]+"${model[@]}"} \
@@ -77,6 +84,7 @@ red_green() {
     added+=("$p")
   done < <(git diff --name-only --no-renames --diff-filter=A "$start" "$commit")
   if [ ${#added[@]} = 0 ]; then red="No test added; Root cause and fix says why."; return; fi
+  reserve 1
   git worktree add -q --detach "$item/red" "$start"
   git -C "$item/red" checkout -q "$commit" -- "${added[@]}"
   (cd "$item/red" && timeout "${minutes}m" sh -c "$test_cmd") > "$item/red.log" 2>&1 || rc=$?
@@ -219,10 +227,10 @@ escalate() {
   finish escalated "$why"
 }
 
-# repro-only: one comment with the spec and repro record, then stop.
+# One comment with the spec and repro record, then stop. $1 what became of the fix, default repro-only.
 repro_item() {
   step=link
-  { printf 'Reproduced on %s by a scheduled run. No fix was attempted.\n' "$start"
+  { printf 'Reproduced on %s by a scheduled run. %s\n' "$start" "${1:-No fix was attempted.}"
     printf '\n## Spec\n\n'; cat "$item/spec.md"
     printf '\n## Reproduction\n\n'; clip 60 < "$item/repro.md"
     printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
@@ -335,9 +343,13 @@ release() {
   local f
   set +e
   [ -n "$outcome" ] || outcome=blocked reason=$step
-  printf '%s %s %s\n%s %s\n%s\n%s\n%s\n%s\n' "$outcome" "$reason" "$url" "$start" "${commit:-$start}" "$stat" "$(disclosure)" \
+  printf '%s %s %s\n%s %s\n%s\n%s\n%s\n%s\n' "$outcome" "$reason" "${url:-none}" "$start" "${commit:-$start}" "$stat" "$(disclosure)" \
     "$reviews" "$(instruction_change)" > "$runview/outcomes/$id"
   [ -n "$claimed" ] || return
+  # Reproduced, then blocked with nothing pushed: the issue still gets the reproduction. Subshell: finish exits.
+  case $outcome:$step in blocked:fix | blocked:gates | blocked:verify | blocked:review)
+    (set -e; commentable; repro_item "The automated fix stopped at $step and nothing was pushed; needs a human.") ;;
+  esac
   if [ "$step" = publish ] && [ -n "$commit" ] &&
     [ "$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1)" = "$commit" ]; then
     printf '%s %s %s %s\n' "$id" "$commit" "$entry" "$start" >> "$fx/pushed.tsv"
@@ -349,7 +361,7 @@ release() {
   for f in spec.md body.md; do [ ! -f "$item/$f" ] || cp "$item/$f" "$out/"; done
   [ "${FACTORY_DRY_RUN:-0}" = 1 ] || [ "$outcome" = deferred ] ||
     printf '%s issue-pipeline: outcome=%s reason=%s base=%s commit=%s pr=%s\n' \
-      "$day" "$outcome" "$reason" "$start" "${commit:-none}" "$url" >> "$out/summary.md"
+      "$day" "$outcome" "$reason" "$start" "${commit:-none}" "${url:-none}" >> "$out/summary.md"
   rm -rf "$item"
   git worktree prune
 }
@@ -368,11 +380,12 @@ run_item() {
   [ -z "$prs" ] || finish skipped pr-exists
   ! git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null || finish skipped branch-exists
   printf '%s\n' 'No git commit (fix stage: only refactor steps per the scope line) or git push, no gh, no tracker or chat writes, no edits outside the working directory and $evidence.' \
-    "In fix.md, before its last line, one line $scope_rule" \
     'Unattended run: never ask a question; nobody answers.' \
     'When the stage needs credentials, production access, a decision the spec leaves open, or work outside its feature, do not guess: say what is missing and end your record with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line.' \
+    'The reference above also covers the coordinator and other stages: do only the part for the stage named on the last line.' > "$item/bans.md"
+  printf '%s\n' "In fix.md, before its last line, one line $scope_rule" \
     'In fix.md, before its last line, one line per existing test file you changed, deleted or renamed (old path): test-change: <path from the repo root>: <one-line reason>.' \
-    'Prefer existing code and the standard library; add a package only for substantial functionality, with one line in fix.md per new package: dependency: <name> <why not in-house>.' > "$item/bans.md"
+    'Prefer existing code and the standard library; add a package only for substantial functionality, with one line in fix.md per new package: dependency: <name> <why not in-house>.' > "$item/bans.fix.md"
   { awk '/^## /{p = $0 == "## Run"} p' .factory/profile.md; grep '^- Scripts: ' .factory/profile.md || true; } > "$item/run.md"
   [ -z "$3" ] || verify_item "$3"
   [ "$flow" = fix ] || commentable
@@ -387,7 +400,8 @@ run_item() {
   take "$item/evidence/reproduce/repro.md" "$item/repro.md"
   escalate "$item/repro.md"
   r=$(tail -n 1 "$item/repro.md")
-  case $r in "repro: outcome=reproduced" | "repro: outcome=not-reproduced") echo "$id $r" ;; *) exit 1 ;; esac
+  case $r in "repro: outcome=reproduced" | "repro: outcome=not-reproduced" | "repro: outcome=blocked") echo "$id $r" ;; *) exit 1 ;; esac
+  [ "$r" != "repro: outcome=blocked" ] || finish blocked repro-blocked
   [ "$r" = "repro: outcome=reproduced" ] || finish not-reproduced reproduce
   [ "$flow" = fix ] || repro_item
 
@@ -492,9 +506,23 @@ merge_item() {
 # $1 item, $2 merged PR, $3 its merge commit. Same gates, draft, never merged by the factory.
 revert_pr() {
   local d=$runview/revert-$1 p
+  # revert_item already checked the time for both test runs.
+  reserve() { :; }
   view=$d out=$items/$1 work=$d/work branch=factory/revert-$1 pr="" commit="" gated=""
   title="revert: $(tag "$1") factory merge ${3:0:12}"
-  ! git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null || { echo "land: $branch exists" >&2; exit 1; }
+  if p=$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1) && [ -n "$p" ]; then
+    # Only a gated push of an earlier run whose PR never opened is finished here.
+    [ "$p" = "$(cat "$out/revert-commit" 2> /dev/null)" ] || { echo "land: $branch exists" >&2; exit 1; }
+    p=$(gh pr list --repo "$repo" --head "$branch" --state all --json url,isCrossRepository \
+      --jq '.[] | select(.isCrossRepository | not) | .url')
+    if [ -z "$p" ]; then
+      sendable "$out/revert-body.md" || return 0
+      p=$(gh pr create --repo "$repo" --draft --base "$ref" --head "$branch" --title "$title" --body-file "$out/revert-body.md")
+    fi
+    mkdir -p "$d"
+    echo "${p%%$'\n'*}" > "$d/pr-url"
+    return
+  fi
   git fetch -q "$remote" "refs/heads/$ref"
   start=$(git rev-parse FETCH_HEAD)
   mkdir -p "$d" "$out"
@@ -540,6 +568,18 @@ revert_item() {
   time_for $((2 * minutes)) || { echo "land: $1 $2 revert waits for a run with time for its tests." | tee -a "$report"; return; }
   try revert_pr "$1" "$2" "$m" < /dev/null
   [ ! -s "$runview/revert-$1/pr-url" ] || u=$(tail -n 1 "$runview/revert-$1/pr-url")
+  s=$(git ls-remote "$remote" "refs/heads/factory/revert-$1" | cut -f1) || s=""
+  if [ "$u" = none ] && [ -n "$s" ]; then
+    if [ "$s" = "$(git -C "$runview/revert-$1/work" rev-parse HEAD 2> /dev/null)" ]; then
+      cp "$runview/revert-$1/body.md" "$items/$1/revert-body.md"
+      echo "$s" > "$items/$1/revert-commit"
+    fi
+    # Pushed but no PR: the item stays `merged`, so the next run opens the PR from the saved body.
+    if [ "$s" = "$(cat "$items/$1/revert-commit" 2> /dev/null)" ]; then
+      echo "land: $1 $2 revert pushed to factory/revert-$1, PR not opened; retried on the next run; needs a human." | tee -a "$report"
+      return
+    fi
+  fi
   printf '%s reverted %s %s\n' "$1" "$2" "$m" >> "$fx/merges.tsv"
   printf 'escalated main-red %s\n%s %s\n\n\n\n' "$u" "$m" "$m" > "$runview/outcomes/revert-$1"
   echo "escalated: main-red: CI failed on $ref for the factory merge $m of $2; revert PR $u; needs a human." | tee -a "$report"
@@ -627,6 +667,7 @@ pipeline() {
         # Three stages, the test command, the reviewers and the spec-writer, each at its timeout.
         elif ! time_for $(((4 + ${#reviewers[@]}) * minutes + 5)); then o=deferred r=run-time
         elif [ -n "$started" ] && [ "${FACTORY_DRY_RUN:-0}" = 1 ]; then o=deferred r=dry-run
+        elif ! (ledgers); then halt=ledger o=deferred r=ledger
         else
           started=1 o=blocked r=error
           try run_item "$id" "$feature" "$fref" < /dev/null
@@ -639,5 +680,5 @@ pipeline() {
     esac
     echo "pipeline: id=$id outcome=$o reason=$r pr=$u" | tee -a "$report"
   done < "$view/select.tsv"
-  [ -z "$halt" ] || { echo "pipeline: stopped on a runner error" >&2; exit 1; }
+  [ -z "$halt" ] || { echo "pipeline: stopped on $halt" >&2; exit 1; }
 }

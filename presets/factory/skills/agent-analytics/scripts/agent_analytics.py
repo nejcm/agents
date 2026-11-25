@@ -7,11 +7,14 @@ import contextlib
 import datetime
 import glob
 import json
+import math
 import os
 import pathlib
 import re
+import shutil
 import sqlite3
 import sys
+import tempfile
 import urllib.parse
 
 HARNESSES = ("Claude Code", "Codex", "Cursor", "Antigravity")
@@ -21,7 +24,7 @@ UNAVAILABLE = {
     "Claude Code": set(),
     "Codex": {"cost", "failed", "retries"},
     "Cursor": {"tokens", "cost", "failed", "retries", "escalations", "links"},
-    "Antigravity": {"cost", "tool_calls", "failed", "retries", "escalations", "links"},
+    "Antigravity": {"subagents", "cost", "tool_calls", "failed", "retries", "escalations", "links"},
 }
 ESCALATION_TOOLS = {
     "Claude Code": {"AskUserQuestion"},
@@ -47,6 +50,8 @@ KNOWN_TYPES = {"assistant", "user", "system", "cost-state", "pr-link", "tool_use
                "session_meta", "event_msg", "response_item", "token_count", "function_call",
                "custom_tool_call", "local_shell_call"}
 # --shape descends only into containers the parsers read; message.content holds the Claude blocks.
+# Field names are short words; a longer letter run or a second digit is taken for an ID or a credential.
+SHAPE_KEY = re.compile(r"(?!.*([a-z]{15}|[A-Z]{6}))[A-Za-z_]{1,40}([0-9][A-Za-z_]*)?")
 SHAPE_CONTAINERS = {"message", "usage", "payload", "info", "total_token_usage", "git"}
 
 
@@ -60,7 +65,7 @@ def new_stats():
 
 
 def is_num(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
 
 
 def num(value):
@@ -72,20 +77,19 @@ def text(value):
 
 
 def load(path, stats):
+    out = []
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(rec, dict):
+                    out.append(rec)
     except OSError:
         stats["unreadable"] += 1
         return None
-    out = []
-    for line in lines:
-        try:
-            rec = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(rec, dict):
-            out.append(rec)
     return out
 
 
@@ -109,15 +113,20 @@ def config_dirs(home, var, name):
     return list(collections.OrderedDict((os.path.realpath(d), d) for d in dirs + [os.path.join(home, name)]).values())
 
 
-def files(pattern, since, stats, recursive=False):
-    out = []
-    for path in glob.glob(pattern, recursive=recursive):
+def fresh(paths, since, stats):
+    if since is None:
+        return True
+    for path in paths:
         try:
-            if os.path.isfile(path) and (since is None or os.path.getmtime(path) >= since):
-                out.append(path)
+            if os.path.getmtime(path) >= since:
+                return True
         except OSError:
             stats["unreadable"] += 1
-    return sorted(out)
+    return False
+
+
+def files(pattern, since, stats, recursive=False):
+    return sorted(p for p in glob.glob(pattern, recursive=recursive) if os.path.isfile(p) and fresh([p], since, stats))
 
 
 def blocks(rec):
@@ -174,7 +183,10 @@ def claude(home, repo, since):
             if (name != enc and not name.startswith(enc + "-")) or d in seen:
                 continue
             seen.add(d)
-            for path in files(os.path.join(d, "*.jsonl"), since, s):
+            for path in files(os.path.join(d, "*.jsonl"), None, s):
+                subs = files(os.path.join(path[:-len(".jsonl")], "subagents", "*.jsonl"), None, s)
+                if not fresh([path] + subs, since, s):
+                    continue
                 recs = load(path, s)
                 # A session started elsewhere (e.g. a scratch dir) and moved into the repo is filed under its exact dir.
                 cwds = [r.get("cwd") for r in recs or []] if name == enc else [first_cwd(recs or [])]
@@ -183,7 +195,7 @@ def claude(home, repo, since):
                 sid = next((r["sessionId"] for r in recs if text(r.get("sessionId"))), path)
                 acc = sessions.setdefault(sid, new_session())
                 claude_records(recs, path, acc)
-                for sub in files(os.path.join(path[:-len(".jsonl")], "subagents", "*.jsonl"), None, s):
+                for sub in subs:
                     sub_recs = load(sub, s)
                     cwd = first_cwd(sub_recs or [])
                     if sub_recs and (cwd is None or in_repo(cwd, repo)):
@@ -222,7 +234,8 @@ def codex(home, repo, since):
         if not in_repo(meta.get("cwd"), repo):
             continue
         acc = sessions.setdefault(text(meta.get("id")) or text(meta.get("session_id")) or path, new_session())
-        acc["child"] = text(meta.get("thread_source")) in CODEX_CHILD_THREADS
+        native = isinstance(meta.get("source"), dict) and "subagent" in meta["source"]
+        acc["child"] = native or text(meta.get("thread_source")) in CODEX_CHILD_THREADS
         git = meta.get("git") if isinstance(meta.get("git"), dict) else {}
         if text(git.get("branch")):
             acc["branches"].add(git["branch"])
@@ -257,19 +270,21 @@ def codex(home, repo, since):
 
 def cursor(home, repo, since):
     s = new_stats()
-    seen = set()
+    tools = {}
     for root in repo_roots(repo):
         enc = re.sub(r"[^A-Za-z0-9]+", "-", root).strip("-")
-        for path in files(os.path.join(home, ".cursor", "projects", enc, "agent-transcripts", "**", "*.jsonl"), since, s, True):
-            if path in seen:
-                continue
-            seen.add(path)
+        base = os.path.join(home, ".cursor", "projects", enc, "agent-transcripts")
+        for path in files(os.path.join(base, "**", "*.jsonl"), since, s, True):
             recs = [r for r in load(path, s) or [] if "message" in r or "role" in r]
             if not recs:
                 continue
-            s["found"] = True
-            s["subagents" if os.path.basename(os.path.dirname(path)) == "subagents" else "sessions"] += 1
-            s["tool_calls"] += sum(b.get("type") == "tool_use" for rec in recs for b in blocks(rec))
+            # The same transcript can sit under the checkout's real and symlinked project dirs.
+            key = os.path.relpath(path, base)
+            tools[key] = max(tools.get(key, 0), sum(b.get("type") == "tool_use" for rec in recs for b in blocks(rec)))
+    for key, n in tools.items():
+        s["found"] = True
+        s["subagents" if os.path.basename(os.path.dirname(key)) == "subagents" else "sessions"] += 1
+        s["tool_calls"] += n
     return s
 
 
@@ -317,15 +332,25 @@ def antigravity(home, repo, since):
     for pattern in (os.path.join(home, ".gemini", "antigravity-cli", "conversations", "*.db"),
                     os.path.join(home, ".t3", "userdata", "providers", "antigravity", "*", "antigravity-acp",
                                  "conversations", "*.db")):
-        for path in files(pattern, since, s):
+        for path in files(pattern, None, s):
             try:
-                uri = pathlib.Path(os.path.abspath(path)).as_uri() + "?mode=ro"
-                with contextlib.closing(sqlite3.connect(uri, uri=True)) as db:
+                wal = [path + "-wal"] if os.path.getsize(path + "-wal") else []
+            except OSError:
+                wal = []
+            if not fresh([path] + wal, since, s):
+                continue
+            try:
+                # Even mode=ro writes the -shm beside a WAL database, so read a private copy; -wal first,
+                # so a checkpoint in between only replays frames the database copy already holds.
+                with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+                    for part in wal + [path]:
+                        shutil.copyfile(part, os.path.join(tmp, "c.db" + part[len(path):]))
+                    db = stack.enter_context(contextlib.closing(sqlite3.connect(os.path.join(tmp, "c.db"))))
                     meta = db.execute("SELECT data FROM trajectory_metadata_blob").fetchone()
                     if not any(in_repo(workspace(m), repo) for m in pb(meta[0]).get(1, [])):
                         continue
                     gens = db.execute("SELECT idx, data FROM gen_metadata").fetchall()
-            except (sqlite3.Error, ValueError, IndexError, TypeError):
+            except (sqlite3.Error, OSError, ValueError, IndexError, TypeError):
                 s["unreadable"] += 1
                 continue
             acc = sessions.setdefault(os.path.basename(path)[:-len(".db")], {})
@@ -408,7 +433,7 @@ def factory_runs(repo, since):
             pr, rv = (i.get("pr"), i.get("reviews")) if isinstance(i, dict) else (None, None)
             if isinstance(pr, str) and re.search(r"/pull/[0-9]+$", pr):
                 rv = [x for x in rv if isinstance(x, dict)] if isinstance(rv, list) else []
-                r["prs"][pr] = (bool(rv) and all(x.get("verdict") == "approve" for x in rv), bool(rv), i.get("scope"))
+                r["prs"][pr] = (bool(rv) and all(x.get("verdict") == "approve" for x in rv), bool(rv), text(i.get("scope")))
         for u in [rec] + [i for i in items if isinstance(i, dict)]:
             if u.get("outcome") == "escalated":
                 why = u.get("reason")
@@ -467,8 +492,7 @@ def shape(value, key=None, parent=None):
     if isinstance(value, (dict, list)) and not opened:
         return type(value).__name__
     if isinstance(value, dict):
-        return {(k if len(k) <= 40 and re.fullmatch(r"[A-Za-z_]+([0-9][A-Za-z_]*)?", k) else "?"): shape(v, k, key)
-                for k, v in value.items()}
+        return {(k if SHAPE_KEY.fullmatch(k) else "?"): shape(v, k, key) for k, v in value.items()}
     if isinstance(value, list):
         return [shape(v) for v in value[:3]]
     return type(value).__name__
@@ -519,7 +543,7 @@ def merged_links(stats, merged):
 def render(repo, since_label, stats, merged, runs=None):
     rows = [
         ("Sessions", None, "sessions"),
-        ("Subagent transcripts", None, "subagents"),
+        ("Subagent transcripts", "subagents", "subagents"),
         ("Input tokens (uncached)", "tokens", "input"),
         ("Cache write tokens", "tokens", "cache_write"),
         ("Cache read tokens", "tokens", "cache_read"),

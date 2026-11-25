@@ -204,6 +204,21 @@ class CheckItems(unittest.TestCase):
             ci.main(["--write", tool, "body", f.name, "{"], stream(""))
         self.assertIn("not JSON", str(e.exception.code))
 
+    def test_write_body_may_differ_only_by_trailing_newlines(self):
+        tool, fixed = "mcp__trk__save_comment", '{"issueId": "ENG-12"}'
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write("    code block\n")
+
+        def write(body):
+            events = [tool_use(tool, "1", {"issueId": "ENG-12", "body": body}), tool_result(False, "1")]
+            ci.main(["--write", tool, "body", f.name, fixed], stream("", events, servers=[("trk", "connected")]))
+
+        write("    code block")
+        write("    code block\n")
+        for body in ("code block", "    code block ", "\n    code block"):
+            with self.subTest(body=body), self.assertRaises(SystemExit):
+                write(body)
+
     def test_write_without_body_checks_fixed_args_only(self):
         tool, fixed = "mcp__trk__update_issue", '{"id": "ENG-12", "state": "In Review", "notify": false}'
 

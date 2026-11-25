@@ -103,7 +103,7 @@ entries the user names or whose smoke run failed. To change an entry:
   minutes as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
   unit or cron timeout is `run_minutes` plus 10; and an item cap, `cap` (default 3).
-  Refactor test runs and a revert's test runs also wait for time left in `run_minutes`. The
+  Refactor, old-test and new-test runs and a revert's test runs also wait for time left in `run_minutes`. The
   profile's per-week budget is `weekly_usd` (empty: no limit): before any model call, a run sums
   `cost_usd` over every `runs.jsonl` record started in the last 7 days (a missing cost counts as 0
   and is noted) and, at or over it, exits 0 with one `weekly budget reached` report line and no

@@ -12,8 +12,8 @@
   one fixed destination, with `post` and `post_check` as in [weekly-digest](weekly-digest.md). At
   `draft-pr`, per selected item: state under `.factory/reports/fix-issues/` (claim, `items/<id>/`,
   `pushed.tsv`, `tickets.tsv`, `linked.tsv`, `merges.tsv`, `fates.tsv`), a ticket for an `err-` item, one draft PR on
-  `factory/fix-<id>`, one link comment (for verdict `fixed`, or any item under `flow` `repro-only`,
-  its one comment only), and `pipeline:` lines under `## Pipeline` in the report. At
+  `factory/fix-<id>`, one link comment (for verdict `fixed`, any item under `flow` `repro-only`,
+  or a reproduced item blocked before its push, its one comment only), and `pipeline:` lines under `## Pipeline` in the report. At
   `merge_level` `ready` or `merge`, [merge levels](../safety.md#steps) add marking a PR ready, a
   squash merge, and a draft revert PR on `factory/revert-<id>`.
 - **Write levels**: report, comment, draft-pr (never `pr`).
@@ -100,6 +100,35 @@ feature: <the feature from the triage section's fix-issues: line>
 In your own words, at most 4000 bytes. No URLs, no other headings, and no other line starting
 with #. Quote only error signatures, indented four spaces. Never put a guessed cause in it.
 ```
+
+## State (`draft-pr`)
+
+Under `.factory/reports/fix-issues/`, written model-free by `issue-pipeline.sh`. No stage is
+retried, and an item's one comment is the only thing its issue hears.
+
+- **Ledgers**: `pushed.tsv`, `linked.tsv`, `tickets.tsv`, `merges.tsv` and `fates.tsv` are each a
+  regular file or absent, else the run fails before any stage or write. The check repeats before
+  each item (the rest end `deferred` `ledger` and the run fails) and, for `pushed.tsv`, before the
+  push.
+- **Claim**: an existing claim, any same-repo PR or a remote `factory/fix-<id>` skips the item.
+- **`tickets.tsv`**: `<group id> <issue number>` for an `err-` item, filed after verify with
+  `spec.md` plus the `fix-issues-error: <group id>` line as body. A later failure leaves the
+  ticket, reused next run.
+- **`pushed.tsv`**: `<id> <commit> issue-pipeline <base>` after the push. A row with no PR gets
+  one from `items/<id>/body.md` on the next run, and one with no `linked.tsv` row its link comment.
+- **PR body**: after the automation line, `Fixes #<n>` (or `Source item: <prefix>-<id>`), then
+  `## Spec`, `## Reproduction`, `## Root cause and fix`, `## Tests` (gates and the red → green
+  line), `## Verification`, `## Shadow review` and the evidence path.
+- **`linked.tsv`**: `<id> <value>` after the item's comment, sent or not; a row stops any later
+  comment for that item. The value is the PR URL for a link, the fix commit in verify mode, the
+  run's base commit for a reproduction, or `escalated`.
+- **Reproduced, then blocked**: under `flow` `fix`, a reproduced item that ends `blocked` at fix,
+  gates, verify or review, so with nothing pushed, gets the `repro-only` comment (spec and repro
+  record) naming the step the automated fix stopped at, through the same destination, checks
+  and `linked.tsv` row. Without a comment destination it gets none.
+- **Reproduce blocked**: a record ending `repro: outcome=blocked` (feature map, launch, data or a
+  precondition missing) ends the item `blocked` `repro-blocked`; any other missing or invalid
+  last line ends it `blocked` with the step as reason.
 
 ## Follow-up (attended)
 

@@ -45,7 +45,9 @@ your reply.
 7. **Hand-off**: summarize the profile in five lines or fewer, list what stayed unavailable or
    unverified, list the profile's missing `Agent setup` items, plus unknown ones the interview
    found uncovered, as suggestions the user can add to their agent config (nothing is written
-   outside `.factory/`), and offer to schedule recurring work. On yes, load `automate-factory` by path (see
+   outside `.factory/`), and offer to schedule recurring work, saying that the automations that
+   read the verify skill (`issue-pipeline`, `new-error-triage`, `maintain-verification`)
+   stay unavailable until the user commits it to the default branch; this skill never commits. On yes, load `automate-factory` by path (see
    loading other skills) and follow it from its first step; it reads the profile just written.
 
 Write each phase's result to its profile section as soon as the phase ends, in the format of

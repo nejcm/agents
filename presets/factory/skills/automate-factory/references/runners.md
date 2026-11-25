@@ -107,15 +107,15 @@ destination approved by the user: GitHub through `gh`, or a source's `Write` lin
 [write back](../../fix-issues/references/triage.md#write-back) (an MCP write needs
 `skills=("<skill-path:fix-issues>")`). `draft-pr` and `pr` need the profile's
 `Agent PR review` allowing agent PRs (`pr` also allowing non-draft ones; an edit that changes
-existing tests still makes the PR a draft, per [safety.md](safety.md#steps)) and a test script in the
-profile, and Git 2.31 or later (the run script sets config through `GIT_CONFIG_COUNT`). Fill in
+existing tests still makes the PR a draft, per [safety.md](safety.md#steps)) and a `Test recipe` in the
+profile's `Run` section (`unavailable` or missing: offer `report` and `comment` only, and say `setup-factory`'s run phase records it), and Git 2.31 or later (the run script sets config through `GIT_CONFIG_COUNT`). Fill in
 the run script:
 
 - `<remote url>`: `git remote get-url --push <name>` of the remote whose push URL is `repo`, so
   fetch and push use that URL, not a name Git config can repoint; `branch` left as `factory/$entry` except for
   `pr-babysitting`.
-- `test_cmd`: the profile's test script, self-contained (installs its own dependencies), run in
-  the checkout; `allow`: the entry's path globs, confirmed by the user; `ceiling` (default 10000);
+- `test_cmd`: the profile's `Test recipe`, self-contained (installs its own dependencies), run in
+  a fresh worktree of the checkout, never the bare `test` script; `allow`: the entry's path globs, confirmed by the user; `ceiling` (default 10000);
   `dep_files=1` only for entries that fix source code (`failed-ci-triage`, `pr-babysitting`,
   `issue-pipeline`), so their edits may add a disclosed dependency through manifests and lockfiles
   outside `allow` ([safety.md](safety.md#steps)); every other entry keeps `0`.

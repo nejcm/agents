@@ -42,4 +42,4 @@ The user picks `new-bug` groups and runs `fix-issues`: "Continue from
 .factory/reports/new-error-triage/<date>.md with groups <err-id>." It files a ticket for each group
 the user confirms, then reproduces and fixes under the ticket's number or `<prefix>-<id>`. This entry
 never files tickets or opens PRs; a group reaches one unattended only through `issue-pipeline` at
-`draft-pr` with its `err-` source trusted, ticket first.
+`draft-pr` with its `err-` source trusted; it files the ticket after verify and review, before the push.

@@ -14,7 +14,8 @@ Updated: <YYYY-MM-DD> (explore) at <short SHA>
 - Surfaces: <primary>; also <others> (<source>)
 - Stack: <languages, frameworks, runtime versions> (<source>)
 - Package manager: <name> (<lockfile>)
-- Scripts: dev `<cmd>`, build `<cmd>`, test `<cmd>`, lint `<cmd>`, typecheck `<cmd>` (<file>)
+- Scripts: dev `<cmd>`, build `<cmd>`, test `<cmd>`, lint `<cmd>`, typecheck `<cmd>` (<file>), each
+  runnable from the repo root; app or package <name at path / the repo root>
 - Services: <db, queue, cache> (<source>)
 - CI: <workflow files>; jobs <names>; triggers <events>
 - Dependent repos: <name>: <why needed> (<source>)
@@ -59,6 +60,9 @@ Updated: <YYYY-MM-DD> (run) at <short SHA>
 - Ready when: <check and what it proved>
 - Teardown: `<cmd>` ...
 - Timings: cold start <s>, ready <s>
+- Test recipe: `<install or bootstrap cmd> && <test cmd>` from the repo root of a fresh checkout;
+  needs <env var names, services / nothing>; <ran in step 3 / as CI job <name> runs it / not run>
+  / unavailable: <reason>
 - Known gaps: <list or none>
 
 ## Verification
@@ -73,7 +77,7 @@ Updated: <YYYY-MM-DD> (verification)
 Updated: <YYYY-MM-DD> (analytics)
 
 - Period: <all local history / since date>; report `.factory/reports/<date>-agents.md`
-- Sessions: Claude Code <n>, Codex <n>, Cursor <n or not found>
+- Sessions: <harness> <n or not found>, ... (every harness the report lists)
 - Tokens: uncached input <n>, cache write <n>, cache read <n>, output <n>
 - Cost: <USD, harness estimate, from n of m sessions / unavailable>
 - Failed tool calls: <harness> <n> of its <n> tool calls; retries <n>; escalations <n>

@@ -11,7 +11,10 @@ interview instead of asking now.
 - **Stack**: languages, frameworks, key libraries, runtime versions (`.nvmrc`, `.tool-versions`,
   `engines`, `go.mod`, `pyproject.toml`, `Cargo.toml`, Dockerfiles).
 - **Package manager and scripts**: from the lockfile, not a guess. List dev, build, test, lint,
-  typecheck, migrate and seed commands as written in the manifest, Makefile or task runner.
+  typecheck, migrate and seed commands as written in the manifest, Makefile or task runner. With
+  several manifests (monorepo), name the app or package behind the primary surface and record
+  its commands so they run from the repo root (`npm --prefix`, `pnpm --filter`, `make -C`, or
+  `(cd <dir> && <cmd>)`).
 - **Services**: databases, queues, caches and other processes the app needs (compose files,
   env examples, connection-string env var names, ORM config).
 - **CI**: workflow files, the jobs and named steps they run, triggers, required checks if visible
@@ -40,6 +43,10 @@ interview instead of asking now.
 - The audit installs and changes nothing; missing items become suggestions in the hand-off.
 - Read env example files for variable names only. Never open `.env` or other files that may hold
   real values.
+- MCP and harness config can hold inline tokens: list server and key names only, outside the
+  model's context (`jq -r '.mcpServers | keys[]' .mcp.json`, `grep -o '^\[[^]]*\]'
+  .codex/config.toml`), or use the connected tool inventory. Never print `env`, `headers`, `args`
+  or URL values.
 - Contradictions between sources (README says `npm`, lockfile is `pnpm-lock.yaml`) go to the
   interview's contradiction list, not silently resolved.
 

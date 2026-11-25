@@ -78,7 +78,8 @@ diff alone is not a pass.
 
 Not confirmed: rerun the fix stage once in the same checkout with `verify.md` in its inputs,
 commit, and verify again in a fresh stage. A second failure ends the item with the repro report
-and no PR. Unattended has no rerun: the item ends `blocked`.
+and no PR. Unattended has no rerun: the item ends `blocked`, and the coordinator posts the spec and
+repro record as its one comment.
 
 ## Before post
 

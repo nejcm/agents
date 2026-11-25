@@ -38,7 +38,7 @@ one-line test idea that needs no mock of the unit under test. Change nothing.
 ```text
 Read report.md and profile.md. For at most 3 of the riskiest gaps, add tests in the repo's existing
 style that pass on the current code and would fail if the covered behaviour broke. Change no
-non-test file and no existing test. Run the profile's test script. Stop if no gap can be covered
+non-test file and no existing test. Run the profile's test recipe. Stop if no gap can be covered
 that way.
 ```
 

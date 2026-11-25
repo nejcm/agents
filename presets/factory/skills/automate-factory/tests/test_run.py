@@ -723,6 +723,24 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         r, _, creates = self.edit_run("printf '#!/bin/sh\\n' > src/run; chmod +x src/run")
         self.assertEqual((r.returncode, len(creates)), (0, 1), r.stderr)
 
+    def test_path_git_would_quote_blocks_and_unicode_path_is_gated_by_its_real_name(self):
+        tab = "$(printf 'ci\\t.yml')"
+        for do, allow in ((f'mkdir -p .github/workflows; echo x > ".github/workflows/{tab}"', "*"),
+                          (f'ln -s /nonexistent "src/{tab}"', "*"),
+                          (f'mkdir -p .github/src; echo x > ".github/src/{tab}"', "*/src/*"),
+                          ("echo x > 'src/a\"b'", "src/*")):
+            with self.subTest(do):
+                r, _, _ = self.edit_run(do, allow=allow)
+                self.assert_blocked(r, "path ")
+                self.assertIn("has a control character, quote or backslash", r.stderr)
+        r, _, _ = self.edit_run("mkdir -p .github; echo x > .github/č.yml")
+        self.assert_blocked(r, "CI, hook or policy path .github/č.yml")
+        r, _, _ = self.edit_run("ln -s /nonexistent src/č")
+        self.assert_blocked(r, "src/č is a symlink or submodule")
+        r, _, creates = self.edit_run("echo x > src/č.txt", allow="src/*")
+        self.assertEqual((r.returncode, len(creates)), (0, 1), r.stderr)
+        self.assertIn("src/č.txt", self.git("--git-dir", self.remote, "ls-tree", "-r", "-z", "--name-only", "factory/e"))
+
     def runs(self, *recs):
         os.makedirs(f"{self.repo}/.factory/reports", exist_ok=True)
         with open(f"{self.repo}/.factory/reports/runs.jsonl", "w") as f:

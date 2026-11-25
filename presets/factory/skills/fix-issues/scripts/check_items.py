@@ -254,9 +254,9 @@ def check_write(tool, body_key, body_file, fixed, stream):
     got = dict(got) if isinstance(got, dict) else None
     if body_key and got is not None:
         with open(body_file, errors="replace") as f:
-            body = f.read().strip()
+            body = f.read().rstrip("\n")
         sent = got.pop(body_key, None)
-        got = got if isinstance(sent, str) and sent.strip() == body else None
+        got = got if isinstance(sent, str) and sent.rstrip("\n") == body else None
     # Canonical JSON, so 1, 1.0 and True differ.
     if got is None or json.dumps(got, sort_keys=True) != json.dumps(want, sort_keys=True):
         sys.exit(f"{tool} called with other arguments or body: check the destination by hand")

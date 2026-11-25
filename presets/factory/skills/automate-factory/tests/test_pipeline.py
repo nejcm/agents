@@ -480,7 +480,7 @@ sys.exit(1 if spec else p.returncode)
             with self.subTest(n):
                 self.assertEqual([x for x in names if f"overlay-{x}" in prompt], [n])
                 if n in ("reproduce", "fix", "verify"):
-                    self.assertLess(prompt.index(f"overlay-{n}"), prompt.index("dependency: <name> <why not in-house>."))
+                    self.assertLess(prompt.index(f"overlay-{n}"), prompt.index("end your record with escalated:"))
                     self.assertRegex(prompt, rf"overlay-{n}\n+No git commit")
                     self.assertTrue(prompt.endswith(f"Stage: {n}."))
         for n in names:
@@ -939,6 +939,16 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("ran", r.stdout)
 
+    def test_added_test_run_on_base_waits_for_run_time(self):
+        self.git("-C", self.repo, "checkout", "-qb", "t")
+        sha = self.main_commit("tests/new_test.sh", "t")
+        self.git("-C", self.repo, "checkout", "-q", "main")
+        r = self.run_pipeline({}, main=f'run_minutes=1 commit={sha} item=$view outcome=""\n'
+                              'start=$(git rev-parse main); red_green; echo ran\n')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("ran", r.stdout)
+        self.assertFalse(any("red" in n for n in os.listdir(f"{self.repo}/.factory/tmp")))
+
     def test_reviewers_must_be_allowed_models_and_every_call_names_one(self):
         self.gh_state({1: {}}, [])
         r = self.run_pipeline({"1": {}}, models="haiku", reviewers="sonnet")
@@ -1037,6 +1047,35 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((len(self.gh()["prs"]), self.merge_calls()), (1, []))
 
+    def test_revert_pr_that_failed_to_open_is_opened_by_a_later_run(self):
+        url = "https://github.com/o/r/pull/2"
+        m = self.main_commit("src/two", "fix: #2 b (#2)")
+        self.push_main()
+        for _ in range(2):
+            self.land(self.rows("merges.tsv") or [f"2 merged {url} {m}"], {}, {m: "FAILURE"}, fail=["pr create"])
+            self.assertEqual((self.gh()["prs"], self.rows("merges.tsv")), ([], [f"2 merged {url} {m}"]))
+            self.assertIn(f"land: 2 {url} revert pushed to factory/revert-2, PR not opened", self.report())
+        tip = self.git("--git-dir", self.remote, "rev-parse", "factory/revert-2").strip()
+        self.land(self.rows("merges.tsv"), {}, {m: "FAILURE"})
+        [pr] = self.gh()["prs"]
+        self.assertEqual((pr["head"], pr["draft"]), ("factory/revert-2", True))
+        self.assertIn(f"Reverts the factory merge {m} of {url}", pr["body"])
+        self.assertEqual(self.git("--git-dir", self.remote, "rev-parse", "factory/revert-2").strip(), tip)
+        self.assertEqual(self.rows("merges.tsv")[1:], [f"2 reverted {url} {m}"])
+        self.assertIn(f"revert PR {pr['url']}; needs a human.", self.report())
+        r = self.run_pipeline({}, report_extra="No new issues\n", merge_level="merge", reviewers="sonnet opus")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((len(self.gh()["prs"]), self.merge_calls(), self.pr_creates()), (1, [], []))
+
+    def test_revert_branch_nobody_recorded_is_not_given_a_pr(self):
+        url = "https://github.com/o/r/pull/2"
+        m = self.main_commit("src/two", "fix: #2 b (#2)")
+        self.push_main()
+        self.git("-C", self.repo, "push", "-q", self.remote, "main:refs/heads/factory/revert-2")
+        self.land([f"2 merged {url} {m}"], {}, {m: "FAILURE"})
+        self.assertEqual(self.gh()["prs"], [])
+        self.assertIn("revert PR none; needs a human.", self.report())
+
     def test_pr_fates_feed_agreement_metrics(self):
         m1 = self.main_commit("src/one", "fix: #1 a (#1)")
         m2 = self.main_commit("src/two", "fix: #2 b (#2)")
@@ -1083,6 +1122,73 @@ sys.exit(1 if spec else p.returncode)
                 self.assertIn(f"{name} is a symlink or not a regular file", r.stderr)
                 self.assertEqual(self.stage_calls() + self.gh_writes(), [])
                 os.rmdir(f"{self.fx}/{name}")
+
+    def test_every_ledger_must_be_a_regular_file(self):
+        for name in ("pushed.tsv", "linked.tsv", "tickets.tsv", "merges.tsv", "fates.tsv"):
+            with self.subTest(name):
+                os.makedirs(f"{self.fx}/{name}")
+                self.gh_state({1: {}}, [])
+                r = self.run_pipeline({"1": {}})
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn(f"{name} is a symlink or not a regular file", r.stderr)
+                self.assertEqual(self.stage_calls() + self.gh_writes(), [])
+                os.rmdir(f"{self.fx}/{name}")
+
+    def test_ledger_broken_during_an_item_stops_its_push_and_defers_the_rest(self):
+        self.write("tests/ledger_test.sh", "mkdir -p ../../../pushed.tsv\n")
+        self.git("-C", self.repo, "add", "tests")
+        self.git("-C", self.repo, "commit", "-qm", "test")
+        self.gh_state({1: {}, 2: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b"}})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("fix-issues/pushed.tsv is a symlink or not a regular file", r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "publish"))
+        self.assertEqual(self.outcome("2"), ("deferred", "ledger", "none"))
+        self.assertEqual(self.remote_heads(), "")
+        self.assertEqual(self.stage_calls("2") + self.gh_writes(), [])
+
+    def test_stage_prompts_name_the_stage_and_keep_fix_rules_to_the_fix_stage(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        seen = {c["evidence"].rsplit("/", 1)[1]: c["prompt"] for c in self.prompts() if c["evidence"]}
+        self.assertEqual(sorted(seen), ["fix", "reproduce", "verify"])
+        for n, prompt in seen.items():
+            with self.subTest(n):
+                self.assertIn("do only the part for the stage named on the last line.", prompt)
+                self.assertTrue(prompt.endswith(f"Stage: {n}."))
+                self.assertEqual("In fix.md" in prompt, n == "fix")
+                self.assertEqual("dependency: <name> <why not in-house>." in prompt, n == "fix")
+
+    def test_reproduce_blocked_is_recorded_as_such(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"repro": "blocked"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("blocked", "repro-blocked", "none"))
+        self.assertIn("1 repro: outcome=blocked", r.stdout)
+        self.assertEqual(self.stage_calls("1", "fix") + self.gh_writes(), [])
+
+    def test_reproduced_item_blocked_before_push_comments_the_reproduction_once(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        items = {"1": {"feature": "a", "verify": "insufficient"}, "2": {"feature": "b", "deny": True}}
+        r = self.run_pipeline(items)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([self.outcome(i)[:2] for i in "12"], [("blocked", "verify"), ("blocked", "gates")])
+        start = self.git("-C", self.repo, "rev-parse", "main").strip()
+        comments = self.gh()["comments"]
+        self.assertEqual([c["issue"] for c in comments], ["1", "2"])
+        for c, step in zip(comments, ("verify", "gates")):
+            self.assertTrue(c["body"].startswith(f"Reproduced on {start} by a scheduled run. The automated fix stopped "
+                                                 f"at {step} and nothing was pushed; needs a human.\n"))
+            self.assertIn("repro: outcome=reproduced", c["body"])
+            self.assertNotIn("root cause", c["body"])
+        self.assertEqual(self.gh_writes(), [c for c in self.calls() if c.startswith("gh issue comment")])
+        self.assertEqual(self.rows("linked.tsv"), [f"1 {start}", f"2 {start}"])
+        self.assertEqual(self.remote_heads() + "".join(self.rows("pushed.tsv")), "")
+        self.assertFalse(os.path.exists(f"{self.fx}/tmp/fix-1"))
+        r = self.run_pipeline({"3": {"feature": "c", "verify": "insufficient"}}, dry=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.gh()["comments"]), 2)
 
     def fix_commit(self, branch=None):
         if branch:

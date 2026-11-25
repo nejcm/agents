@@ -21,8 +21,9 @@ force-push or close an issue.
 Needs `.factory/profile.md` with `Run` and `Verification` sections (`setup-factory`). Without
 them, say which phase to run and stop. Never run from a schedule: the scheduled path is
 `automate-factory`'s `issue-pipeline` at `draft-pr`, which runs these stages unattended for
-trusted sources ([catalog](../automate-factory/references/catalog/issue-pipeline.md)). This skill
-is the attended follow-up for its reports and `new-error-triage`'s.
+trusted sources; what differs there, and its ledger rows, are in its
+[catalog entry](../automate-factory/references/catalog/issue-pipeline.md#state-draft-pr). This
+skill is the attended follow-up for its reports and `new-error-triage`'s.
 
 ## Sources
 
@@ -48,11 +49,6 @@ triage stage only, which runs the isolated analyze command from automate-factory
 [`safety.md`](../automate-factory/references/safety.md#steps) and follows its lethal-trifecta
 rule. The coordinator holds credentials, so it reads no model prose at all: triage and stage
 results reach it only as projected enum lines, and the user reads the reports and evidence.
-
-Unattended, automate-factory's `assets/issue-pipeline.sh` is the coordinator: a tool-less
-spec-writer replaces the user's spec, `check_items.py --spec` checks it, reproduce, fix and verify
-run as above with `run.sh` gates after fix, and every post is model-free (`gh`,
-`<prefix>.comment.sh`). Verdict `fixed` runs only verify mode, for a merged fix, and comments.
 
 ## Steps
 
@@ -101,7 +97,11 @@ check=$item/check/<stage> evidence=$item/evidence/<stage>
 mkdir -p "$check" "$evidence"
 git archive "<baseline sha>" .cursor/skills/verify-<app> | tar -x -C "$check"
 cp <stage inputs> "$check/"
-prompt=$(cat <reference file> "$item/bans.md")
+printf '%s\n' 'No git commit or git push, no gh, no tracker or chat writes, no edits outside the working directory and $evidence.' \
+  'The reference above also covers the coordinator and other stages: do only the part for the stage named on the last line.' \
+  > "$item/bans.md"
+prompt="$(cat <reference file> "$item/bans.md")
+Stage: <stage>."
 (unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
   ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
   CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
@@ -128,9 +128,9 @@ cd "$dir" && check=$check evidence=$evidence timeout <stage minutes>m claude -p 
 - **Model tools**: reproduce and verify get `Bash,Read,Grep,Glob`; fix adds `Edit,Write`.
 - **Inputs**: the coordinator copies each stage's inputs (its reference's Inputs list) into
   `$check` model-free, with the verify skill from the stage's baseline commit; the stage reads
-  journeys only from there. The prompt is the
-  reference file, then `bans.md`: no `git commit` or `git push`, no `gh`, no tracker or chat
-  writes, no edits outside `$dir` and `$evidence`.
+  journeys only from there. The prompt is the reference file, then `bans.md`, which the
+  coordinator writes with the two lines above, then `Stage: <stage>.` (`reproduce`, `fix` or
+  `verify`).
 - Stage reports end with one projected line (see each reference); the coordinator reads only that
   line, and an invalid or missing one is `blocked`. An `escalated: <reason>` line
   ([escalate](references/reproduce.md#escalate)) ends the item: show the user the record; posting
@@ -164,9 +164,6 @@ Work is keyed by the item ID, so a retry finds the same work:
   from `.factory/reports/fix-issues/items/<id>/` (its `spec.md` and stage records); otherwise
   report it and stop. When that last line is tagged `issue-pipeline` and `linked.tsv` has no row
   for the item, report it and stop: the next scheduled run opens its PR and comments.
-- Unattended: an existing claim, any same-repo PR or a remote `factory/fix-<id>` skips the item.
-  A `pushed.tsv` row tagged `issue-pipeline` with no PR gets one from `items/<id>/body.md` on
-  the next run, and one without a `linked.tsv` row gets its link comment.
 - Release: `git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree remove --force "$item/patch"`,
   then remove `$item`, after the report is written.
 
@@ -190,28 +187,21 @@ on stdin; titles are built from projected fields only.
   `fix-issues-error: <group id>`, run
   `gh issue create --repo "$repo" --title "Error <group id>: <feature>" --body-file <body>`, and
   at once append `<group id> <number>`, the number ending the printed URL, to
-  `.factory/reports/fix-issues/tickets.tsv`. Unattended: GitHub only, after verify, body
-  `spec.md` plus the marker; a later failure leaves the ticket, reused next run. No undo.
+  `.factory/reports/fix-issues/tickets.tsv`. No undo.
 - **Push**: `git -c core.hooksPath=/dev/null -c core.fsmonitor=false push "$remote_url" "<commit>:refs/heads/factory/fix-<id>"`,
   never forced; a rejected push is a stop. Then at once append `<id> <commit>` to
-  `.factory/reports/fix-issues/pushed.tsv` (unattended: `<id> <commit> issue-pipeline <base>`).
+  `.factory/reports/fix-issues/pushed.tsv`.
 - **Draft PR**: when the profile's `Agent PR review` allows agent PRs. Body model-free:
   `Fixes #<id>` (or `Source item: <prefix>-<id>`), the tested `$before` and `$commit` SHAs, then
   `spec.md` and the stages' `repro.md`, `fix.md` and `verify.md` concatenated. Update the
   claimed PR with `gh pr edit <n> --repo "$repo" --body-file <file>`, else
   `gh pr create --repo "$repo" --draft --base "$base" --head factory/fix-<id> --title "fix: <#id or prefix-id> <feature>" --body-file <file>`.
-  Unattended, after the automation line: `Fixes #<n>` (or `Source item:`), then `## Spec`,
-  `## Reproduction`, `## Root cause and fix`, `## Tests` (gates and the red → green line),
-  `## Verification`, and the evidence path.
 - **Comment**: at most one per item per run, the file built from the projected outcome, the
   tested SHAs and the PR or artifact URL only. A GitHub issue, after
   `gh issue view <id> --repo "$repo" --json state` shows it open:
   `gh issue comment <id> --repo "$repo" --body-file <file>`. A `<prefix>-<id>` item, through its
   source's `comment` write with the native ID. Triage-only outcomes (duplicate, not a bug, needs
-  info) are posted only when the user picks them. Unattended, the link step then appends
-  `<id> <PR url>` (verify mode: `<id> <fix commit>`; `repro-only`: `<id> <start>`, the run's base
-  commit; an escalation: `<id> escalated`) to `.factory/reports/fix-issues/linked.tsv`,
-  sent or not; a row stops any later comment for that item.
+  info) are posted only when the user picks them.
 - **Status**: `<prefix>-<id>` items only, after the draft PR is opened, through the source's
   `status` write: the one state recorded at setup, never a closing one.
 
@@ -228,6 +218,7 @@ on stdin; titles are built from projected fields only.
   s=.factory/reports/fix-issues
   for p in .factory .factory/reports "$s"; do [ ! -L "$p" ] || exit 1; done
   [ -z "$(find "$s" -path "$s/tmp/fix-*/*" -prune -o -type l -print 2> /dev/null)" ] || exit 1
+  for p in pushed linked tickets merges fates; do [ ! -e "$s/$p.tsv" ] || [ -f "$s/$p.tsv" ] || exit 1; done
   [ -z "$(git ls-files -- "$s")" ] || exit 1  # tracked state: the user runs git rm -r --cached
   mkdir -p "$s" && { [ -e "$s/.gitignore" ] || (set -C; printf '*\n' > "$s/.gitignore"); }
   [ "$(cat "$s/.gitignore")" = '*' ] && git check-ignore -q "$item/spec.md"
@@ -236,7 +227,6 @@ on stdin; titles are built from projected fields only.
   invoked; `disable-model-invocation` blocks that.
 - **Git after a stage**: coordinator `add`, `commit`, `worktree` and `push` take
   `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, against mistakes only.
-- **Retries**: one corrected retry per stage, then stop and report, per orchestration. Unattended
-  has none.
+- **Retries**: one corrected retry per stage, then stop and report, per orchestration.
 - **Two machines** can both claim an item before its draft PR exists; the second push is
   rejected and stops. Attended v1 accepts that.

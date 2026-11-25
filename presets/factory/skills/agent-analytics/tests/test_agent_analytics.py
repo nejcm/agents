@@ -174,6 +174,38 @@ class ReportTest(unittest.TestCase):
                       "dependencies in 0.", report)
 
 
+    def runs(self, recs, fates=""):
+        repo = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, repo)
+        write(repo, ".factory/reports/runs.jsonl", recs)
+        write(repo, ".factory/reports/fix-issues/fates.tsv", [], raw=fates)
+        return run(home=tempfile.gettempdir() + "/none", repo=repo)
+
+    def test_review_agreement_and_merge_rates_follow_the_newest_fate(self):
+        def item(n, verdicts, scope):
+            return {"outcome": "fixed", "pr": f"https://github.com/o/r/pull/{n}", "scope": scope,
+                    "reviews": [{"verdict": v} for v in verdicts]}
+        items = [item(1, ["approve", "approve"], "minimal"), item(2, ["approve", "changes"], "refactor"),
+                 item(3, ["approve"], "minimal"), item(4, ["approve"], "refactor"), item(5, ["approve"], "minimal"),
+                 item(6, [], "minimal"), item(1, ["approve", "approve"], "minimal")]
+        u = "https://github.com/o/r/pull/"
+        fates = (f"{u}1 open 0 - t\n{u}1 merged 0 {'a' * 40} t\n{u}2 closed 1 - t\n{u}3 factory-merged 0 {'b' * 40} t\n"
+                 f"{u}4 reverted 0 {'c' * 40} t\n{u}6 merged 0 {'d' * 40} t\n{u}9 merged 0 - t\nbad row\n")
+        report = self.runs([{"entry": "issue-pipeline", "outcome": "ok", "items": items}], fates)
+        self.assertIn("Review: approved 4 of 5 reviewed PRs; human outcome known for 3, agreeing 2; misses 1 "
+                      "(approved, then closed or reverted). Merged of resolved PRs: minimal 3 of 3, refactor 0 of 2.", report)
+
+    def test_corrupt_counters_and_scope_do_not_abort_or_reach_the_totals(self):
+        bad = {"entry": "e", "outcome": "ok", "cost_usd": float("nan"), "turns": -4, "weighted_lines": float("inf"),
+               "test_changes": float("nan"), "items": [{"pr": "https://github.com/o/r/pull/1", "scope": ["minimal"],
+                                                        "reviews": [{"verdict": "approve"}]}]}
+        report = self.runs([bad, {"entry": "e", "outcome": "ok", "cost_usd": 0.5, "turns": 3}])
+        self.assertIn("| e | 2 | ok 2 | 3 |", report)
+        self.assertIn("| 0.50 |", report)
+        self.assertIn("Turns reported by 1, tokens by 0, cost by 1.", report)
+        self.assertNotIn("nan", report)
+
+
 class RobustnessTest(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
@@ -357,6 +389,62 @@ class SourcesTest(unittest.TestCase):
         self.assertNotIn("Antigravity |", run())
 
 
+    def test_antigravity_reads_commits_still_in_the_wal_and_writes_nothing_beside_the_database(self):
+        d = ".gemini/antigravity-cli/conversations"
+        path = agy_db(self.home, f"{d}/a.db", "file:///work/demo", [(10, 3, 0)])
+        idle = agy_db(self.home, f"{d}/b.db", "file:///work/demo", [(1, 1, 0)])
+        writer = sqlite3.connect(path)
+        self.addCleanup(writer.close)
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("INSERT INTO gen_metadata VALUES (?, ?)", (1, pb(1, pb(4, pb(2, 5) + pb(3, 2)))))
+        writer.commit()
+        os.utime(path, (1, 1))
+        os.utime(idle, (1, 1))
+        # A WAL emptied by a checkpoint holds nothing new, whatever its mtime.
+        open(idle + "-wal", "w").close()
+
+        def beside():
+            names = sorted(os.listdir(os.path.dirname(path)))
+            return [(n, os.stat(os.path.join(os.path.dirname(path), n)).st_mtime_ns) for n in names]
+
+        before = beside()
+        s = aa.antigravity(self.home, REPO, 1000)
+        self.assertEqual((s["sessions"], s["input"], s["output"], s["unreadable"]), (1, 15, 5, 0))
+        self.assertEqual(aa.antigravity(self.home, REPO, None)["sessions"], 2)
+        self.assertEqual(beside(), before)
+        self.assertIn("| Subagent transcripts | not found | not found | not found | unavailable |", run(home=self.home))
+
+    def test_codex_child_marked_only_by_native_source_is_a_subagent(self):
+        write(self.home, ".codex/sessions/a/rollout-1.jsonl", [{"type": "session_meta", "payload": {
+            "id": "c", "cwd": REPO, "source": {"subagent": {"thread_spawn": {"depth": 1}}}}}])
+        write(self.home, ".codex/sessions/a/rollout-2.jsonl",
+              [{"type": "session_meta", "payload": {"id": "p", "cwd": REPO, "source": "vscode"}}])
+        s = aa.codex(self.home, REPO, None)
+        self.assertEqual((s["sessions"], s["subagents"]), (1, 1))
+
+    def test_claude_session_is_in_the_period_when_any_of_its_transcripts_is(self):
+        for sid, old in (("a", "a/subagents/x.jsonl"), ("b", "b.jsonl"), ("c", None)):
+            write(self.home, f".claude/projects/-work-demo/{sid}.jsonl", [claude_msg(f"m{sid}", 1, sid=sid)])
+            write(self.home, f".claude/projects/-work-demo/{sid}/subagents/x.jsonl", [claude_msg(f"n{sid}", 10, sid=sid)])
+            for rel in (old,) if old else (f"{sid}.jsonl", f"{sid}/subagents/x.jsonl"):
+                os.utime(os.path.join(self.home, ".claude/projects/-work-demo", rel), (1, 1))
+        s = aa.claude(self.home, REPO, 1000)
+        self.assertEqual((s["sessions"], s["subagents"], s["input"]), (2, 2, 22))
+
+    def test_cursor_transcript_under_both_checkout_aliases_counts_once(self):
+        real = os.path.join(self.home, "real")
+        os.makedirs(real)
+        alias = os.path.join(self.home, "alias")
+        os.symlink(real, alias)
+        use = {"role": "assistant", "message": {"content": [{"type": "tool_use", "name": "Read"}]}}
+        for root, recs in ((real, [use]), (alias, [use, use])):
+            enc = re.sub(r"[^A-Za-z0-9]+", "-", root).strip("-")
+            write(self.home, f".cursor/projects/{enc}/agent-transcripts/s/s.jsonl", recs)
+        s = aa.cursor(self.home, alias, None)
+        self.assertEqual((s["sessions"], s["tool_calls"]), (1, 2))
+
+
 class DriftTest(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
@@ -402,6 +490,14 @@ class DriftTest(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(aa.main(["--shape", path]), 0)
+        self.assertNotIn("SECRET", out.getvalue())
+        token = write(self.home, "k.jsonl", [{"type": "assistant", "message": {"usage": {
+            "ghp_" + "a" * 30: 1, "AKIAABCDEFGHIJKLMNOP": 2, "cache_creation_input_tokens": 3, "totalCostUSD": 4}}}])
+        keys = io.StringIO()
+        with contextlib.redirect_stdout(keys):
+            aa.main(["--shape", token])
+        self.assertEqual(json.loads(keys.getvalue())["message"]["usage"],
+                         {"?": "int", "cache_creation_input_tokens": "int", "totalCostUSD": "int"})
         self.assertNotIn("SECRET", out.getvalue())
         self.assertNotIn("privateword", out.getvalue())
         self.assertNotIn("secretkey", out.getvalue())

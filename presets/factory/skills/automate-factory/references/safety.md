@@ -104,7 +104,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   runaway `ceiling` (default 10000 weighted lines: a deletion weighs 1/4; lockfiles and known
   generated files such as `*.min.js` excluded), no binary files; every path in the entry's `allow` globs and none in
   `deny` (CI, hooks, agent harness and editor settings, `.factory/`, `CODEOWNERS`,
-  `.gitattributes`, the verify skill, the in-repo skills the run reads, link and target); every
+  `.gitattributes`, the verify skill, the in-repo skills the run reads, link and target), and
+  none with a control character, quote or backslash, which Git prints quoted; every
   changed, deleted or renamed existing test file (a rename counts as its old path), and only
   those, has exactly one `test-change` line whose path matches it exactly and whose reason is not
   blank; added test lines carry no skip or focus marker; every new package has a `dependency`
@@ -135,7 +136,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   commit before the behaviour commit; each refactor commit leaves existing test files unchanged
 (content, mode and type) and
   passes the test command (same timeout, in its own worktree), or the gate blocks. In
-  `issue-pipeline` those runs start only with time left in `run_minutes` for them, verify and the
+  `issue-pipeline` those runs, the old-tests run for changed tests and the run of added tests on
+  the base each start only with time left in `run_minutes` for them, verify and the
   reviewers; else the item is `deferred` `run-time`. A refactor PR is
   a draft as for changed tests, gets the `factory:refactor` label, and its reason tops the body;
   the run record keeps `scope` and `weighted_lines`.
@@ -168,7 +170,11 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   `SUCCESS` closes it; `FAILURE` or `ERROR` opens a revert PR (`git revert` on the fetched
   `<base>`, the same gates and publish, always draft, on `factory/revert-<id>`), records the item
   `escalated` `main-red` and says "needs a human" in the report. A revert starts only with time
-  left in `run_minutes` for two test runs; else it waits for a later run. The factory never merges a
+  left in `run_minutes` for two test runs; else it waits for a later run. When the branch was
+  pushed but its PR did not open, the item stays `merged` and the next run opens the draft PR for
+  that same commit from the saved body (`items/<id>/revert-body.md`, `revert-commit`), with a
+  "needs a human" line each run; a revert that failed before the push is still recorded
+  `reverted` with `revert PR none`. The factory never merges a
   revert PR: only `factory/fix-<id>` heads recorded as approved can merge. An unknown merge
   commit (failed lookup, merge queue) is looked up again on every later run until CI on it is
   green or red; the fifth failed lookup adds a "needs a human" line. A PR found closed unmerged
@@ -178,8 +184,10 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   `merges.tsv`), merged by a human (any other merge),
   closed unmerged, or reverted (a later commit carrying `This reverts commit <merge commit>`,
   `Revert "<title>` or `Reverts <repo>#<n>`), plus a count of change-request reviews by authors not ending in `[bot]`. Rows go to
-  `fix-issues/fates.tsv`; `agent-analytics` reports agreement from them. `merges.tsv` and
-  `fates.tsv` must be regular files, like the push ledger.
+  `fix-issues/fates.tsv`; `agent-analytics` reports agreement from them. `pushed.tsv`,
+  `linked.tsv`, `tickets.tsv`, `merges.tsv` and `fates.tsv` under `fix-issues/` must be regular
+  files or absent, checked before any stage or write and again before each item
+  ([state](catalog/issue-pipeline.md#state-draft-pr)).
 - **Dependencies**: disclosed, never blocked. Gates compare dependency keys of every changed
   `package.json`, `pyproject.toml`, `Cargo.toml` and `go.mod` between the start and the commit
   (all package managers using that manifest). A new package without a `dependency: <name>` line

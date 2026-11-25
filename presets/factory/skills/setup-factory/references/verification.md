@@ -5,9 +5,14 @@ discoverable by every harness. Requires a working `Run` section from phase 3.
 
 ## Steps
 
-1. **Existing skill**: if `.cursor/skills/verify-*/` already exists, do not regenerate it. With
-   several, pick the one for the primary surface or ask. Record it, keep its recorded proof
-   evidence or mark proof unavailable, check the links below, and offer pstack
+1. **Existing skill**: if a `verify-*` skill already exists under `.cursor/skills/`,
+   `.agents/skills/` or `.claude/skills/` (phase 1 lists them), do not regenerate it. With
+   several, pick the one for the primary surface or ask. One that is a real directory outside
+   `.cursor/skills/` is not at the canonical location pstack and `automate-factory` read: show
+   the move (`mv` to `.cursor/skills/verify-<app>`, a link left at the old path) and apply it
+   only on the user's confirmation; on no, record its path and that `maintain-verification-skill`
+   and the automations needing the verify skill are unavailable. Record the skill, keep its
+   recorded proof evidence or mark proof unavailable, check the links below, and offer pstack
    `maintain-verification-skill` to refresh it.
 2. **Generate**: load `create-verification-skill` by path (see SKILL.md, loading other skills) and
    follow it. Hand it the profile's `Run` section as the answer to its launch and isolation

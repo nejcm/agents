@@ -15,7 +15,9 @@ report. No transcript or record text enters the report or your context. Run from
 ## Run
 
 1. **Period**: all history by default; for a recurring report pass `--since <YYYY-MM-DD>` (the
-   period's first day). It filters by transcript modification time.
+   period's first day). It filters by transcript modification time, from local midnight: a Claude
+   Code session counts whole when its transcript or any of its subagent transcripts is in the
+   period, an Antigravity conversation when its database or a non-empty `-wal` is.
 2. **Generate**: fetch merged PRs only if `gh` succeeds, and replace the report only after the
    script succeeds, from per-run temp files, so a failure or an overlapping run never leaves an
    empty or partial report:
@@ -55,7 +57,7 @@ tokens and cost (the CLI's own estimate), and for reviewed PRs, joined with
 `.factory/reports/fix-issues/fates.tsv`: reviewer approve rate, agreement with the human outcome
 (a human merge is agreement with approve; closed, reverted or a change request with changes; a
 factory merge is not a human outcome), misses
-(approved, then closed or reverted) and merge rates by scope; a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the record's
+(approved, then closed or reverted) and merge rates by scope; a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the UTC date of the record's
 start date. Factory runs keep no transcript, so they are not counted again below. Gate messages,
 items and commits stay in the file, never in the report.
 
@@ -66,10 +68,10 @@ harness dirs and count the same way. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` are 
 
 | Harness | Source | Counted | Unavailable |
 | ------- | ------ | ------- | ----------- |
-| Claude Code | `~/.claude/projects/<path, non-alphanumerics as ->/*.jsonl`, subagents in `<session>/subagents/`; in the repo's exact dir any recorded cwd in the repo counts (a session moved in from a scratch dir), in prefix dirs the first | tokens per API message (deduped by message id), cost from the last `cost-state.totalCostUSD`, `tool_use` calls, `tool_result.is_error`, `system` `api_error` retries, `AskUserQuestion` calls, `pr-link` URLs, `gitBranch` | none |
-| Codex | `~/.codex/{sessions,archived_sessions}/**/rollout-*.jsonl` whose `session_meta.cwd` is in the repo; `thread_source` `subagent`/`guardian_review` count as subagent transcripts (T3 Code marks the threads it delegates `subagent`) | last cumulative `token_count.total_token_usage`, tool calls, `request_user_input*` calls, `session_meta.git.branch` | cost, failed tool calls, retries (tool output carries no structured error) |
-| Cursor | `~/.cursor/projects/<path, non-alphanumeric runs as ->/agent-transcripts/**/*.jsonl` | sessions, `tool_use` calls | tokens, cost, failed tool calls, retries, escalations, PR links (no usage or result fields) |
-| Antigravity | SQLite `conversations/*.db` (read-only) under `~/.gemini/antigravity-cli/` and T3 Code's `~/.t3/userdata/providers/antigravity/*/antigravity-acp/`, whose workspace URI (`trajectory_metadata_blob`) is in the repo; column shown only when found | tokens per `gen_metadata` record (protobuf usage fields) | cost, tool calls, failed tool calls, retries, escalations, PR links, subagents (not decoded) |
+| Claude Code | `~/.claude/projects/<path, non-alphanumerics as ->/*.jsonl`, subagents in `<session>/subagents/`; in the repo's exact dir any recorded cwd in the repo counts (a session moved in from a scratch dir), in prefix dirs the first | tokens per API message (deduped by message id), cost from the largest `cost-state.totalCostUSD`, `tool_use` calls, `tool_result.is_error`, `system` `api_error` retries, `AskUserQuestion` calls, `pr-link` URLs, `gitBranch` | none |
+| Codex | `~/.codex/{sessions,archived_sessions}/**/rollout-*.jsonl` whose `session_meta.cwd` is in the repo; `thread_source` `subagent`/`guardian_review` or a `source.subagent` object count as subagent transcripts (T3 Code marks the threads it delegates `subagent`) | the cumulative `token_count.total_token_usage` with the largest `total_tokens`, tool calls, `request_user_input*` calls, `session_meta.git.branch` | cost, failed tool calls, retries (tool output carries no structured error) |
+| Cursor | `~/.cursor/projects/<path, non-alphanumeric runs as ->/agent-transcripts/**/*.jsonl`; a transcript under both the real and the symlinked checkout path counts once | sessions, `tool_use` calls | tokens, cost, failed tool calls, retries, escalations, PR links (no usage or result fields) |
+| Antigravity | SQLite `conversations/*.db` (read from a private temporary copy with its `-wal`, so nothing is written beside it) under `~/.gemini/antigravity-cli/` and T3 Code's `~/.t3/userdata/providers/antigravity/*/antigravity-acp/`, whose workspace URI (`trajectory_metadata_blob`) is in the repo; column shown only when found | tokens per `gen_metadata` record (protobuf usage fields) | cost, tool calls, failed tool calls, retries, escalations, PR links, subagents (not decoded) |
 
 - **Cost** is the harness's own estimate (Claude Code `cost-state`), never derived from a price
   table. The report says how many sessions reported it.
@@ -101,7 +103,7 @@ harness dirs and count the same way. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` are 
    `python3 <skill-dir>/scripts/agent_analytics.py --shape <file>`. It opens only the containers
    the parser reads (top level, `message`, its `content` blocks, `usage`, `payload`, `info`,
    `total_token_usage`, `git`) and prints their keys and value types; every other object or list
-   prints as its type, unknown `type` values and ID-like keys as `?`. Never read the file any
+   prints as its type, unknown `type` values and ID-like keys (a second digit, 15 lowercase or 6 capital letters in a row) as `?`. Never read the file any
    other way. Antigravity databases are protobuf in SQLite; `--shape` does not read them, so an
    Antigravity drift stays "unverified" until the parser is updated from a synthetic fixture.
 2. Find the new name or nesting for the missing shape. Extend the parser to accept it and keep the

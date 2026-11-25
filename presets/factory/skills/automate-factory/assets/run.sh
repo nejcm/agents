@@ -13,8 +13,9 @@ view=$(mktemp -d "$PWD/.factory/tmp/$entry.XXXXXX")
 n=${GIT_CONFIG_COUNT:-0}
 [[ $n =~ ^[0-9]+$ ]] || { echo "GIT_CONFIG_COUNT is not a number" >&2; exit 1; }
 n=$((10#$n))
-export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFIG_VALUE_$n=/dev/null" \
-  "GIT_CONFIG_KEY_$((n + 1))=core.fsmonitor" "GIT_CONFIG_VALUE_$((n + 1))=false"
+export GIT_CONFIG_COUNT=$((n + 3)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFIG_VALUE_$n=/dev/null" \
+  "GIT_CONFIG_KEY_$((n + 1))=core.fsmonitor" "GIT_CONFIG_VALUE_$((n + 1))=false" \
+  "GIT_CONFIG_KEY_$((n + 2))=core.quotePath" "GIT_CONFIG_VALUE_$((n + 2))=false"
 creds_re='sk-ant-[A-Za-z0-9_-]{16}'
 calls=$view/calls.jsonl gates_log=$view/gates.log began=$(date -u +%FT%TZ) run_outcome="" run_reason="" gate_block=""
 record_py=$(cat <<'PY'
@@ -374,7 +375,7 @@ ci_state() {
 }
 
 ledger_ok() {
-  local f=${1:-$out/pushed.tsv}
+  local f=${1:-${fx:-$out}/pushed.tsv}
   [ ! -L "$f" ] && { [ ! -e "$f" ] || [ -f "$f" ]; } || block "$f is a symlink or not a regular file"
 }
 
@@ -510,6 +511,8 @@ diff_gate() {
   local st p g ok a d m quarters=0
   tests=() changed=() deleted=() guarded=()
   while IFS=$'\t' read -r st p; do
+    # Git quotes exactly these paths; a quoted name would match no glob and no tree entry below.
+    [[ $p != \"* ]] || block "path $p has a control character, quote or backslash"
     for g in "${deny[@]}"; do [[ $p != $g ]] || block "CI, hook or policy path $p"; done
     ok=0
     for g in "${allow[@]}"; do [[ $p != $g ]] || ok=1; done
@@ -518,6 +521,7 @@ diff_gate() {
       [[ $p =~ $locks_re ]] || guarded+=("$p")
     fi
     m=$(git ls-tree "$start" -- "$p" | cut -c1-6; git ls-tree "$1" -- "$p" | cut -c1-6)
+    [ -n "$m" ] || block "$p has no file mode"
     if [ "$ok" = 0 ] || [[ $p =~ $locks_re ]]; then
       [ -z "$(grep -vx 100644 <<< "$m")" ] || block "$p is not a regular file"
     else
@@ -578,6 +582,7 @@ gates() {
     block "tests failed, exit $?"
   refactor_tests
   if [ ${#changed[@]} -gt 0 ]; then
+    ! declare -F reserve > /dev/null || reserve 1
     git worktree add -q --detach "$view/old" "$commit"
     git -C "$view/old" checkout -q "$start" -- "${changed[@]}"
     rc=0
