@@ -35,6 +35,11 @@ interview instead of asking now.
 - **Error and analytics SDKs**: detected from dependencies, init code, config files and env var
   names, e.g. Sentry, PostHog, Datadog, Bugsnag, Rollbar, New Relic, Amplitude, Segment,
   LogRocket. Record what was detected and where; do not check whether the agent can reach it yet.
+- **Risk paths**: globs for code where a change deserves a security review: auth, payments,
+  crypto, secrets handling and config, migrations, dependency manifests and lockfiles, CI, infra
+  (`src/auth/*`, `migrations/*`, `*package.json`, `.github/*`, `terraform/*`; a glob matches the
+  whole path from the repo root, `*` crossing `/`), each from a file
+  found. A proposal only: add `Risk paths` to `Open gaps` for the interview to confirm.
 - **Issue sources hinted by the repo**: issue templates, `.github/ISSUE_TEMPLATE`, Linear or Jira
   keys in branch names or commit messages (`git log --oneline -200`).
 

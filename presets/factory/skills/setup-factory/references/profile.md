@@ -49,6 +49,7 @@ Updated: <YYYY-MM-DD> (interview)
   <USD / none>>
 - Agent PR review: <who; PRs allowed or not; drafts only or ready ones too>
 - Environment: <isolated | not isolated>
+- Risk paths: <glob> ... / none
 - Resolved gaps and contradictions: <gap>: <decision>
 
 ## Run
@@ -71,6 +72,8 @@ Updated: <YYYY-MM-DD> (verification)
 - Skill: `verify-<app>` at `.cursor/skills/verify-<app>/`
 - Harness discovery: Claude Code <confirmed / unconfirmed / copy>, Codex <...>, Cursor <...>
 - Features mapped: <list>
+- Feature paths <feature>: <glob> ... (one line per mapped feature; <feature> its feature file's
+  name, letters, digits, `.`, `_`, `-` only)
 - Proof run: <feature>, evidence at <path>
 
 ## Agent analytics
@@ -99,7 +102,8 @@ Updated: <YYYY-MM-DD> (automate-factory)
 - Runners: systemd user <yes/no>, cron <yes/no>, isolated analyze <Claude Code version / no:
   reason; managed policy confirmed none <yes/no>>
 - <entry>: <runner>, schedule <cron-like value>; models default <cli:model[@effort]>[, <stage>
-  <cli:model[@effort]> ...]; extra skills <dirs / none>; level <report / comment / draft-pr / pr>; files <paths>; smoke
+  <cli:model[@effort]> ...]; extra skills <dirs / none>; trigger <schedule / changes / workflow: <what starts it>>
+  (`security-review`, `maintain-verification`); level <report / comment / draft-pr / pr>; files <paths>; smoke
   run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>; for
   `issue-pipeline` at draft-pr: flow <fix / repro-only>, verify_fixed <on / off>, reviewers
   <cli:model[@effort] ...>, merge_level <draft / ready / merge>, needs_human <test-change dependency refactor>

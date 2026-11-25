@@ -66,22 +66,35 @@ if mode == "json":
                                 turns=d.get("num_turns"), **{k: u.get(n) for k, n in tokens}, cost_usd=d.get("total_cost_usd"),
                                 max_turns=d.get("subtype") == "error_max_turns", stop=stop)) + "\n")
     sys.exit()
-if mode == "spent":
-    import datetime, math
+def ledger():
     path = ".factory/reports/runs.jsonl"
     if os.path.islink(path) or os.path.exists(path) and not os.path.isfile(path):
         sys.exit("runs.jsonl is a symlink or not a regular file")
     if not os.access(path if os.path.exists(path) else os.path.dirname(path), os.W_OK):
         sys.exit("runs.jsonl cannot be appended to, so spend would go unrecorded")
-    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-    total = missing = partial = 0
     try:
-        f = open(path, encoding="utf-8", errors="replace")
+        return open(path, encoding="utf-8", errors="replace")
     except FileNotFoundError:
-        f = []
+        return []
     except OSError as e:
         sys.exit(f"runs.jsonl unreadable: {e.strerror}")
-    for l in f:
+if mode == "last":
+    end = ""
+    for l in ledger():
+        try:
+            r = json.loads(l)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("entry") == a[0] and r.get("dry_run") is False and r.get("exit_code") == 0 and (
+                r.get("outcome") == "completed" or (r.get("outcome"), r.get("reason")) == ("skipped", "no-risk-change")):
+            end = str(r.get("end_commit") or "")
+    print(end)
+    sys.exit()
+if mode == "spent":
+    import datetime, math
+    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+    total = missing = partial = 0
+    for l in ledger():
         try:
             r = json.loads(l)
             t = datetime.datetime.fromisoformat(r["started"].replace("Z", "+00:00"))
@@ -260,7 +273,12 @@ Snapshot: $ref at $(git rev-parse --short "$ref")"
     > "$view/report.md" || rc=$?
   [ "$rc" = 0 ] || exit "$rc"
   test -s "$view/report.md"
-  mv "$view/report.md" "$out/$day.md"
+  # A change-tracked range is never reviewed again, so a later run that day appends instead of replacing.
+  if [ -n "$reviewed_sha" ]; then
+    { printf 'Range: %s\n\n' "$(cat "$view/input/range")"; cat "$view/report.md"; echo; } >> "$out/$day.md"
+  else
+    mv "$view/report.md" "$out/$day.md"
+  fi
 }
 
 post_check() { :; }
@@ -429,6 +447,34 @@ ci_state() {
 ledger_ok() {
   local f=${1:-${fx:-$out}/pushed.tsv}
   [ ! -L "$f" ] && { [ ! -e "$f" ] || [ -f "$f" ]; } || block "$f is a symlink or not a regular file"
+}
+
+# Change-triggered entries (security-review, maintain-verification); see their catalog steps.
+trigger_ok() { [[ $trigger =~ ^(schedule|changes)$ ]] || block "trigger $trigger is not schedule or changes"; }
+globs_ok() {
+  local g
+  [ $# -gt 0 ] || block "no path globs"
+  for g; do [[ -n $g && $g != *"<"* ]] || block "path glob '$g' is empty or unfilled"; done
+}
+# Writes the NUL-separated paths git $@ prints to $view/paths; a git failure blocks, never reads as no change.
+paths() { git "$@" > "$view/paths" || block "git $1 failed"; }
+# NUL-separated paths on stdin; succeeds when one matches a glob in $@.
+touches() {
+  local p g
+  while IFS= read -r -d '' p; do
+    [ -n "$p" ] || continue
+    for g; do [[ $p != $g ]] || return 0; done
+  done
+  return 1
+}
+# Sets last to the end_commit of this entry's last non-dry run that completed or skipped with no-risk-change.
+last_end() { last=$(python3 -I -c "$record_py" last "$entry" 2> "$view/last.err") || block "$(tail -n 1 "$view/last.err")"; }
+# Set by a fetch to the SHA it covered; written only after the run succeeded, never in a dry run.
+reviewed_sha=""
+mark_reviewed() {
+  [ -n "$reviewed_sha" ] && [ "${FACTORY_DRY_RUN:-0}" != 1 ] || return 0
+  ledger_ok "$out/reviewed.sha"
+  printf '%s\n' "$reviewed_sha" > "$out/reviewed.sha"
 }
 
 # Prints red after two red factory pushes on the PR, unknown on a failed lookup.
@@ -714,3 +760,4 @@ case "$level" in
     fi
     ;;
 esac
+mark_reviewed

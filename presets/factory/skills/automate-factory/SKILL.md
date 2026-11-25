@@ -39,7 +39,12 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
      ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`;
    - extra skills: skill dirs the entry's analyze and edit steps also read (not yet
      `issue-pipeline`'s spec, reproduce, fix, verify or review), default none, each with a
-     directory name no other skill of the entry has.
+     directory name no other skill of the entry has;
+   - trigger, `security-review` and `maintain-verification` only: on a schedule (default), only
+     on risky changes, or wired into the user's existing workflow
+     ([runners.md](references/runners.md#change-triggers)). For `security-review`, risky
+     changes need the profile's confirmed `Risk paths`; without them, offer the schedule only and
+     say `setup-factory` records them.
 5. **Write** per [`references/runners.md`](references/runners.md): the prompt to
    `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and the
    runner config as a proposed diff; for `draft-pr` and `pr`, the entry's `Edit prompt` to
@@ -63,7 +68,7 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
    `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
 7. **Record** each entry in the profile's `Automations` section: runner, schedule, model picks,
-   extra skills, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
+   extra skills, trigger, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
    `verify_fixed`, `reviewers`,
    `merge_level` and `needs_human`, status
    (`active`, `proposed`, `failed: <reason>`).
@@ -75,7 +80,7 @@ entries the user names or whose smoke run failed. To change an entry:
 
 1. Regenerate its files (step 5) into a scratch directory from the current profile, never
    writing `*.local.md`: the before copy.
-2. Write the change where it lives: a setting (schedule, model picks, extra skills, write level,
+2. Write the change where it lives: a setting (schedule, model picks, extra skills, trigger, write level,
    destination, trust, `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`,
    `merge_level`, `needs_human`, budgets, `weekly_usd`) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the

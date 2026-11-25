@@ -104,6 +104,33 @@ Every counted call (analyze, edit, spec, each stage, each reviewer) runs under i
 (`<minutes>`; 5 for the tool-less spec-writer) and keeps at most `8 * summary_cap` bytes of its JSON
 output: a longer output is cut there and fails the call (a stage then records `runner-error`).
 
+## Change triggers
+
+`security-review` and `maintain-verification` take a per-entry `trigger`, asked with the other
+per-entry settings:
+
+- **On a schedule** (`trigger="schedule"`): every run calls the model, as before.
+- **Only on risky changes** (`trigger="changes"`), from the timer at the entry's schedule: a
+  model-free check first. `security-review` reviews only when its range touches the profile's
+  `Risk paths` (`risk_paths`); `maintain-verification` calls the model only when a commit since
+  its last successful run touched a mapped feature's `Feature paths` (`feature_paths`) or the
+  verify skill. Otherwise the run is recorded `skipped` `no-risk-change`, with no model call.
+- **Wired into the user's workflow**: `trigger="changes"`, started by something the user already
+  runs after the default branch moves (a `post-merge` hook, a task-runner target, a step on a
+  self-hosted runner) instead of the timer. Propose the line as a diff with the script's absolute
+  path, run in the background with its output to `.factory/automations/<entry>.log`; install
+  nothing outside `.factory/` without the user's consent, and never a CI job that needs a model
+  API secret. The smoke run runs the script directly as that user with `FACTORY_DRY_RUN=1`.
+
+Fill `trigger`, then `risk_paths` with the `Risk paths` globs (`risk_paths=()` when the trigger is
+`schedule`) and `feature_paths` with one `[<feature>]="<glob> ..."` per `Feature paths` line. A glob
+matches the whole repo-relative path and `*` crosses `/`: `auth/*` misses `x/auth/z`, so a nested
+path needs a leading `*` (`*package.json`). An unfilled or empty glob, or an unknown trigger,
+fails the run before any call. A dry run skips the
+check and always calls the model, so the smoke run writes its report. `security-review` keeps its
+last reviewed SHA in `.factory/reports/security-review/reviewed.sha` (a symlink or non-regular
+file stops the run), written by the script only after a successful run or a `no-risk-change` skip.
+
 ## Prompt overlays
 
 `.factory/automations/<entry>.<name>.local.md` belongs to the user; generation never writes it.
@@ -156,7 +183,8 @@ Every run past the pause and Git config checks appends one line to
 (`sk-ant-`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
-`escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget,
+`escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget, `no-risk-change` for one `skipped` by its
+[change trigger](#change-triggers),
 `usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
 disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
@@ -189,7 +217,8 @@ Run the entry once as the runner, in dry-run mode, before its automatic trigger 
   `timeout`. Wait for its `exit <n>` line in `<entry>.log`; pass needs `exit 0`. Then
   replace it with the real line.
 
-Pass means: the run exited 0, a report from this run landed where the entry says, for entries
+Pass means: the run exited 0, a report from this run landed where the entry says (a dry run
+skips the [change trigger](#change-triggers) check), for entries
 with a post step, `post_check` read the fixed destination with the runner's identity (or, for a
 post-only destination with no `Fetch` line, the log shows `post_check: destination unchecked`),
 and for `draft-pr` and `pr`, the edit and gates ran (the log shows `edit: no change` or no `gate:` line)

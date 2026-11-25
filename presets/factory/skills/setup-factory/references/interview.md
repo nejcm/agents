@@ -55,7 +55,9 @@ the items the user selected. Skip the phase when there are no gaps.
    whether this environment is isolated. If not, warn once that injected issue text can reach
    whatever this machine can, including every repo its `gh` login reaches, and that a
    fine-grained single-repo token limits that; then go on.
-8. **Contradictions**: each conflict from phase 1, with both sources named.
+8. **Risk paths**: phase 1's proposed globs, for the user to edit and confirm; they decide when
+   `security-review` runs only on risky changes.
+9. **Contradictions**: each conflict from phase 1, with both sources named.
 
 ## Output
 

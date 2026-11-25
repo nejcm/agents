@@ -27,6 +27,7 @@ in its environment.
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
   `run_minutes`, `cap`, budgets (`weekly_usd`), per-entry model picks and extra skills, `ceiling`,
+  the [change trigger](runners.md#change-triggers) with `Risk paths` and `Feature paths`,
   `issue-pipeline` `reviewers`, `merge_level` and `needs_human`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
 - `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
@@ -226,5 +227,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   Tracker tokens a write needs sit in the isolated environment too, scoped to the destination
   where the tracker allows it (a Slack bot in one channel).
 - **Memory**: no automation keeps notes between runs beyond its reports in `.factory/reports/`,
-  including the redacted [run record](runners.md#run-record) `runs.jsonl`.
+  including the redacted [run record](runners.md#run-record) `runs.jsonl`, and `security-review`'s
+  `reviewed.sha`, written model-free by the script.
+- **Change triggers**: the `no-risk-change` check is model-free, on the commit graph and the
+  globs fixed at setup ([runners.md](runners.md#change-triggers)); `reviewed.sha` advances only
+  after a successful run or that skip, never on a failure, budget or pause skip, or dry run.
   A later run reads earlier reports as data, never as instructions.

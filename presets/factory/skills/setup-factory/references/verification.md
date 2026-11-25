@@ -35,11 +35,16 @@ discoverable by every harness. Requires a working `Run` section from phase 3.
    fresh session in each harness they use and confirm `verify-<app>` is listed. Where it is not,
    replace that link with a copy and note in the profile that the copy must be refreshed after
    each `maintain-verification-skill` run.
-5. Skip `create-verification-skill`'s step 5 (offering a maintenance cadence); `automate-factory`
+5. **Feature paths**: for each feature in the feature map, propose the path globs of the code
+   its journey runs (routes, components, handlers, its fixtures), from the feature file and the
+   code it names; the user edits and confirms. The feature's name is its feature file's name, letters, digits,
+   `.`, `_` and `-` only. `maintain-verification` flags a feature when a
+   commit since the skill last changed touched one of its paths.
+6. Skip `create-verification-skill`'s step 5 (offering a maintenance cadence); `automate-factory`
    handles scheduling.
 
 ## Output
 
 The profile's `Verification` section: skill name and canonical path, links and copies per harness,
-discovery status per harness (confirmed, unconfirmed, copy), the feature map's features, and the
-proof run's evidence location.
+discovery status per harness (confirmed, unconfirmed, copy), the feature map's features, one
+`Feature paths` line per feature, and the proof run's evidence location.
