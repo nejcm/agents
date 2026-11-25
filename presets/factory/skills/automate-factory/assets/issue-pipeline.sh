@@ -6,7 +6,10 @@ reviewers=(claude:sonnet) merge_level="<merge level>"
 # Disclosures that keep a PR draft and unmerged at any merge_level: test-change, dependency, refactor.
 needs_human=(test-change dependency refactor)
 for m in "${reviewers[@]}"; do check_model "$m"; done
-for m in spec:none reproduce:exec fix:write verify:exec; do confirm "${m%:*}" "$(pick "${m%:*}")" "${m#*:}"; done
+for m in spec:none reproduce:exec fix:write verify:exec; do
+  case $flow/$verify_fixed/${m%:*} in repro-only/*/fix | repro-only/off/verify) continue ;; esac
+  confirm "${m%:*}" "$(pick "${m%:*}")" "${m#*:}"
+done
 # A user skill (its directory name in skills) in place of a built-in stage; gates, writes and this script stay.
 declare -A stage_skills=()
 # Skills (directory names in skills) every stage and reviewer also follows.

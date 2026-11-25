@@ -12,7 +12,11 @@ AGENT = r"""#!/usr/bin/env python3
 import json, os, subprocess, sys
 args = sys.argv[1:]
 if args[:1] == ["status"]:
-    print(json.dumps({"isAuthenticated": not os.environ.get("AGENT_LOGGED_OUT")}, indent=2))
+    print(json.dumps({"isAuthenticated": not os.environ.get("AGENT_LOGGED_OUT")}, indent=2), flush=True)
+    if os.environ.get("AGENT_STATUS_TAIL"):
+        import time
+        time.sleep(0.5)
+        print("x" * 1000000)
     sys.exit(0)
 prompt = sys.stdin.read()
 try:
@@ -204,6 +208,13 @@ class CursorRunTest(unittest.TestCase):
         r = self.run_entry("draft-pr", models=models, subs=[ISOLATED], extra={"FACTORY_CHECK_MODELS": "1", "AGENT_EMPTY": "1"})
         self.assertEqual(r.returncode, 1, r.stderr)
         self.assertIn(f"check: {PICK} did not answer", r.stderr)
+
+    def test_a_login_check_that_writes_on_after_the_login_line_still_passes(self):
+        models = f"[default]=claude:opus [edit]={PICK}"
+        r = self.run_entry("draft-pr", models=models, subs=[ISOLATED],
+                           extra={"FACTORY_CHECK_MODELS": "1", "AGENT_STATUS_TAIL": "1"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(f"check: {PICK} answered", r.stdout)
 
 
 class CursorPipelineTest(unittest.TestCase):

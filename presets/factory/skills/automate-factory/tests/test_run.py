@@ -830,7 +830,7 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
                         ({"models": '[default]="claude:opus claude:sonnet"'}, f"model claude:opus claude:sonnet {bad}"),
                         ({"models": "[default]=claude:a,b"}, f"model claude:a,b {bad}"),
                         ({"models": "[default]=claude:default [edit]=nope:gpt-5.6-sol-high"},
-                         "model nope:gpt-5.6-sol-high: CLI nope is not supported yet, only claude, codex, agy and agent"),
+                         "model nope:gpt-5.6-sol-high: CLI nope is not claude, codex, agy or agent"),
                         ({"models": "[default]=claude:opus@huge"},
                          "model claude:opus@huge: effort huge is not low, medium, high, xhigh or max"),
                         ({"models": "[default]=claude:opus [verfy]=claude:opus"}, "models: verfy is not a stage"),

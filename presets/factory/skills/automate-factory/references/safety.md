@@ -163,7 +163,7 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   gets the `factory:instructions` label, the paths top the body, and the run record sets
   `instruction_change`. This is not a `needs_human` disclosure: no setting lifts it.
 - **Shadow review**: `issue-pipeline` only, after verify: each model in the entry's `reviewers`
-  runs as analyze does (`--restricted`, read-only tools, its own pick) on an export of the
+  runs as analyze does (read-only tools, its own pick; Claude `--restricted`, another CLI at `weak` isolation) on an export of the
   gated commit with the checked spec, the diff and the gate and verify records, never item text.
   Its last line must be `review: verdict=approve` or `review: verdict=changes`; anything else
   counts as `changes`. Verdicts and capped findings go in the PR body and the item's run record;

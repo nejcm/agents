@@ -16,7 +16,8 @@ stdin = sys.stdin.read()
 with open(os.environ["LOG"], "a") as f:
     f.write("codex " + " ".join(a.replace("\n", " ") for a in args[:-1]) + "\n")
 with open(os.environ["LOG"] + ".codex", "a") as f:
-    f.write(json.dumps({"args": args[:-1], "prompt": args[-1], "cwd": os.getcwd(), "evidence": os.environ.get("evidence", "")}) + "\n")
+    f.write(json.dumps({"args": args[:-1], "prompt": args[-1], "cwd": os.getcwd(), "evidence": os.environ.get("evidence", ""),
+                        "openai": os.environ.get("OPENAI_API_KEY")}) + "\n")
 mode = args[args.index("-s") + 1]
 kind = "none" if "shell_tool" in args else "read" if mode == "read-only" else "write"
 if os.environ.get("CODEX_INNER"):
@@ -41,9 +42,11 @@ for _ in range(2000 if os.environ.get("CODEX_BIG_JSONL") else 0):
 if os.environ.get("CODEX_ERROR"):
     print(json.dumps({"type": "turn.failed", "error": {"message": os.environ["CODEX_ERROR"]}}))
 elif not os.environ.get("CODEX_NO_USAGE"):
-    print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 4,
-                                                          "cache_write_input_tokens": 1, "output_tokens": 3,
-                                                          "reasoning_output_tokens": 0}}))
+    usage = {"input_tokens": 10, "cached_input_tokens": 4, "cache_write_input_tokens": 1, "output_tokens": 3,
+             "reasoning_output_tokens": 0}
+    if os.environ.get("CODEX_NO_CACHE_WRITE"):
+        del usage["cache_write_input_tokens"]
+    print(json.dumps({"type": "turn.completed", "usage": usage}))
 open(args[args.index("-o") + 1], "w").write(msg)
 sys.exit(rc)
 """
@@ -221,6 +224,24 @@ class CodexRunTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertEqual(self.records()[-1]["reason"], "usage-limit")
 
+    def test_a_token_count_codex_does_not_report_is_null_not_zero(self):
+        r = self.run_entry("report", models="[default]=codex:gpt-6-luna", subs=[confirm("analyze")],
+                           extra={"CODEX_NO_CACHE_WRITE": "1"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rec = self.records()[-1]
+        self.assertEqual({k: rec["stages"][0][k] for k in CODEX_USAGE}, dict(CODEX_USAGE, cache_write_tokens=None))
+        self.assertEqual((rec["input_tokens"], rec["cache_write_tokens"]), (6, None))
+
+    def test_provider_variables_are_unset_for_their_cli_only(self):
+        test_cmd = ('test_cmd="sh tests/a_test.sh"',
+                    'test_cmd="printenv OPENAI_API_KEY GOOGLE_APPLICATION_CREDENTIALS > $LOG.env; sh tests/a_test.sh"')
+        r = self.run_entry("draft-pr", models="[default]=claude:default [edit]=codex:gpt-6-luna", subs=[confirm("edit"), test_cmd],
+                           extra={"OPENAI_API_KEY": "k", "GOOGLE_APPLICATION_CREDENTIALS": "/g"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([c["openai"] for c in self.codex()], [None])
+        with open(self.log + ".env") as f:
+            self.assertEqual(f.read(), "k\n/g\n")
+
     def test_size_cap_applies_to_the_final_message_not_the_jsonl(self):
         r = self.run_entry("report", models="[default]=codex:gpt-6-luna", subs=[confirm("analyze")],
                            extra={"CODEX_BIG_JSONL": "1"})
@@ -323,6 +344,21 @@ class CodexPipelineTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("gate: model codex:gpt-6-luna on spec has weak isolation and needs a recorded confirmation", r.stderr)
         self.assertFalse(any(c.startswith(("claude ", "codex ")) for c in self.calls()))
+
+    def test_repro_only_needs_no_confirmation_for_the_stages_it_skips(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}}, models="[default]=claude:default [fix]=codex:gpt-6-luna [verify]=codex:gpt-6-luna",
+                              subs=[confirm()], flow="repro-only", verify_fixed="off")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1"), ("reproduced", "linked", "none"))
+        self.assertEqual(self.codex(), [])
+
+    def test_smoke_check_covers_the_reviewers(self):
+        self.env["FACTORY_CHECK_MODELS"] = "1"
+        r = self.run_pipeline({"1": {}}, reviewers="codex:gpt-6.1-sol claude:sonnet", subs=[ISOLATED])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines()[-3:], ["check: claude:default answered", "check: claude:sonnet answered",
+                                                      "check: codex:gpt-6.1-sol answered"])
 
     def test_unavailable_codex_defers_the_item_and_stops_the_run(self):
         self.gh_state({1: {}, 2: {}}, [])

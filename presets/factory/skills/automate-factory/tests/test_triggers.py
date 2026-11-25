@@ -228,6 +228,24 @@ class TriggerTest(unittest.TestCase):
         self.assertIn("still flagged: none\n", self.report("maintain-verification"))
         self.assertTrue(self.report("maintain-verification").endswith("No drift signals\n"))
 
+    def test_a_model_check_is_a_dry_run_that_never_moves_the_change_trigger(self):
+        self.commit_file(".cursor/skills/verify-app/SKILL.md", "v1\n")
+        self.commit_file("src/a/x.py", "1\n")
+        fill = {"<app>": "app", '[<feature>]="<path glob>"': '[a]="src/a/*"'}
+        r = self.run_entry("maintain-verification", "changes", fill, extra={"FACTORY_CHECK_MODELS": "1"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.records()[-1]["dry_run"])
+        r = self.verification()
+        self.assertEqual((r.returncode, self.model_calls(), self.flagged()), (0, 2, [["a"]]), r.stderr)
+
+    def test_a_model_check_at_the_weekly_budget_fails_without_a_report(self):
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.write(".factory/reports/runs.jsonl", json.dumps({"entry": "x", "started": now, "cost_usd": 9}) + "\n")
+        r = self.security(weekly="5", extra={"FACTORY_CHECK_MODELS": "1"})
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("gate: weekly budget reached: $9.00 of $5 in the last 7 days, so the models were not checked", r.stderr)
+        self.assertEqual((self.model_calls(), self.report("security-review")), (0, None))
+
     def test_maintain_verification_schedule_mode_analyzes_every_run(self):
         self.commit_file(".cursor/skills/verify-app/SKILL.md", "v1\n")
         self.commit_file("src/b/y", "1\n")

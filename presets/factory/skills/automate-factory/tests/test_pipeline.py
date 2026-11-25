@@ -42,6 +42,8 @@ elif os.getcwd().endswith("/review"):
     print(json.dumps({"result": out, "num_turns": 1}))
 elif tools == "Read,Grep,Glob":
     sys.stdout.write(open(os.environ["REPORT"]).read())
+elif tools == "" and args[-1].startswith("Reply with the single word ok."):
+    print("ok")
 elif tools == "":
     i, feat = re.search(r"fix-issues: id=(\S+) verdict=\S+ feature=(\S+)", sys.stdin.read()).groups()
     if scen["items"].get(i, {}).get("spec") == "bad":
@@ -275,7 +277,9 @@ class PipelineTest(unittest.TestCase):
             script = script.replace(old, new)
         script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging" {skills})')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
-        script = script.replace("\nfetch\nanalyze\n", "\n" + pipeline + "\nfetch\nanalyze\n")
+        anchor = '\nconfirm analyze "$(pick analyze)" read\n'
+        self.assertIn(anchor, script)
+        script = script.replace(anchor, "\n" + pipeline + anchor)
         if main:
             script = script[:script.index("\nfetch\nanalyze\npost_check\n")] + "\npreflight\n" + main
         path = f"{self.repo}/.factory/automations/issue-pipeline.sh"
@@ -961,10 +965,10 @@ sys.exit(1 if spec else p.returncode)
         self.assertNotIn("ran", r.stdout)
         self.assertFalse(any("red" in n for n in os.listdir(f"{self.repo}/.factory/tmp")))
 
-    def test_reviewers_must_be_valid_claude_picks_before_any_call(self):
+    def test_reviewers_must_be_valid_picks_before_any_call(self):
         for reviewers, msg in (('"claude:haiku sonnet"', "model claude:haiku sonnet is not <cli>:<model>[@effort]"),
                                ("sonnet", "model sonnet is not <cli>:<model>[@effort]"),
-                               ("claude:sonnet nope:gpt-5.6-sol", "model nope:gpt-5.6-sol: CLI nope is not supported yet, only claude, codex, agy and agent")):
+                               ("claude:sonnet nope:gpt-5.6-sol", "model nope:gpt-5.6-sol: CLI nope is not claude, codex, agy or agent")):
             with self.subTest(reviewers):
                 self.gh_state({1: {}}, [])
                 r = self.run_pipeline({"1": {}}, reviewers=reviewers)

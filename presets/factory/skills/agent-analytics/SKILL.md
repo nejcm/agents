@@ -60,7 +60,8 @@ counted), and for reviewed PRs, joined with
 factory merge is not a human outcome), the same agreement per reviewer family (from each
 verdict's recorded `family`), misses
 (approved, then closed or reverted) and merge rates by scope; a run whose record has no usage or cost is counted as a run and listed under coverage. `--since` filters by the UTC date of the record's
-start date. Factory runs keep no transcript, so they are not counted again below. Gate messages,
+start date. Factory runs are not counted again below: Claude Code and Codex calls keep no transcript, and
+Antigravity conversations under `.factory/` are skipped. Gate messages,
 items and commits stay in the file, never in the report.
 
 **Sessions**: scope is this repo: transcripts whose recorded cwd is the repo root or a path under it
@@ -73,7 +74,7 @@ harness dirs and count the same way. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` are 
 | Claude Code | `~/.claude/projects/<path, non-alphanumerics as ->/*.jsonl`, subagents in `<session>/subagents/`; in the repo's exact dir any recorded cwd in the repo counts (a session moved in from a scratch dir), in prefix dirs the first | tokens per API message (deduped by message id), cost from the largest `cost-state.totalCostUSD`, `tool_use` calls, `tool_result.is_error`, `system` `api_error` retries, `AskUserQuestion` calls, `pr-link` URLs, `gitBranch` | none |
 | Codex | `~/.codex/{sessions,archived_sessions}/**/rollout-*.jsonl` whose `session_meta.cwd` is in the repo; `thread_source` `subagent`/`guardian_review` or a `source.subagent` object count as subagent transcripts (T3 Code marks the threads it delegates `subagent`) | the cumulative `token_count.total_token_usage` with the largest `total_tokens`, tool calls, `request_user_input*` calls, `session_meta.git.branch` | cost, failed tool calls, retries (tool output carries no structured error) |
 | Cursor | `~/.cursor/projects/<path, non-alphanumeric runs as ->/agent-transcripts/**/*.jsonl`; a transcript under both the real and the symlinked checkout path counts once | sessions, `tool_use` calls | tokens, cost, failed tool calls, retries, escalations, PR links (no usage or result fields) |
-| Antigravity | SQLite `conversations/*.db` (read from a private temporary copy with its `-wal`, so nothing is written beside it) under `~/.gemini/antigravity-cli/` and T3 Code's `~/.t3/userdata/providers/antigravity/*/antigravity-acp/`, whose workspace URI (`trajectory_metadata_blob`) is in the repo; column shown only when found | tokens per `gen_metadata` record (protobuf usage fields) | cost, tool calls, failed tool calls, retries, escalations, PR links, subagents (not decoded) |
+| Antigravity | SQLite `conversations/*.db` (read from a private temporary copy with its `-wal`, so nothing is written beside it) under `~/.gemini/antigravity-cli/` and T3 Code's `~/.t3/userdata/providers/antigravity/*/antigravity-acp/`, whose workspace URI (`trajectory_metadata_blob`) is in the repo outside `.factory/` (factory runs); column shown only when found | tokens per `gen_metadata` record (protobuf usage fields) | cost, tool calls, failed tool calls, retries, escalations, PR links, subagents (not decoded) |
 
 - **Cost** is the harness's own estimate (Claude Code `cost-state`), never derived from a price
   table. The report says how many sessions reported it.

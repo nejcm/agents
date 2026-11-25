@@ -347,7 +347,9 @@ def antigravity(home, repo, since):
                         shutil.copyfile(part, os.path.join(tmp, "c.db" + part[len(path):]))
                     db = stack.enter_context(contextlib.closing(sqlite3.connect(os.path.join(tmp, "c.db"))))
                     meta = db.execute("SELECT data FROM trajectory_metadata_blob").fetchone()
-                    if not any(in_repo(workspace(m), repo) for m in pb(meta[0]).get(1, [])):
+                    # Factory runs are counted from their run records; their agy calls work under .factory/.
+                    if not any(in_repo(w, repo) and not in_repo(w, os.path.join(repo, ".factory"))
+                               for w in map(workspace, pb(meta[0]).get(1, []))):
                         continue
                     gens = db.execute("SELECT idx, data FROM gen_metadata").fetchall()
             except (sqlite3.Error, OSError, ValueError, IndexError, TypeError):
@@ -430,7 +432,7 @@ def factory_runs(repo, since):
         r["runs"] += 1
         r["dry"] += rec.get("dry_run") is True
         r["capped"] += is_num(rec.get("max_turns_hit")) and rec["max_turns_hit"] > 0
-        r["partial"] += rec.get("cost_complete") is False and rec.get("cost_usd") is not None
+        r["partial"] += rec.get("cost_complete") is False and is_num(rec.get("cost_usd"))
         r["outcomes"][outcome] += 1
         items = rec.get("items") if isinstance(rec.get("items"), list) else []
         for i in items:

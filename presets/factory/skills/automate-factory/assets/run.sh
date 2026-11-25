@@ -4,6 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 [ ! -e .factory/pause ] || { echo paused; exit 0; }
 entry=$(basename "$0" .sh)
+# A model check records as a dry run, so a change trigger never takes it for the last real run.
+[ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || FACTORY_DRY_RUN=1
 day=$(date +%F)
 out=.factory/reports/$entry
 mkdir -p "$out" .factory/tmp
@@ -90,10 +92,11 @@ if mode == "json":
             ev.append(e) if isinstance(e, dict) else None
         us = [e["usage"] for e in ev if e.get("type") == "turn.completed" and isinstance(e.get("usage"), dict)]
         def total(k):
-            return sum(x[k] for x in us if isinstance(x.get(k), int) and not isinstance(x.get(k), bool))
-        if us:
-            u = dict(input_tokens=total("input_tokens") - total("cached_input_tokens"), output_tokens=total("output_tokens"),
-                     cache_creation_input_tokens=total("cache_write_input_tokens"), cache_read_input_tokens=total("cached_input_tokens"))
+            v = [x[k] for x in us if isinstance(x.get(k), int) and not isinstance(x.get(k), bool)]
+            return sum(v) if v else None
+        inp, cached = total("input_tokens"), total("cached_input_tokens")
+        u = dict(input_tokens=None if inp is None else inp - (cached or 0), output_tokens=total("output_tokens"),
+                 cache_creation_input_tokens=total("cache_write_input_tokens"), cache_read_input_tokens=cached)
         err = " ".join(str(e.get("message") or e.get("error")) for e in ev if e.get("type") in ("error", "turn.failed"))
         if err:
             stop = stop_of(err)
@@ -250,16 +253,18 @@ environment="<environment>" confirmed=()
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
   ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
   CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
-  CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD OPENAI_API_KEY CODEX_API_KEY OPENAI_BASE_URL \
-  GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_GEMINI_BASE_URL GOOGLE_APPLICATION_CREDENTIALS GOOGLE_GENAI_USE_VERTEXAI AGY_ADC_AUTH \
-  GOOGLE_GENAI_USE_ENTERPRISE GOOGLE_SERVICE_ACCOUNT_AUTH CURSOR_API_KEY CURSOR_AUTH_TOKEN CURSOR_AUTH_TOKEN_FILE \
-  CURSOR_API_ENDPOINT
+  CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
+# The same for the other CLIs, unset only around their own calls so the test command keeps them.
+declare -A cli_env=([codex]="OPENAI_API_KEY CODEX_API_KEY OPENAI_BASE_URL"
+  [agy]="GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_GEMINI_BASE_URL GOOGLE_APPLICATION_CREDENTIALS GOOGLE_GENAI_USE_VERTEXAI
+  AGY_ADC_AUTH GOOGLE_GENAI_USE_ENTERPRISE GOOGLE_SERVICE_ACCOUNT_AUTH"
+  [agent]="CURSOR_API_KEY CURSOR_AUTH_TOKEN CURSOR_AUTH_TOKEN_FILE CURSOR_API_ENDPOINT")
 caps=(--max-turns "$max_turns")
 [[ $weekly_usd =~ ^([0-9]+(\.[0-9]+)?)?$ ]] || block "weekly budget $weekly_usd is not empty or a number of USD"
 model_re='^[a-z]+:[A-Za-z0-9][][A-Za-z0-9._:-]*(@[a-z]+)?$'
 check_model() {
   [[ $1 =~ $model_re ]] || block "model $1 is not <cli>:<model>[@effort]"
-  [[ ${1%%:*} =~ ^(claude|codex)$|^(agy|agent)$ ]] || block "model $1: CLI ${1%%:*} is not supported yet, only claude, codex, agy and agent"
+  [[ ${1%%:*} =~ ^(claude|codex)$|^(agy|agent)$ ]] || block "model $1: CLI ${1%%:*} is not claude, codex, agy or agent"
   [[ $1 != agent:*@* ]] || block "model $1: agent takes its effort in the model id, not @${1##*@}"
   [[ $1 != *@* || ${1##*@} =~ ^(low|medium|high|xhigh|max)$ ]] || block "model $1: effort ${1##*@} is not low, medium, high, xhigh or max"
 }
@@ -284,6 +289,7 @@ if [ -n "$weekly_usd" ]; then
   rc=0
   python3 -I -c "$record_py" spent "$weekly_usd" > "$view/spent" 2> "$view/spent.err" || rc=$?
   if [ "$rc" = 3 ]; then
+    [ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || block "$(cat "$view/spent"), so the models were not checked"
     tee -a "$out/$day.md" < "$view/spent"
     run_outcome=skipped run_reason=weekly-budget
     exit 0
@@ -335,8 +341,8 @@ claude_ready() { :; }
 codex_ready() { codex login status > /dev/null 2>&1; }
 # /usage is answered by the CLI without a model call; logged out, it waits for a browser login.
 agy_ready() { timeout 30 agy -p /usage < /dev/null > /dev/null 2>&1; }
-# Logged out, status still exits 0.
-agent_ready() { timeout 30 agent status --format json < /dev/null 2> /dev/null | grep -q '"isAuthenticated": true'; }
+# Logged out, status still exits 0. No grep -q: exiting early would fail the pipe on SIGPIPE.
+agent_ready() { timeout 30 agent status --format json < /dev/null 2> /dev/null | grep -E '"isAuthenticated": *true' > /dev/null; }
 # $1 kind, $2 pick, $3 tools, $4 output, $5 prompt; runs in the stage directory, under t minutes.
 claude_run() {
   local a
@@ -423,12 +429,12 @@ run_model() {
   iso=${isolation[$cli:$kind]}
   confirm "$1" "$2" "$kind"
   [ "$iso" != weak ] || prompt+=$'\n'"$weak_rules"
-  if ! command -v "$cli" > /dev/null || ! "${cli}_ready"; then
+  if ! command -v "$cli" > /dev/null || ! (unset ${cli_env[$cli]-}; "${cli}_ready"); then
     echo "model-unavailable: $cli for $1 is missing or logged out" >&2
     run_reason=model-unavailable outcome=deferred reason=model-unavailable
     exit 1
   fi
-  (cd "$4" && "${cli}_run" "$kind" "$2" "$3" "$5" "$prompt") || rc=$?
+  (cd "$4" && unset ${cli_env[$cli]-} && "${cli}_run" "$kind" "$2" "$3" "$5" "$prompt") || rc=$?
   python3 -I -c "$record_py" json "$5" "$calls" "$1" "$2" "$iso" "$rc" || exit 1
   return "$rc"
 }

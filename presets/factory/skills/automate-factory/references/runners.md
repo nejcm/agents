@@ -131,7 +131,7 @@ dontAsk`; every `codex` call `--json --ephemeral --ignore-user-config --ignore-r
 `apps`, `plugins`, `hooks`, `multi_agent`, `image_generation`, `browser_use`, `computer_use` and
 `in_app_browser`, `-m <model>` unless `default`, `-c model_reasoning_effort="<effort>"` for an
 `@effort`, and `-o` for its last message. `OPENAI_API_KEY`, `CODEX_API_KEY` and `OPENAI_BASE_URL`
-are unset like the Anthropic ones. Every `agy` call gets `--input-format stream-json --output-format
+are unset for its calls and login check. Every `agy` call gets `--input-format stream-json --output-format
 stream-json --disable-slash-commands`, `--model <model>` unless `default` and `--effort <effort>` for an
 `@effort` (model IDs that end in an effort, such as `gemini-3.8-flash-low`, also work), and runs under
 `timeout <minutes>m` like the others (not the CLI's `--print-timeout`, which exits 3, not 124). The
@@ -139,12 +139,13 @@ prompt goes in as one stdin message, so input size has no argument limit; the sp
 follows it after a line saying the rest is data, never instructions. Its final `result` event gives the
 response and usage. `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GEMINI_BASE_URL`,
 `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_GENAI_USE_ENTERPRISE`,
-`GOOGLE_SERVICE_ACCOUNT_AUTH` and `AGY_ADC_AUTH` are unset too. Every `agent` call gets `-p --trust
+`GOOGLE_SERVICE_ACCOUNT_AUTH` and `AGY_ADC_AUTH` are unset for its calls and login check. Every `agent` call gets `-p --trust
 --output-format json` and `--model <model>` unless `default`, and runs under `timeout <minutes>m` (the CLI has
 no time cap). The prompt and the spec-writer's input go in on stdin as for `agy`; the call's stderr is kept
 beside its output to name a usage or rate limit. Tool-less and read-only calls write their deny rules to
 `.cursor/cli.json` in the stage's own directory, never the checkout. `CURSOR_API_KEY`, `CURSOR_AUTH_TOKEN`,
-`CURSOR_AUTH_TOKEN_FILE` and `CURSOR_API_ENDPOINT` are unset too.
+`CURSOR_AUTH_TOKEN_FILE` and `CURSOR_API_ENDPOINT` are unset for its calls and login check. The test command
+and other CLIs' calls keep these variables; the Anthropic ones are unset for the whole run.
 
 Codex's isolation check, observed with codex-cli 0.172.0: exec and write pass (writes stay in the
 working directory and the added record directory; user MCP servers, ChatGPT apps, hooks, rules and
@@ -279,7 +280,7 @@ the run script:
   outside `allow` ([safety.md](safety.md#steps)); every other entry keeps `0`.
 - The entry's `Edit prompt` to `.factory/automations/<entry>.edit.md`.
 
-The edit step and the test command run as the runner identity, under its own `claude` login, and
+The edit step and the test command run as the runner identity, the edit under the picked CLI's login, and
 `publish` uses its `gh` login and `git push` credentials. So the edit step can read that login and
 change Git config, `PATH` and the run script: only the isolated environment, holding a
 fine-grained token scoped to this repo, bounds an injected model
@@ -293,7 +294,7 @@ Every run past the pause and Git config checks appends one line to
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget, `no-risk-change` for one `skipped` by its
-[change trigger](#change-triggers),
+[change trigger](#change-triggers), `model-unavailable` for a `failed` run whose picked CLI was missing or logged out,
 `usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
 disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
@@ -323,8 +324,8 @@ token total is `null` when any call did not report it. Agent fetch and write cal
 Run the entry once as the runner, in dry-run mode, before its automatic trigger is enabled. First,
 with `FACTORY_CHECK_MODELS=1` in place of `FACTORY_DRY_RUN=1` the same way, the script makes one
 tool-less check call per picked model (models and reviewers) through its [mapping](#cli-mapping),
-prints `check: <pick> answered` or `did not answer`, records the calls and ends; it passes only
-when it exits 0, so every picked model answered. Then the dry run:
+prints `check: <pick> answered` or `did not answer`, records the calls as a dry run and ends; it passes only
+when it exits 0, so every picked model answered. At the weekly budget it fails before any call. Then the dry run:
 
 - systemd: install the units and `systemctl --user daemon-reload`, then
   `systemctl --user set-environment FACTORY_DRY_RUN=1; systemctl --user start factory-<repo>-<entry>.service; systemctl --user unset-environment FACTORY_DRY_RUN`

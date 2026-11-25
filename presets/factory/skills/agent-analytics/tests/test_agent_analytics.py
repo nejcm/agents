@@ -227,6 +227,11 @@ class ReportTest(unittest.TestCase):
         self.assertIn("cost by 0.", report)
         self.assertNotIn("missing a call's cost", report)
 
+    def test_a_run_with_a_corrupt_cost_is_not_called_partial(self):
+        report = self.runs([{"entry": "e", "outcome": "ok", "cost_usd": "1", "cost_complete": False}])
+        self.assertIn("cost by 0.", report)
+        self.assertNotIn("missing a call's cost", report)
+
 
 class RobustnessTest(unittest.TestCase):
     def setUp(self):
@@ -410,6 +415,13 @@ class SourcesTest(unittest.TestCase):
         self.assertIn("| Tool calls | not found | not found | not found | unavailable | unavailable |", report)
         self.assertNotIn("Antigravity |", run())
 
+
+    def test_antigravity_skips_factory_run_conversations(self):
+        d = ".gemini/antigravity-cli/conversations"
+        agy_db(self.home, f"{d}/a.db", "file:///work/demo", [(10, 3, 0)])
+        agy_db(self.home, f"{d}/b.db", "file:///work/demo/.factory/tmp/e.Ab12", [(7, 7, 7)])
+        s = aa.antigravity(self.home, REPO, None)
+        self.assertEqual((s["sessions"], s["input"]), (1, 10))
 
     def test_antigravity_reads_commits_still_in_the_wal_and_writes_nothing_beside_the_database(self):
         d = ".gemini/antigravity-cli/conversations"

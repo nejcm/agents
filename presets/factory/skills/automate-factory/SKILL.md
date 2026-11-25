@@ -21,6 +21,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    - cron: `command -v crontab`.
    - Isolated analyze for local runners: Claude Code with the flags and no managed hooks, per
      [`references/runners.md`](references/runners.md#analyze-command).
+   - Other CLIs: `codex`, `agy` and `agent` versions and logins (`codex login status`, `agy -p /usage`,
+     `agent status`).
 2. **Suggest**: read each file in [`references/catalog/`](references/catalog/). For every entry
    whose requirements the profile meets, give one line: the entry and the profile fact that makes
    it worth running ("4 open PRs with review bots", "CI failed 9 of 40 runs on main"). List the
@@ -141,7 +143,7 @@ entries the user names or whose smoke run failed. To change an entry:
   profile's per-week budget is `weekly_usd` (empty: no limit): before any model call, a run sums
   `cost_usd` over every `runs.jsonl` record started in the last 7 days (a missing cost counts as 0
   and is noted, as is a run with a call that reported no cost) and, at or over it, exits 0 with
-  one `weekly budget reached` report line and no other write; a call that reported no cost adds
+  one `weekly budget reached` report line and no other write (a `FACTORY_CHECK_MODELS=1` run fails instead); a call that reported no cost adds
   nothing to the sum. Model picks are per entry and stage ([runners.md](references/runners.md#models)); an unfilled or
   invalid value fails the run before any call.
 - **Pause**: `.factory/pause` in the target repo makes every run exit 0 before any work, and
