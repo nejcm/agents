@@ -26,7 +26,8 @@ in its environment.
 
 Through setup-factory's "change my factory", which runs automate-factory's [re-run](../SKILL.md#re-run):
 - Settings in the profile: schedule, write level, destinations, per-source trust, `label`,
-  `run_minutes`, `cap`, budgets (`weekly_usd`), per-entry model picks and extra skills, `ceiling`,
+  `run_minutes`, `cap`, budgets (`weekly_usd`), per-entry model picks, extra skills and
+  [stage skills](runners.md#stage-skills), `ceiling`,
   the [change trigger](runners.md#change-triggers) with `Risk paths` and `Feature paths`,
   `issue-pipeline` `reviewers`, `merge_level` and `needs_human`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
@@ -35,7 +36,7 @@ Through setup-factory's "change my factory", which runs automate-factory's [re-r
 Locked in the run scripts, at every write: model-free writes to destinations fixed at setup; dry
 run writes nothing external; item text reaches stages only through the checked spec; gates on the
 exact pushed commit; credential check and size cap on every final body (`sendable`); the consumed
-in-repo skills in `deny`; pause, claims; a merge only at `issue-pipeline` `merge_level` `merge`,
+in-repo skills, stage skills included, in `deny`; the record contract of every stage; pause, claims; a merge only at `issue-pipeline` `merge_level` `merge`,
 by the model-free rule under Merge levels, never of a revert; every other PR stays unmerged, and
 `issue-pipeline` PRs open as drafts; a PR that changes [agent instructions](#steps) stays a draft
 and is never marked ready or merged, whatever `needs_human` says. A

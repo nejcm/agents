@@ -31,7 +31,15 @@ interview instead of asking now.
   [loading other skills](../SKILL.md#loading-other-skills), reading only each `SKILL.md`'s name and
   description (the one read outside the repo). Record each practice as present (with its file),
   unknown (only an installed skill's name or description suggests it; add it to `Open gaps`), or
-  missing (neither project config nor any installed skill covers it).
+  missing (neither project config nor any installed skill covers it). From the same project and
+  user skills, also record:
+  - stage skill candidates: for each of triage, reproduce, fix, verify and review, the skills
+    whose name or description says they do that job (a bug-triage, reproduction, debugging or fix,
+    QA or verification, code-review skill). A suggestion only: `automate-factory` offers each
+    and the user confirms.
+  - a feature workflow: the order in which the user's skills and orchestration (a plan step,
+    phase splitting, builder and reviewer roles) already take a feature from plan to merged PR,
+    or the missing step. A suggestion for the hand-off; feature work is never a scheduled entry.
 - **Error and analytics SDKs**: detected from dependencies, init code, config files and env var
   names, e.g. Sentry, PostHog, Datadog, Bugsnag, Rollbar, New Relic, Amplitude, Segment,
   LogRocket. Record what was detected and where; do not check whether the agent can reach it yet.

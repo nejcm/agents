@@ -27,9 +27,9 @@ In `$check`: `spec.md`, the profile's `Run` section as `run.md`, and the verify 
    symptom.
 6. **Tear down** with the verify skill's cleanup and confirm the evidence survived it.
 
-At most three attempts at the path within the budget. Write `$evidence/repro.md`: the exact steps
-and commands run (the check verify will rerun), both final states, the state value, evidence
-paths, and last the line `repro: outcome=<outcome>`:
+At most three attempts at the path within the budget. The record, in the file and with the last
+line the stage prompt states ([Records](../SKILL.md#records)), holds the exact steps and commands
+run (the check verify will rerun), both final states, the state value and evidence paths. Outcome:
 
 - `reproduced`: the broken state, twice.
 - `not-reproduced`: the path ran and the expected state appeared. Report it; no fix.
@@ -38,8 +38,7 @@ paths, and last the line `repro: outcome=<outcome>`:
 
 [Escalate](#escalate) instead when a human must supply something.
 
-The coordinator reads only `tail -n 1 "$evidence/repro.md" | grep -xE 'repro: outcome=(reproduced|not-reproduced|blocked)|escalated: (credentials|prod-access|ambiguous|out-of-scope)'`.
-The user reads the report and evidence; a correction they give reruns the stage once.
+The coordinator reads only the record's last line. The user reads the report and evidence; a correction they give reruns the stage once.
 
 ## Verify an existing fix
 
@@ -68,8 +67,7 @@ another PR. Run code only from a commit someone with write access put in `$repo`
    skill of `before`: the reproduce steps, run twice on `base/` first, then twice on `patch/`,
    with the verify skill and journey read from `$check` for both.
 
-The stage writes `$evidence/verify.md` ending with `verify: outcome=<outcome>`, projected with
-`grep -xE 'verify: outcome=(confirmed|insufficient|inconclusive)'`:
+The stage's record ([Records](../SKILL.md#records)) ends with its outcome:
 
 - `confirmed`: broken twice on `base/`, expected state twice on `patch/`.
 - `insufficient`: broken on both; the artifact did not resolve the symptom.

@@ -100,7 +100,7 @@ cp <stage inputs> "$check/"
 printf '%s\n' 'No git commit or git push, no gh, no tracker or chat writes, no edits outside the working directory and $evidence.' \
   'The reference above also covers the coordinator and other stages: do only the part for the stage named on the last line.' \
   > "$item/bans.md"
-prompt="$(cat <reference file> "$item/bans.md")
+prompt="$(cat <reference file> "$item/bans.md"; echo "<the stage's record from Records>")
 Stage: <stage>."
 (unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
   ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
@@ -129,12 +129,25 @@ cd "$dir" && check=$check evidence=$evidence timeout <stage minutes>m claude -p 
 - **Inputs**: the coordinator copies each stage's inputs (its reference's Inputs list) into
   `$check` model-free, with the verify skill from the stage's baseline commit; the stage reads
   journeys only from there. The prompt is the reference file, then `bans.md`, which the
-  coordinator writes with the two lines above, then `Stage: <stage>.` (`reproduce`, `fix` or
-  `verify`).
-- Stage reports end with one projected line (see each reference); the coordinator reads only that
+  coordinator writes with the two lines above, then the stage's record from [Records](#records),
+  then `Stage: <stage>.` (`reproduce`, `fix` or `verify`).
+- Stage reports end with one projected line ([Records](#records)); the coordinator reads only that
   line, and an invalid or missing one is `blocked`. An `escalated: <reason>` line
   ([escalate](references/reproduce.md#escalate)) ends the item: show the user the record; posting
   it is a Comment step.
+
+### Records
+
+The stage prompt states the record, so a stage run from another skill gets the same contract;
+the references say only what goes in it. Triage's verdict line is in its
+[Analyze](references/triage.md#analyze) prompt.
+
+- reproduce: `$evidence/repro.md`, last line `repro: outcome=<reproduced|not-reproduced|blocked>`.
+- fix: `$evidence/fix.md`, last line `fix: outcome=<changed|stopped>`.
+- verify (both modes): `$evidence/verify.md`, last line
+  `verify: outcome=<confirmed|insufficient|inconclusive>`.
+- Any stage: `escalated: <credentials|prod-access|ambiguous|out-of-scope>` in place of the outcome
+  line ([escalate](references/reproduce.md#escalate)).
 
 ## Claims
 

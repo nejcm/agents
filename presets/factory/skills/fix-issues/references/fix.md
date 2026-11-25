@@ -39,8 +39,8 @@ The stage follows the target repo's `AGENTS.md` and:
 3. Makes the smallest change that fixes the root cause. No unrelated cleanup, no edits to the
    verify skill, no weakened tests; a deleted or renamed test gets a stated reason. Prefers existing
    code and the standard library; adds a package only for substantial functionality, naming why.
-4. Runs the profile's test, lint and typecheck scripts and writes `$evidence/fix.md`: root cause,
-   change, tests, what it skipped, and last `fix: outcome=changed` or `fix: outcome=stopped`.
+4. Runs the profile's test, lint and typecheck scripts and records root cause, change, tests and
+   what it skipped, `changed` or `stopped` ([Records](../SKILL.md#records)).
 
 It stops when the change outgrows the budget or touches more than the spec's feature and its
 direct dependencies. When going on would mean guessing (credentials, production access, a
@@ -71,8 +71,8 @@ defined by base: the journey is read from `$check`, `repro.md`'s steps are run a
 3. The profile's test, lint and typecheck scripts pass on `patch/`.
 4. Smoke the blast radius: neighbouring journeys in the feature map that share the changed code.
 
-It writes `$evidence/verify.md`: pass or fail per step, evidence paths, commands run, and last
-`verify: outcome=confirmed` only when all four pass, else `insufficient` or `inconclusive` as in
+Its record ([Records](../SKILL.md#records)): pass or fail per step, evidence paths, commands run;
+`confirmed` only when all four pass, else `insufficient` or `inconclusive` as in
 [verify mode](reproduce.md#verify-an-existing-fix). A compile, unit test, code review or plausible
 diff alone is not a pass.
 

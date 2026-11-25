@@ -22,6 +22,9 @@ Updated: <YYYY-MM-DD> (explore) at <short SHA>
 - Agent config: <AGENTS.md, skills, MCP servers found>
 - Agent setup: <plan step, phase splitting, independent review, CI round cap, dependency rule>:
   <present (<file>) / unknown (<skill>) / missing>
+- Stage skill candidates: <triage / reproduce / fix / verify / review>: <skill dir> (<name or
+  description match>) ... / none
+- Feature workflow: <skill or step> → ... (<sources>) / missing: <step>
 - Detected SDKs: <tool> (<file>)
 - Open gaps: <unknown or contradiction> (<sources>)
 
@@ -107,4 +110,6 @@ Updated: <YYYY-MM-DD> (automate-factory)
   run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>; for
   `issue-pipeline` at draft-pr: flow <fix / repro-only>, verify_fixed <on / off>, reviewers
   <cli:model[@effort] ...>, merge_level <draft / ready / merge>, needs_human <test-change dependency refactor>
+- <entry> stage <triage / reproduce / fix / verify / review>: <skill dir>; confirmed <YYYY-MM-DD>;
+  smoke run <YYYY-MM-DD> <pass / fail: error>. No line: the built-in stage.
 ```

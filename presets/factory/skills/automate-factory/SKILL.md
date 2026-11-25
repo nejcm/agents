@@ -37,9 +37,14 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    - models: a `default` pick and optional per-stage picks, `<cli>:<model>[@effort]` with the
      effort inside the pick, default `claude:default`, only the stages the entry and level run
      ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`;
-   - extra skills: skill dirs the entry's analyze and edit steps also read (not yet
-     `issue-pipeline`'s spec, reproduce, fix, verify or review), default none, each with a
-     directory name no other skill of the entry has;
+   - extra skills: skill dirs the entry's analyze and edit steps, and `issue-pipeline`'s
+     reproduce, fix and verify stages and reviewers, also read (not the tool-less spec-writer),
+     default none, each with a directory name no other skill of the entry has;
+   - stage skills, `issue-pipeline` and `new-error-triage` only: per stage the entry runs (triage,
+     and at `draft-pr` reproduce, fix, verify, review), the built-in (default) or a user skill
+     in its place ([runners.md](references/runners.md#stage-skills)). Offer the profile's
+     `Stage skill candidates` for that stage; the user confirms each swap, and a confirmed one
+     is used only after this entry's smoke run passes with it;
    - trigger, `security-review` and `maintain-verification` only: on a schedule (default), only
      on risky changes, or wired into the user's existing workflow
      ([runners.md](references/runners.md#change-triggers)). For `security-review`, risky
@@ -52,6 +57,7 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    levels](references/runners.md#write-levels). For `issue-pipeline` at `draft-pr`, instead of the
    edit prompt: its `Spec prompt` to `.factory/automations/issue-pipeline.spec.md`, and
    [`assets/issue-pipeline.sh`](assets/issue-pipeline.sh) inserted into the script after `publish`.
+   A stage skill per [runners.md](references/runners.md#stage-skills).
    Never write a `*.local.md` [overlay](references/runners.md#prompt-overlays). Fill each
    `<skill-path:<name>>` in the script's `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills). A skill not
@@ -67,8 +73,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
    `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
+   A stage skill needs its stage in the smoke run ([runners.md](references/runners.md#smoke-run)).
 7. **Record** each entry in the profile's `Automations` section: runner, schedule, model picks,
-   extra skills, trigger, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
+   extra skills, one `stage` line per stage skill, trigger, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
    `verify_fixed`, `reviewers`,
    `merge_level` and `needs_human`, status
    (`active`, `proposed`, `failed: <reason>`).
@@ -80,7 +87,7 @@ entries the user names or whose smoke run failed. To change an entry:
 
 1. Regenerate its files (step 5) into a scratch directory from the current profile, never
    writing `*.local.md`: the before copy.
-2. Write the change where it lives: a setting (schedule, model picks, extra skills, trigger, write level,
+2. Write the change where it lives: a setting (schedule, model picks, extra skills, stage skills, trigger, write level,
    destination, trust, `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`,
    `merge_level`, `needs_human`, budgets, `weekly_usd`) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the

@@ -32,7 +32,10 @@ skill dirs the prompt loads plus the entry's extra skills (a project skill as it
 path, so it is read from the tracked snapshot; an installed one as its absolute resolved dir; no
 two with the same directory name), and the step functions from the entry, `chmod +x`. Each extra
 skill also gets one line at the end of the entry's prompt and edit prompt: `Also follow
-skills/<name>/SKILL.md where it applies.`
+skills/<name>/SKILL.md where it applies.` For `issue-pipeline` at `draft-pr`, its directory name
+also goes into `extra_skills`, and the script adds that line to each reproduce, fix and verify
+stage and reviewer prompt, with the skill copied into the stage's inputs (the tool-less
+spec-writer reads no skills). A [stage skill](#stage-skills) goes into `skills` the same way.
 These values come from the profile and the entry's choices; the profile is the source of truth,
 so a changed value regenerates the entry ([re-run](../SKILL.md#re-run)).
 `repo/` and fetch's `git` reads use the local `<base>` branch, as fresh as the user's last pull;
@@ -103,6 +106,27 @@ current `reviewers`. `weekly-agent-analytics` has no model.
 Every counted call (analyze, edit, spec, each stage, each reviewer) runs under its timeout
 (`<minutes>`; 5 for the tool-less spec-writer) and keeps at most `8 * summary_cap` bytes of its JSON
 output: a longer output is cut there and fails the call (a stage then records `runner-error`).
+
+## Stage skills
+
+Setup may swap one of `issue-pipeline`'s stages (triage, reproduce, fix, verify, review), or
+`new-error-triage`'s triage, for a skill the user already has, one profile line per stage
+(`- <entry> stage <stage>: <skill dir>`). The skill goes into `skills` (a project skill by its
+repo-relative path, so its paths, link and target join `deny` like any consumed skill) and:
+
+- triage: the prompt's `Read skills/fix-issues/references/triage.md, section Judge, and apply it`
+  becomes `Read skills/<name>/SKILL.md and apply it`; the rest of the prompt, with its `## <id>`
+  sections, `fix-issues:` line and verdicts, stays.
+- reproduce, fix, verify, review: `declare -A stage_skills=([<stage>]=<name> ...)` in the
+  `issue-pipeline` part of the script, `<name>` its directory name. The stage's prompt then says to
+  follow that skill, copied into the stage's inputs, in place of the `fix-issues` reference (for
+  review, in place of the judging sentence); the overlay, bans, the record the stage must write
+  (file and last line) and `Stage: <stage>.` follow as for the built-in stage.
+
+The record contract, every gate, write and checker, and the run script itself are never
+replaced: a record without its last line ends the item `blocked` as before. A name not in
+`skills`, or a key other than those four stages, fails the run before any call. Only `fix` edits;
+a replaced reproduce, verify or review keeps its tools.
 
 ## Change triggers
 
@@ -228,4 +252,9 @@ and the PR lookup read the destination. A gate failure exits 1 and publishes not
 `<id> repro: outcome=reproduced` or `<id> repro: outcome=not-reproduced` line and no `gate:` line;
 `pipeline: no candidates` is not a pass. With no pending item, the user files a canary: a trusted
 or labelled issue describing behaviour that works, so the expected line is `not-reproduced`. The
-dry run records every selected item as `deferred`, so the first real run processes it.
+dry run records every selected item as `deferred`, so the first real run processes it. A
+[stage skill](#stage-skills) passes only when its stage ran: a triage skill leaves a valid
+`fix-issues:` line in the report, a reproduce skill the log's `repro:` line, a fix or verify skill
+`<id> verify: outcome=confirmed`, a review skill `<id> review:` lines. Those last three need a
+canary that reproduces (a real open bug); without one the entry stays `proposed`, or runs with
+the built-in stage if the user drops the swap.

@@ -19,8 +19,10 @@ args = sys.argv[1:]
 ev = os.environ.get("evidence", "")
 with open(os.environ["LOG"], "a") as f:
     f.write("claude " + " ".join(a.replace("\n", " ") for a in args[:-1]) + (" evidence=" + ev if ev else "") + "\n")
+skills = os.path.join(os.environ.get("check", ""), "skills")
 with open(os.environ["LOG"] + ".prompts", "a") as f:
-    f.write(json.dumps({"evidence": ev, "args": args[:-1], "prompt": args[-1]}) + "\n")
+    f.write(json.dumps({"evidence": ev, "args": args[:-1], "prompt": args[-1],
+                        "skills": sorted(os.listdir(skills)) if os.environ.get("check") else None}) + "\n")
 scen = json.load(open(os.environ["SCEN"]))
 tools = args[args.index("--tools") + 1]
 fmt = args[args.index("--output-format") + 1] if "--output-format" in args else ""
@@ -58,7 +60,9 @@ else:
     def put(path, text):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         open(path, "w").write(text)
-    if s.get("escalate") == stage:
+    if s.get("norecord") == stage:
+        put(f"{ev}/{dict(reproduce='repro').get(stage, stage)}.md", "did the work\n")
+    elif s.get("escalate") == stage:
         put(f"{ev}/{dict(reproduce='repro').get(stage, stage)}.md", "needs the prod database\nescalated: prod-access\n")
     elif stage == "reproduce":
         put(ev + "/repro.md", "steps\nrepro: outcome=" + s.get("repro", "reproduced") + "\n")
@@ -237,7 +241,8 @@ class PipelineTest(unittest.TestCase):
 
     def run_pipeline(self, items, trust=("#",), label="", agent=None, dry=False, extra_fetch="", main="",
                      report_extra="", cap="3", flow="fix", verify_fixed="on", merge_level="draft",
-                     reviewers="claude:sonnet", needs_human=None, run_minutes="240", models=""):
+                     reviewers="claude:sonnet", needs_human=None, run_minutes="240", models="", skills="",
+                     stage_skills="", extra_skills=""):
         report = "".join(f"## {i}\n\nx\n\nfix-issues: id={i} verdict={v.get('verdict', 'new-bug')} "
                          f"feature={v.get('feature', 'a')} ref={v.get('ref', 'none')}\n\n" for i, v in items.items())
         with open(self.env["REPORT"], "w") as f:
@@ -257,13 +262,15 @@ class PipelineTest(unittest.TestCase):
                      "<verify-fixed>": verify_fixed, "<merge level>": merge_level,
                      "reviewers=(claude:sonnet)": f"reviewers=({reviewers})"}.items():
             pipeline = pipeline.replace(k, v)
+        pipeline = pipeline.replace("declare -A stage_skills=()", f"declare -A stage_skills=({stage_skills})")
+        pipeline = pipeline.replace("extra_skills=()", f"extra_skills=({extra_skills})")
         if needs_human is not None:
             pipeline = pipeline.replace("needs_human=(test-change dependency refactor)", f"needs_human=({needs_human})")
         fetch = "fetch_new; fetch_deferred; " + (f"fetch_labeled {label}; " if label else "") + extra_fetch + "fetch_context"
         if models:
             self.assertIn(test_run.MODELS, script)
             script = script.replace(test_run.MODELS, f"declare -A models=({models})")
-        script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging")')
+        script = script.replace("skills=()", f'skills=("{FIX_ISSUES}" "{self.tmp.name}/debugging" {skills})')
         script = script.replace("fetch() { :; }", fetch_functions() + f"\nfetch() {{ {fetch}; }}")
         script = script.replace("\nfetch\nanalyze\n", "\n" + pipeline + "\nfetch\nanalyze\n")
         if main:
@@ -1177,6 +1184,148 @@ sys.exit(1 if spec else p.returncode)
                 self.assertTrue(prompt.endswith(f"Stage: {n}."))
                 self.assertEqual("In fix.md" in prompt, n == "fix")
                 self.assertEqual("dependency: <name> <why not in-house>." in prompt, n == "fix")
+
+    STAGE_SKILLS = "[reproduce]=my-repro [fix]=my-fix [verify]=my-verify [review]=my-review"
+
+    def user_skills(self):
+        for name in ("my-repro", "my-fix", "my-verify", "my-review", "house"):
+            self.write(f".claude/skills/{name}/SKILL.md", f"{name} steps\n")
+        self.git("-C", self.repo, "add", "-A")
+        self.git("-C", self.repo, "commit", "-qm", "user skills")
+        return " ".join(f'".claude/skills/{n}"' for n in ("my-repro", "my-fix", "my-verify", "my-review", "house"))
+
+    def test_replaced_stages_follow_the_user_skill_and_carry_the_record_contract(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}}, skills=self.user_skills(), stage_skills=self.STAGE_SKILLS,
+                              extra_skills="house")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[0], "fixed")
+        records = {"reproduce": ("repro.md", "repro: outcome=reproduced", "repro: outcome=not-reproduced",
+                                 "repro: outcome=blocked"),
+                   "fix": ("fix.md", "fix: outcome=changed", "fix: outcome=stopped"),
+                   "verify": ("verify.md", "verify: outcome=confirmed", "verify: outcome=insufficient",
+                              "verify: outcome=inconclusive")}
+        seen = {c["evidence"].rsplit("/", 1)[1]: c for c in self.prompts() if c["evidence"]}
+        self.assertEqual(sorted(seen), ["fix", "reproduce", "verify"])
+        for n, c in seen.items():
+            with self.subTest(n):
+                check, prompt = c["evidence"].replace("/evidence/", "/check/"), c["prompt"]
+                skill = {"reproduce": "my-repro"}.get(n, "my-" + n)
+                self.assertTrue(prompt.startswith(f"Follow {check}/skills/{skill}/SKILL.md for this stage;"))
+                self.assertEqual(c["skills"], sorted([skill, "house"]))
+                self.assertNotIn("# Reproduce", prompt)
+                self.assertNotIn("# Fix and verify", prompt)
+                f, *lines = records[n]
+                self.assertIn(f"Write {c['evidence']}/{f}:", prompt)
+                for line in lines:
+                    self.assertIn(line, prompt)
+                self.assertIn(f"Also follow {check}/skills/house/SKILL.md where it applies.", prompt)
+                self.assertIn("end your record with escalated:", prompt)
+                self.assertTrue(prompt.endswith(f"Stage: {n}."))
+        [review] = [c["prompt"] for c in self.prompts() if not c["evidence"] and "--model" in c["args"]]
+        self.assertIn("Judge it by skills/my-review/SKILL.md.\nAlso follow skills/house/SKILL.md where it applies.", review)
+        self.assertNotIn("Judge whether it fixes", review)
+        self.assertIn("Last line review: verdict=approve\nor review: verdict=changes.", review)
+        self.assertEqual(self.reviews(), [{"raw": False, "top": ["input", "repo", "skills"]}])
+        [pr] = self.gh()["prs"]
+        for h in SPEC_HEADINGS:
+            self.assertIn(h, pr["body"])
+
+    def test_built_in_stages_carry_the_same_record_contract(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for c in self.prompts():
+            if c["evidence"]:
+                n = c["evidence"].rsplit("/", 1)[1]
+                with self.subTest(n):
+                    self.assertTrue(c["prompt"].startswith("# "))
+                    self.assertIn(f"Write {c['evidence']}/{dict(reproduce='repro').get(n, n)}.md:", c["prompt"])
+                    self.assertEqual(c["skills"], [])
+        [review] = [c["prompt"] for c in self.prompts() if not c["evidence"] and "--model" in c["args"]]
+        self.assertIn("Judge whether it fixes", review)
+
+    def test_every_record_rule_keeps_escalation_and_defines_its_outcomes(self):
+        skills = self.user_skills()
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {}}, skills=skills, stage_skills="[verify]=my-verify")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        esc = "end instead with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line"
+        seen = {c["evidence"].rsplit("/", 1)[1]: c["prompt"] for c in self.prompts() if c["evidence"]}
+        self.assertEqual(sorted(seen), ["fix", "reproduce", "verify"])
+        for n, prompt in seen.items():
+            with self.subTest(n):
+                rule = prompt[prompt.index(f"/evidence/{n}/"):]
+                self.assertIn(esc, rule)
+        self.assertIn("Mode: this run's fix;", seen["verify"])
+        for o in ("confirmed (broken twice on base/", "insufficient (broken on both)", "inconclusive (base/ did not reproduce"):
+            self.assertIn("verify: outcome=" + o, seen["verify"])
+        self.gh_state({2: {}}, [])
+        r = self.run_pipeline({"2": {"escalate": "verify"}}, skills=skills, stage_skills="[verify]=my-verify")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("2")[:2], ("escalated", "prod-access"))
+
+    def test_a_replaced_verify_is_told_it_checks_an_existing_fix(self):
+        skills = self.user_skills()
+        sha = self.fix_commit()
+        self.push_main()
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"verdict": "fixed", "ref": sha[:7]}}, skills=skills, stage_skills="[verify]=my-verify")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("fixed", "linked"))
+        [prompt] = [c["prompt"] for c in self.prompts() if c["evidence"]]
+        self.assertTrue(prompt.startswith("Follow "))
+        self.assertIn("Mode: an existing merged fix;", prompt)
+        self.assertNotIn("Mode: this run's fix;", prompt)
+
+    def test_a_replaced_stage_without_its_record_line_fails_the_gate(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a", "norecord": "reproduce"}, "2": {"feature": "b", "norecord": "fix"}},
+                              skills=self.user_skills(), stage_skills=self.STAGE_SKILLS)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "reproduce"))
+        self.assertEqual(self.outcome("2")[:2], ("blocked", "fix"))
+        self.assertEqual(self.stage_calls("1", "fix"), [])
+        self.assertEqual(self.stage_calls("2", "verify"), [])
+        self.assertEqual(self.pr_creates(), [])
+        self.assertEqual(self.remote_heads(), "")
+
+    def test_an_in_repo_stage_skill_is_consumed_and_denied(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"instructions": ".claude/skills/my-fix/SKILL.md"}},
+                              skills=self.user_skills(), stage_skills="[fix]=my-fix")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("gate: CI, hook or policy path .claude/skills/my-fix/SKILL.md", r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "gates"))
+        self.assertEqual(self.pr_creates(), [])
+        self.assertEqual(self.remote_heads(), "")
+
+    def test_only_the_four_stages_take_a_skill_and_only_one_in_skills(self):
+        skills = self.user_skills()
+        for kw, msg in ((dict(stage_skills="[gates]=my-fix"), "stage_skills: gates is not reproduce, fix, verify or review"),
+                        (dict(stage_skills="[spec]=my-fix"), "stage_skills: spec is not"),
+                        (dict(stage_skills="[fix]=elsewhere"), "skill elsewhere is not a skill in skills"),
+                        (dict(extra_skills="../my-fix"), "skill ../my-fix is not a skill in skills")):
+            with self.subTest(kw):
+                self.gh_state({1: {}}, [])
+                r = self.run_pipeline({"1": {}}, skills=skills, **kw)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("gate: " + msg, r.stderr)
+                self.assertEqual([c for c in self.calls() if c.startswith("claude ")], [])
+
+    def test_triage_prompts_carry_the_record_contract_outside_judge(self):
+        line = ("fix-issues: id=<id> verdict=<new-bug|fixed|duplicate|related|owned|not-a-bug|needs-info> "
+                "feature=<feature file name without .md, or none> ref=<#number, short SHA, item id, or none>")
+        catalog = os.path.join(HERE, "..", "references", "catalog")
+        for path, head in ((TRIAGE, "## Analyze"), (f"{catalog}/issue-pipeline.md", "## Prompt"),
+                           (f"{catalog}/new-error-triage.md", "## Prompt")):
+            with self.subTest(path), open(path) as f:
+                prompt = re.search(r"```text\n(.*?)```", f.read().split(head + "\n", 1)[1], re.S)[1]
+                self.assertRegex(prompt, r"section\s+headed\s+## <id>")
+                self.assertIn(line + "\n", prompt)
+        with open(TRIAGE) as f:
+            judge = f.read().split("## Judge\n", 1)[1].split("## Projection", 1)[0]
+        self.assertNotIn("fix-issues: id=", judge)
 
     def test_reproduce_blocked_is_recorded_as_such(self):
         self.gh_state({1: {}}, [])
