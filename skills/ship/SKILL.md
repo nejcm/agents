@@ -172,8 +172,8 @@ questions, the plan approval, a product choice that can't be inferred) goes to d
 - **Plan approval**: a cross-family Reviewer approves the plan with the answers folded in, or
   returns findings the Planner fixes (at most 2 rounds, then it is a stop).
 
-Record each one in `auto-decisions.md` beside the plan (the fix and bug lanes, without a plan: the
-PR body only) as it is made, and in the PR body under
+Record each one, as it is made, in the local, never-committed file
+`$(git rev-parse --git-common-dir)/ship/<branch>/auto-decisions.md` (every lane), and in the PR body under
 `Auto decisions`: the question, the options, the pick, why, the evidence, and the commit or
 phase it shaped. Pick the choice that is cheapest to undo when the evidence is even.
 
