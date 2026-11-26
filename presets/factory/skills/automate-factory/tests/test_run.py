@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -9,6 +10,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUN_SH = os.path.join(HERE, "..", "assets", "run.sh")
+ONCUE = os.path.join(HERE, "..", "assets", "oncue.mjs")
 sys.path.insert(0, os.path.join(HERE, "..", "..", "agent-analytics", "scripts"))
 import agent_analytics  # noqa: E402
 
@@ -918,24 +920,30 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("weekly budget: $0.75 of $5 in the last 7 days; 1 runs with a stage that reported no cost\n", r.stdout)
 
-    def test_runner_templates_take_the_entry_schedule_and_minutes(self):
+    def test_job_spec_takes_the_entry_schedule_and_minutes(self):
         with open(os.path.join(HERE, "..", "references", "runners.md")) as f:
-            doc = f.read()
-        ini = re.findall(r"```ini\n(.*?)```", doc, re.S)
-        [cron] = re.findall(r"```crontab\n(.*?)```", doc, re.S)
-        fill = {"<repo>": "r", "<entry>": "e", "<repo-root>": "/w/r", "<minutes>": "45", "<tool dirs>": "/opt/bin"}
-        def render(text, schedule):
-            text = text.replace("<schedule>", schedule)
-            for k, v in fill.items():
-                text = text.replace(k, v)
-            self.assertNotRegex(text, r"<[a-z -]+>")
-            return text
-        service, timer = (render(t, "Tue *-*-* 09:30:00") for t in ini)
-        self.assertIn("TimeoutStartSec=45min\n", service)
-        self.assertIn("ExecStart=/w/r/.factory/automations/e.sh\n", service)
-        self.assertIn("OnCalendar=Tue *-*-* 09:30:00\n", timer)
-        self.assertIn("\n30 9 * * 2 timeout 45m /w/r/.factory/automations/e.sh ", render(cron, "30 9 * * 2"))
+            [tpl] = re.findall(r"```json\n(.*?)```", f.read(), re.S)
+        schedule = '{"kind": "calendar", "at": [{"weekday": "tue", "hour": 9, "minute": 30}]}'
+        fill = {"<schedule>": schedule, "<repo-root>": "/w/r", "<repo>": "r", "<entry>": "e", "<minutes>": "45"}
+        for k, v in fill.items():
+            tpl = tpl.replace(k, v)
+        self.assertNotRegex(tpl, r"<[a-z -]+>")
+        spec = json.loads(tpl)
+        self.assertEqual((spec["namespace"], spec["name"], spec["cwd"]), ("factory-r", "e", "/w/r"))
+        self.assertEqual(spec["command"], ["/w/r/.factory/automations/e.sh"])
+        self.assertEqual(spec["log"], "/w/r/.factory/automations/e.log")
+        self.assertEqual(spec["timeout"], 45)
+        if shutil.which("node"):
+            r = subprocess.run(["node", ONCUE, "render", "-", "--backend", "systemd"], input=tpl,
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("TimeoutStartSec=45min\n", r.stdout)
+            self.assertIn("OnCalendar=Tue *-*-* 09:30\n", r.stdout)
 
+    def test_vendored_oncue_names_its_version(self):
+        with open(ONCUE) as f:
+            self.assertEqual(f.readline(), "#!/usr/bin/env node\n")
+            self.assertRegex(f.readline(), r"^// oncue 0\.2\.0 [0-9a-f]{40}, built with bun run build:node\n$")
 
 if __name__ == "__main__":
     unittest.main()

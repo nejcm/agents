@@ -17,8 +17,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
 
 1. **Read** the profile. Detect runners, facts only, and record them in the profile's
    `Automations` section ([`../setup-factory/references/profile.md`](../setup-factory/references/profile.md)):
-   - systemd timer: `systemctl --user is-system-running` prints `running` or `degraded`.
-   - cron: `command -v crontab`.
+   - oncue: Linux, `node` (18.3 or later) or `bun` on `PATH`, and `<oncue> list factory-<repo>`
+     exits 0, so systemd answers ([runners.md](references/runners.md#local-oncue-job)).
    - Isolated analyze for local runners: Claude Code with the flags and no managed hooks, per
      [`references/runners.md`](references/runners.md#analyze-command).
    - Other CLIs: `codex`, `agy` and `agent` versions and logins (`codex login status`, `agy -p /usage`,
@@ -35,7 +35,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `Choices`. Then the per-entry settings, as one table for all picks with suggested defaults,
    where one answer accepts every default and the user names only what to change (budgets stay
    in the profile's `Interview` section):
-   - schedule: any cron-like value, default the entry's `Trigger`;
+   - schedule: in words, default the entry's `Trigger`, converted to an oncue
+     schedule ([runners.md](references/runners.md#local-oncue-job)) and shown back;
    - models: a `default` pick and optional per-stage picks, `<cli>:<model>[@effort]` with the
      effort inside the pick, default `claude:default`, only the stages the entry and level run
      ([runners.md](references/runners.md#models)); none for `weekly-agent-analytics`. CLIs `claude`,
@@ -64,7 +65,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
      say `setup-factory` records them.
 5. **Write** per [`references/runners.md`](references/runners.md): the prompt to
    `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and the
-   runner config as a proposed diff; for `draft-pr` and `pr`, the entry's `Edit prompt` to
+   oncue job spec to `.factory/automations/<entry>.job.json` as a proposed diff (none for a
+   workflow-wired entry); for `draft-pr` and `pr`, the entry's `Edit prompt` to
    `.factory/automations/<entry>.edit.md` and the fixed values per [Write
    levels](references/runners.md#write-levels). For `issue-pipeline` at `draft-pr`, instead of the
    edit prompt: its `Spec prompt` to `.factory/automations/issue-pipeline.spec.md`, and
@@ -110,14 +112,19 @@ entries the user names or whose smoke run failed. To change an entry:
    `.factory/automations/` that differs from the before copy is hand-edited: show that diff and
    settle it with the user (guidance into an overlay, a value into the profile, or drop it).
    Never overwrite it silently.
-4. Show the diff of the regenerated files and the runner config, apply after the user confirms,
+4. Show the diff of the regenerated files, the job spec included, apply after the user confirms,
    and mark the entry `proposed`. An overlay alone regenerates nothing.
-5. Smoke run (step 6) and record (step 7); the entry is `active` again only after a pass.
+5. Smoke run (step 6) and record (step 7); the entry is `active` again only after a pass (for a
+   scheduled entry, the final `install` prints `installed`).
+
+To remove an entry, after the user confirms: `<oncue> uninstall factory-<repo> <entry>`, or for a
+workflow-wired entry its workflow line ([runners.md](references/runners.md#local-oncue-job)), and
+delete its line from the `Automations` section; its files stay.
 
 ## Scope
 
-- Written and activated: one local runner (systemd user timer or cron), under the user's
-  subscription login of each picked CLI (`claude`, `codex`, `agy`, `agent`).
+- Written and activated: one local oncue job (systemd user on Linux; the run script needs bash and
+  GNU `timeout`), under the user's subscription login of each picked CLI (`claude`, `codex`, `agy`, `agent`).
 - Write levels: `report`, the default; `comment`; `draft-pr` and `pr`, per
   [`references/safety.md`](references/safety.md#steps).
 - Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external
@@ -130,15 +137,15 @@ entries the user names or whose smoke run failed. To change an entry:
   the lethal-trifecta rule. An entry that cannot meet it on a runner is not offered there. A
   `draft-pr` or `pr` edit step runs as the user; only the isolated environment bounds it.
 - **Writes**: freely only to `.factory/`. A run writes elsewhere only through its write level's
-  post or publish step. Runner config (systemd units, crontab lines) is shown as a proposed
-  diff and applied only after the user confirms.
+  post or publish step. The oncue job spec is shown as a proposed diff and installed only after
+  the user confirms.
 - **Secrets**: never ask for, read, store or write one. Name a secret by its variable or setting
   name only ("`LINEAR_API_KEY` env var") and print the steps for the user to set it.
 - **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 200 turns when
   unset; minutes are the budget, turns only stop a looping run: `--max-turns` (print mode; absent from `--help` but accepted and validated), the
-  minutes as `timeout` on every model call, and as `TimeoutStartSec` (systemd) or `timeout` (cron). `issue-pipeline` at `draft-pr` also
+  minutes as `timeout` on every model call, and as the job spec's `timeout`. `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
-  unit or cron timeout is `run_minutes` plus 10; and an item cap, `cap` (default 3).
+  job spec's `timeout` is `run_minutes` plus 10; and an item cap, `cap` (default 3).
   Refactor, old-test and new-test runs and a revert's test runs also wait for time left in `run_minutes`. The
   profile's per-week budget is `weekly_usd` (empty: no limit): before any model call, a run sums
   `cost_usd` over every `runs.jsonl` record started in the last 7 days (a missing cost counts as 0
@@ -151,3 +158,5 @@ entries the user names or whose smoke run failed. To change an entry:
 - **Loading skills**: the run script copies the skills a prompt needs into the run's view, and
   the prompt reads `skills/<name>/SKILL.md` by path, never by invocation;
   `disable-model-invocation` blocks that.
+- **oncue**: [`assets/oncue.mjs`](assets/oncue.mjs) is a bundled scheduler CLI; run it with `node`
+  or `bun`, never read it.

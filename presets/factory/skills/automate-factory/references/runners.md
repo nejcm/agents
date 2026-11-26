@@ -21,11 +21,11 @@ setting (`apiKeyHelper`, provider or token env). Unconfirmed means analyze, or a
 write, is
 unavailable there. Record both in the profile's runner line.
 
-## Local: systemd user timer or cron
+## Local: oncue job
 
 Copy [`../assets/run.sh`](../assets/run.sh) to `.factory/automations/<entry>.sh`, fill `<base>`
 with the default branch, `<level>` with the chosen write level, `<owner/repo>` with
-`gh repo view --json nameWithOwner`, `<turns>` and `<minutes>` (script, unit and cron line) with
+`gh repo view --json nameWithOwner`, `<turns>` and `<minutes>` (script and job spec) with
 the profile's per-run caps (see [Budgets](../SKILL.md#rules)), `<weekly usd>` with its per-week
 budget in USD (empty for none), `models` with the entry's [model picks](#models), `skills` with the
 skill dirs the prompt loads plus the entry's extra skills (a project skill as its repo-relative
@@ -40,55 +40,59 @@ These values come from the profile and the entry's choices; the profile is the s
 so a changed value regenerates the entry ([re-run](../SKILL.md#re-run)).
 `repo/` and fetch's `git` reads use the local `<base>` branch, as fresh as the user's last pull;
 the prompt states its SHA.
-Then propose one of these, with absolute paths:
+Then write the job spec to `.factory/automations/<entry>.job.json`, with absolute paths, and
+propose it as a diff:
 
-```ini
-# ~/.config/systemd/user/factory-<repo>-<entry>.service
-[Unit]
-Description=factory <entry> for <repo>
-
-[Service]
-Type=oneshot
-WorkingDirectory=<repo-root>
-ExecStart=<repo-root>/.factory/automations/<entry>.sh
-TimeoutStartSec=<minutes>min
-Environment=PATH=<tool dirs>:/usr/local/bin:/usr/bin:/bin
-SyslogIdentifier=factory-<repo>-<entry>
+```json
+{
+  "namespace": "factory-<repo>",
+  "name": "<entry>",
+  "description": "factory <entry> for <repo>",
+  "command": ["<repo-root>/.factory/automations/<entry>.sh"],
+  "cwd": "<repo-root>",
+  "log": "<repo-root>/.factory/automations/<entry>.log",
+  "schedule": <schedule>,
+  "timeout": <minutes>
+}
 ```
 
-```ini
-# ~/.config/systemd/user/factory-<repo>-<entry>.timer
-[Unit]
-Description=factory <entry> for <repo>
+`<oncue>` is `node <skill dir>/assets/oncue.mjs` (Node 18.3 or later) or the same with `bun`, `<skill
+dir>` this skill's resolved directory; run without arguments it prints its usage. Never read the
+bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changing nothing.
 
-[Timer]
-OnCalendar=<schedule>
-Persistent=true
+`<repo>`: `<name>-<hash>`, so two checkouts get different namespaces. `<name>` is the repo
+root's directory name, lowercased, each run of characters other than `a-z` and `0-9` replaced by
+`-`, cut to 16 characters, leading and trailing `-` removed (empty: `<repo>` is `<hash>` alone);
+`<hash>` the first 6 characters of `git rev-parse --show-toplevel | tr -d '\n' | sha256sum`. A
+namespace holds 31 characters.
 
-[Install]
-WantedBy=timers.target
-```
+`<schedule>`: the entry's schedule ([per-entry settings](../SKILL.md#steps)) as an oncue schedule,
+local time: `{"kind": "interval", "minutes": <n>}`, or `{"kind": "calendar", "at": [...]}` with one
+`{"weekday", "hour", "minute"}` or `{"day", "hour", "minute"}` entry per slot (`weekday` `mon` to
+`sun`; omitted `weekday` and `day` mean every day, omitted `hour` every hour). "Daily, 08:00 on
+weekdays" is five entries, `mon` to `fri` at `hour` 8, `minute` 0; "hourly on weekdays, 09:00 to
+18:00" one entry per weekday and hour. A schedule neither can express gets the nearest one, shown to
+the user.
 
-`<schedule>`: the entry's schedule ([per-entry settings](../SKILL.md#steps)), as an `OnCalendar`
-expression for the timer or the five cron fields for the cron line.
+`<minutes>` in the spec's `timeout` is the per-run minutes; for `issue-pipeline` at `draft-pr`, the
+entry's `run_minutes` plus 10, while the script keeps the per-stage `<minutes>`. oncue accepts 1 to
+10080.
 
-For `issue-pipeline` at `draft-pr`, `<minutes>` in the unit's `TimeoutStartSec` and the cron
-`timeout` is the entry's `run_minutes` plus 10; the script keeps the per-stage `<minutes>`.
+After the user confirms, the [smoke run](#smoke-run) installs it, and after a pass:
+`<oncue> install .factory/automations/<entry>.job.json --capture-path <tools>`, `<tools>`
+comma-separated: `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3` and the
+Run recipe's tools. The job sees no login-shell `PATH`; `--capture-path` sets one from each tool's
+`PATH` directory, unresolved (a version-manager wrapper dispatches on its name). It prints
+`installed`, or `unchanged` when the job already matches. Remove an entry with `<oncue> uninstall
+factory-<repo> <entry>` (`removed`, or `not installed`).
 
-`<tool dirs>`: the directories of `command -v` for `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3` and the
-Run recipe's tools, unresolved (a version-manager wrapper dispatches on its name). systemd and
-cron start with a minimal `PATH`, without the login shell's.
+A [workflow-wired](#change-triggers) entry gets no job spec and no oncue job: its line in the user's
+workflow is its runner, removed (after the user confirms) when the entry is removed or moves to a
+schedule; moving to the workflow uninstalls its job.
 
-User timers stop at logout unless `loginctl enable-linger "$USER"`; say so, do not run it.
+User jobs stop at logout unless `loginctl enable-linger "$USER"`; say so, do not run it.
 
-```crontab
-PATH=<tool dirs>:/usr/local/bin:/usr/bin:/bin
-<schedule> timeout <minutes>m <repo-root>/.factory/automations/<entry>.sh >> <repo-root>/.factory/automations/<entry>.log 2>&1; echo "exit $?" >> <repo-root>/.factory/automations/<entry>.log
-```
-
-Propose `.factory/automations/*.log` for `.gitignore`. Apply crontab changes only after the user
-confirms, with `crontab -e` or by editing the output of `crontab -l` and piping it back to
-`crontab -`.
+Propose `.factory/automations/*.log` for `.gitignore`.
 
 ## Models
 
@@ -220,17 +224,17 @@ a replaced reproduce, verify or review keeps its tools.
 per-entry settings:
 
 - **On a schedule** (`trigger="schedule"`): every run calls the model, as before.
-- **Only on risky changes** (`trigger="changes"`), from the timer at the entry's schedule: a
+- **Only on risky changes** (`trigger="changes"`), from the oncue job at the entry's schedule: a
   model-free check first. `security-review` reviews only when its range touches the profile's
   `Risk paths` (`risk_paths`); `maintain-verification` calls the model only when a commit since
   its last successful run touched a mapped feature's `Feature paths` (`feature_paths`) or the
   verify skill. Otherwise the run is recorded `skipped` `no-risk-change`, with no model call.
 - **Wired into the user's workflow**: `trigger="changes"`, started by something the user already
   runs after the default branch moves (a `post-merge` hook, a task-runner target, a step on a
-  self-hosted runner) instead of the timer. Propose the line as a diff with the script's absolute
+  self-hosted runner) instead of an oncue job. Propose the line as a diff with the script's absolute
   path, run in the background with its output to `.factory/automations/<entry>.log`; install
   nothing outside `.factory/` without the user's consent, and never a CI job that needs a model
-  API secret. The smoke run runs the script directly as that user with `FACTORY_DRY_RUN=1`.
+  API secret. Its [smoke run](#smoke-run) runs the script directly, with no oncue job.
 
 Fill `trigger`, then `risk_paths` with the `Risk paths` globs (`risk_paths=()` when the trigger is
 `schedule`) and `feature_paths` with one `[<feature>]="<glob> ..."` per `Feature paths` line. A glob
@@ -321,21 +325,27 @@ token total is `null` when any call did not report it. Agent fetch and write cal
 
 ## Smoke run
 
-Run the entry once as the runner, in dry-run mode, before its automatic trigger is enabled. First,
-with `FACTORY_CHECK_MODELS=1` in place of `FACTORY_DRY_RUN=1` the same way, the script makes one
-tool-less check call per picked model (models and reviewers) through its [mapping](#cli-mapping),
-prints `check: <pick> answered` or `did not answer`, records the calls as a dry run and ends; it passes only
-when it exits 0, so every picked model answered. At the weekly budget it fails before any call. Then the dry run:
+Run the entry once as the runner before its trigger is enabled, in two steps, each with one
+variable set: `FACTORY_CHECK_MODELS=1`, then `FACTORY_DRY_RUN=1` (below). A scheduled entry runs
+them through oncue before the real job is installed: each step installs a copy of the [job
+spec](#local-oncue-job) with the variable added to its `env`, on stdin
+(`<oncue> install - --capture-path <tools>`), then runs `<oncue> run factory-<repo> <entry> --wait`,
+which waits for that run and exits with its exit code (124, `timed out`, past `timeout`). Exit 2 to 4
+with an `oncue:` line on stderr is oncue's own error: report it; exit 4 can also be a scheduled start
+overlapping this one (attribution is best-effort), so run `--wait` once more. The run's output is what it appended to
+`<entry>.log`.
 
-- systemd: install the units and `systemctl --user daemon-reload`, then
-  `systemctl --user set-environment FACTORY_DRY_RUN=1; systemctl --user start factory-<repo>-<entry>.service; systemctl --user unset-environment FACTORY_DRY_RUN`
-  and read `journalctl --user -u factory-<repo>-<entry>.service -n 5` for the exit status and
-  `journalctl --user -t factory-<repo>-<entry> -n 50` for the script's output (a short-lived
-  process's lines can miss the unit tag). Only after a pass:
-  `systemctl --user enable --now factory-<repo>-<entry>.timer`.
-- cron: install a one-off line two minutes ahead, the real line with `FACTORY_DRY_RUN=1` before
-  `timeout`. Wait for its `exit <n>` line in `<entry>.log`; pass needs `exit 0`. Then
-  replace it with the real line.
+First, `FACTORY_CHECK_MODELS=1`: the script makes one tool-less check call per picked model (models
+and reviewers) through its [mapping](#cli-mapping), prints `check: <pick> answered` or `did not
+answer`, records the calls as a dry run and ends; it passes only when it exits 0, so every picked
+model answered. At the weekly budget it fails before any call. Then `FACTORY_DRY_RUN=1`, the dry
+run. After both pass, a scheduled entry installs the real spec (`installed`); after a failure,
+`<oncue> uninstall factory-<repo> <entry>`.
+
+A [workflow-wired](#change-triggers) entry installs no oncue job: each step runs
+`.factory/automations/<entry>.sh` directly as that user, from the repo root, with the variable set;
+its exit status and output are the command's own. After both pass,
+apply the workflow line; after a failure, apply nothing.
 
 Pass means: the run exited 0, a report from this run landed where the entry says (a dry run
 skips the [change trigger](#change-triggers) check), for entries
