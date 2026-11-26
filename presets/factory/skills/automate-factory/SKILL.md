@@ -62,7 +62,16 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
      on risky changes, or wired into the user's existing workflow
      ([runners.md](references/runners.md#change-triggers)). For `security-review`, risky
      changes need the profile's confirmed `Risk paths`; without them, offer the schedule only and
-     say `setup-factory` records them.
+     say `setup-factory` records them;
+   - trigger, `failed-ci-triage` and `pr-babysitting` only: `watch` (suggested) or the entry's
+     schedule ([runners.md](references/runners.md#watch-trigger)). For `watch`: `interval` in
+     minutes (default 2, the job's schedule), `daily_cap` fires per local day (default 6),
+     `window` (`failed-ci-triage` none, `pr-babysitting` `mon-fri 09:00-18:00`), `notify` (default
+     empty; suggest `notify-send factory` when `notify-send` is on `PATH`); `pr-babysitting` also
+     `drafts` (`skip` default, or `include`). For `pr-babysitting` at `comment`, say before the
+     user picks `watch`: the comment goes only to the PR fixed at setup (`target`), so a fire
+     about any other PR writes its local report and posts nothing; to watch many PRs, suggest
+     `report` with `notify`.
 5. **Write** per [`references/runners.md`](references/runners.md): the prompt to
    `.factory/automations/<entry>.md`, the run script to `.factory/automations/<entry>.sh`, and the
    oncue job spec to `.factory/automations/<entry>.job.json` as a proposed diff (none for a
@@ -76,7 +85,12 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `<skill-path:<name>>` in the script's `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills). A skill not
    found makes the entry unavailable on that runner. Also fill `<app>`, `<base>` and the entry's
-   choices. For an agent-fetched source, write `<prefix>.fetch.md` and, for MCP,
+   choices. For `failed-ci-triage` and `pr-babysitting`, fill their first block's settings at
+   either trigger: `<trigger>` (`watch` or `schedule`), `<daily cap>` a number (6 when
+   `schedule`), `<window>` (empty for none), `<notify command>` its words (empty for none), and
+   `workflows`, or `drafts` (`skip` when `schedule`), `author` (empty for all open) and `target`
+   (empty at `report`); a `watch` entry also fills `<remote url>`
+   ([runners.md](references/runners.md#write-levels)) at every level. For an agent-fetched source, write `<prefix>.fetch.md` and, for MCP,
    `<prefix>.mcp.json` per `fix-issues`
    [agent fetch](../fix-issues/references/triage.md#agent-fetch); show the MCP file for
    confirmation, since it names the commands the server runs.
@@ -89,12 +103,15 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
    `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
    A stage skill needs its stage in the smoke run ([runners.md](references/runners.md#smoke-run)).
+   A `watch` entry's dry run takes the latest matching event, ignoring window, cap and seen
+   ledger; with none in 30 days it passes on `detect` alone and is recorded `active (unexercised)`.
 7. **Record** each entry in the profile's `Automations` section: runner, schedule, model picks,
    confirmations,
    extra skills, one `stage` line per stage skill, trigger, files, smoke run date and result, write level, `issue-pipeline`'s `flow`,
    `verify_fixed`, `reviewers`,
-   `merge_level` and `needs_human`, status
-   (`active`, `proposed`, `failed: <reason>`).
+   `merge_level` and `needs_human`, for `watch` `interval`, `daily_cap`, `window` and `notify`,
+   `pr-babysitting`'s `drafts`, status
+   (`active`, `active (unexercised)`, `proposed`, `failed: <reason>`).
 
 ## Re-run
 
@@ -104,7 +121,8 @@ entries the user names or whose smoke run failed. To change an entry:
 1. Regenerate its files (step 5) into a scratch directory from the current profile, never
    writing `*.local.md`: the before copy.
 2. Write the change where it lives: a setting (schedule, model picks and their confirmations, extra skills, stage skills, trigger, write level,
-   destination, trust, `label`, `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`,
+   destination, trust, `label`, `interval`, `daily_cap`, `window`, `notify`, `drafts`,
+   `run_minutes`, `cap`, `flow`, `verify_fixed`, `ceiling`, `reviewers`,
    `merge_level`, `needs_human`, budgets, `weekly_usd`) to the profile, or guidance to the entry's
    [overlay](references/runners.md#prompt-overlays). Prompts, record formats, gates and the
    deny list are not settings.

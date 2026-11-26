@@ -65,7 +65,7 @@ class FailedCiTest(unittest.TestCase):
         self.out = f"{self.repo}/.factory/reports/failed-ci-triage"
         self.runs_file = f"{self.tmp.name}/runs.json"
 
-    def tick(self, runs, trigger="watch", dry=False, workflows='"CI" "Lint"'):
+    def tick(self, runs, trigger="watch", dry=False, workflows='"CI" "Lint"', remote=None):
         with open(self.runs_file, "w") as f:
             json.dump(runs, f)
         watch, fetch = blocks()
@@ -77,7 +77,7 @@ class FailedCiTest(unittest.TestCase):
         self.assertIn(SETTINGS, script)
         script = script.replace(SETTINGS, watch).replace("fetch() { :; }", fetch)
         for k, v in {"<base>": "main", "<owner/repo>": "o/r", "<turns>": "5", "<minutes>": "1", "<level>": "report",
-                     "<weekly usd>": "", "<remote url>": self.remote}.items():
+                     "<weekly usd>": "", "<remote url>": self.remote if remote is None else remote}.items():
             script = script.replace(k, v)
         path = f"{self.repo}/.factory/automations/failed-ci-triage.sh"
         with open(path, "w") as f:
@@ -151,6 +151,13 @@ class FailedCiTest(unittest.TestCase):
             listing = f.read()
         self.assertIn("commit.patch", listing)
         self.assertNotIn("pushed.txt", listing)
+
+    def test_an_empty_or_unfilled_remote_blocks_the_fetch(self):
+        for remote in ("", "<remote url>"):
+            r = self.tick([run(1, self.sha)], remote=remote)
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("gate: remote url unfilled", r.stderr)
+        self.assertEqual(self.model_calls(), 0)
 
     def test_a_later_success_of_the_workflow_settles_without_a_fire(self):
         b = self.base

@@ -30,7 +30,8 @@ Through setup-factory's "change my factory", which runs automate-factory's [re-r
   [confirmations](runners.md#cli-mapping), extra skills and
   [stage skills](runners.md#stage-skills), `ceiling`,
   the [change trigger](runners.md#change-triggers) with `Risk paths` and `Feature paths`,
-  `issue-pipeline` `reviewers`, `merge_level` and `needs_human`.
+  the [watch trigger](runners.md#watch-trigger) with `interval`, `daily_cap`, `window`, `notify`
+  and `drafts`, `issue-pipeline` `reviewers`, `merge_level` and `needs_human`.
 - Guidance in [prompt overlays](runners.md#prompt-overlays) (`<entry>.<name>.local.md`).
 - `issue-pipeline` [flow variants](catalog/issue-pipeline.md): `flow` `repro-only`, `verify_fixed` `off`.
 

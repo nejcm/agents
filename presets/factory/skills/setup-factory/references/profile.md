@@ -108,8 +108,10 @@ Updated: <YYYY-MM-DD> (automate-factory)
 - <entry>: <runner>, schedule <oncue schedule JSON>; models default <cli:model[@effort]>[, <stage>
   <cli:model[@effort]> ...]; confirmed <stage>=<cli:model> ... <YYYY-MM-DD> / none (non-Claude picks on exec or
   write stages outside an isolated Environment, and on analyze or spec at weak isolation); extra skills <dirs / none>; trigger <schedule / changes / workflow: <what starts it>>
-  (`security-review`, `maintain-verification`); level <report / comment / draft-pr / pr>; files <paths>; smoke
-  run <YYYY-MM-DD> <pass / fail: error>; status <active / proposed / failed: reason>; for
+  (`security-review`, `maintain-verification`) or <schedule / watch> (`failed-ci-triage`, `pr-babysitting`; for
+  watch: interval <n>, daily_cap <n>, window <days HH:MM-HH:MM / none>, notify <command / none>; drafts <skip /
+  include> for `pr-babysitting`); level <report / comment / draft-pr / pr>; files <paths>; smoke
+  run <YYYY-MM-DD> <pass / fail: error>; status <active / active (unexercised) / proposed / failed: reason>; for
   `issue-pipeline` at draft-pr: flow <fix / repro-only>, verify_fixed <on / off>, reviewers
   <cli:model[@effort] ...>, merge_level <draft / ready / merge>, needs_human <test-change dependency refactor>
 - <entry> stage <triage / reproduce / fix / verify / review>: <skill dir>; confirmed <YYYY-MM-DD>;

@@ -38,7 +38,7 @@ the items the user selected. Skip the phase when there are no gaps.
 5. **Budgets**: per run in minutes and turns (default 30 and 200); per scheduled `issue-pipeline`
    run that opens PRs, in minutes (default 240) and items (default 3); per week in USD of the
    CLI's cost estimate (default none; a run at or over it stops before any model call). Models,
-   schedules, extra skills and stage skills are per entry, asked by `automate-factory` when it
+   schedules or triggers (`watch` for CI and PR changes), extra skills and stage skills are per entry, asked by `automate-factory` when it
    places each entry.
    Runs use the subscription login of each CLI the user picks (`claude`, `codex`, `agy`, `agent`), never an API
    key; a run on a non-Claude CLI reports no cost, so the weekly budget counts only reported cost.

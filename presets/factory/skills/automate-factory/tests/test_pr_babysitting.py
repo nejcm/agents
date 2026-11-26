@@ -213,6 +213,18 @@ class PrBabysittingTest(unittest.TestCase):
         self.assertEqual(self.fired(prs, author="ann"), ["pr-2"])
         self.quiet(prs, author="ann")
 
+    def test_the_author_match_ignores_case(self):
+        self.assertEqual(self.fired([pr(1, self.other_sha, author="Ann")], author="ann"), ["pr-1"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads any file")
+    def test_an_unreadable_comment_ledger_blocks_before_posting(self):
+        self.write(".factory/reports/pr-babysitting/commented.tsv", "")
+        os.chmod(f"{self.out}/commented.tsv", 0)
+        r = self.tick([pr(3, self.other_sha)], level="comment", target="3")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("commented.tsv unreadable", r.stderr)
+        self.assertFalse([c for c in self.calls() if c.startswith("gh pr comment")])
+
     def test_comment_level_posts_once_per_pr_per_head_sha(self):
         s = self.other_sha
         kw = dict(level="comment", target="3")

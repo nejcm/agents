@@ -109,6 +109,10 @@ ulis install --global --source . --preset react-web --yes
   runs the model you pick on `claude`, `codex`, `agy` or `agent` (Cursor); a non-Claude CLI runs exec and write stages
   outside an isolated environment, or untrusted input at weak isolation, only after a recorded
   confirmation.
+  `failed-ci-triage` and `pr-babysitting` can `watch` instead of running on a schedule: their job
+  polls every few minutes with no model call and fires only on a new default-branch failure or a
+  settled, actionable PR change, capped per day; a `comment` still goes only to the PR fixed at
+  setup.
   `issue-pipeline` at `draft-pr` turns items from trusted sources into verified draft PRs,
   at most 3 per run by default. They stay unmerged unless the entry's `merge_level` is `merge`:
   then a later run squash-merges a PR only after two or more reviewers approve, CI is green on

@@ -114,7 +114,7 @@
     if [ "$trigger" = watch ]; then
       sha=${values[0]:-}
       [[ $sha =~ ^[0-9a-f]{40}$ ]] || block "failed SHA $sha unusable"
-      [[ $remote != *"<"* ]] || block "remote url unfilled"
+      [ -n "$remote" ] && [[ $remote != *"<"* ]] || block "remote url unfilled"
       git fetch -q --no-tags --no-write-fetch-head "$remote" "$sha"
       git diff "$sha~" "$sha" > "$view/input/commit.patch"
     else

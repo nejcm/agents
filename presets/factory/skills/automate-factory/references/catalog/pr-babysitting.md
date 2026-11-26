@@ -70,7 +70,7 @@
       rollup = (p["statusCheckRollup"] or {}).get("state") or "NONE"
       bots = sum(not t["isResolved"] and any((c["author"] or {}).get("__typename") == "Bot" for c in t["comments"]["nodes"])
                  for t in p["reviewThreads"]["nodes"])
-      if (p["isDraft"] and drafts != "include" or author and (p["author"] or {}).get("login") != author
+      if (p["isDraft"] and drafts != "include" or author and ((p["author"] or {}).get("login") or "").lower() != author.lower()
               or only and str(p["number"]) != only or mode == "dry" and ts(p["updatedAt"]) < since
               or rollup in ("PENDING", "EXPECTED") or p["mergeStateStatus"] == "UNKNOWN"):
           continue
@@ -144,6 +144,7 @@
     if [ "$trigger" = watch ]; then
       [ "${keys[0]}" = "pr-$target" ] || return 0
       ledger_ok "$log"
+      [ ! -e "$log" ] || [ -r "$log" ] || block "$log unreadable"
       ! grep -qxF "$target $sha" "$log" 2> /dev/null || { echo "PR $target already has a comment for $sha"; return 0; }
     fi
     gh pr comment "$target" --repo "$repo" --body-file "$report_md"
