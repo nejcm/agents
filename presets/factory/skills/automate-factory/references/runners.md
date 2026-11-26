@@ -72,7 +72,7 @@ local time: `{"kind": "interval", "minutes": <n>}`, or `{"kind": "calendar", "at
 `sun`; omitted `weekday` and `day` mean every day, omitted `hour` every hour). "Daily, 08:00 on
 weekdays" is five entries, `mon` to `fri` at `hour` 8, `minute` 0; "hourly on weekdays, 09:00 to
 18:00" one entry per weekday and hour. A schedule neither can express gets the nearest one, shown to
-the user.
+the user. A [watch](#watch-trigger) entry: `{"kind": "interval", "minutes": <interval>}`.
 
 `<minutes>` in the spec's `timeout` is the per-run minutes; for `issue-pipeline` at `draft-pr`, the
 entry's `run_minutes` plus 10, while the script keeps the per-stage `<minutes>`. oncue accepts 1 to
@@ -244,6 +244,57 @@ fails the run before any call. A dry run skips the
 check and always calls the model, so the smoke run writes its report. `security-review` keeps its
 last reviewed SHA in `.factory/reports/security-review/reviewed.sha` (a symlink or non-regular
 file stops the run), written by the script only after a successful run or a `no-risk-change` skip.
+`failed-ci-triage` and `pr-babysitting` take a [watch trigger](#watch-trigger) instead.
+
+## Watch trigger
+
+An entry whose catalog step defines `detect` may take `trigger="watch"`: its oncue job runs every
+`interval` minutes (default 2) and a model-free `detect` exits at once when nothing is new. Watch
+changes when an entry runs, never what it may write: the write level, destinations, gates,
+credential check, size cap, pause, claims, draft default, `weekly_usd` and the loop cap
+([safety.md](safety.md#steps)) still apply. `watch` on an entry without `detect` fails the run
+before any call. Fill the run script's watch line, before the weekly budget check, and put the
+entry's `detect` after it:
+
+```bash
+trigger="watch" daily_cap=<daily cap> window="<window>" notify=(<notify command>)
+```
+
+- `daily_cap`: fires per local day (default 6), counted from `runs.jsonl` records with `trigger`
+  `watch`, `dry_run` false and `events`. At the cap the first capped tick appends `daily fire cap
+  reached: <n>` to the day's report; later ticks that day are silent.
+- `window`: optional, local time, `<days> HH:MM-HH:MM`, end excluded; days `daily`, `mon` to `sun`,
+  ranges like `mon-fri` (`fri-mon` wraps), comma-separated; a window that ends at or before its
+  start (overnight) fails the run. Outside it a tick is silent.
+- `notify`: optional command; after the record it runs with `<entry>: <fire> <outcome>` as its
+  last argument, under 60 seconds, its non-zero exit logged and ignored; never in a dry run.
+
+A tick: pause, then a lock (`.factory/tmp/<entry>.lock`, a file holding the owner PID, read and
+written only under `flock`; held by a live PID the tick exits 0 silently, an owner gone is taken
+over with one log line; cleared in the `EXIT` trap), the window, then
+`detect`, all before the weekly budget check, snapshot or any model call. `detect` runs in a
+subshell with `set -e` and prints one line per new event, `<fire> <key> [<value>]` (letters,
+digits, `.`, `_`, `-`; `value` defaults to `-`): `<fire>` names the fire and its report, `<key>`
+the event in the seen ledger. The first fire with an unsettled event fires, with all of its
+events; the rest wait for a later tick. Nothing new: exit 0, no record, log line or report. A
+non-zero `detect` records one `failed` run with reason `detect-error`, unless one was recorded in
+the last hour (then silent); a weekly-budget skip of a watch fire is recorded at most hourly too.
+
+The seen ledger, `.factory/reports/<entry>/seen.tsv` (a symlink or non-regular file stops the
+run), is append-only: `<key>\t<state>\t<value>\t<started>`, the latest line per key wins. A fire
+appends `failed` for its events after the weekly budget check, and `done` in the `EXIT` trap only
+when the run exited 0, so a crash or kill counts as an attempt. An event whose key is `done` or
+`given-up` at the same value is skipped; a new value fires again. After three `failed` lines at one
+value the next tick appends `given-up` and the report line `given-up: <key> after 3 failed
+attempts`. `detect` may itself call `seen <key> done [<value>]` for an event it settles without a
+fire. The ledger is kept when the trigger changes or the entry is removed.
+
+Each fire writes its own report, `.factory/reports/<entry>/<date>-<fire>.md`; analyze, `edit`
+and the `comment` level's body check read only that fire's report (`$report_md`). The run record
+adds `trigger` and `events` (the fire's keys). `FACTORY_CHECK_MODELS=1` takes the lock and skips
+`detect`; `FACTORY_DRY_RUN=1` runs `detect` but ignores the window, cap and ledger and writes no
+ledger line, and with no event logs `no event to analyze` and exits 0. In both a held lock fails
+the run loudly instead of exiting 0.
 
 ## Prompt overlays
 
@@ -299,11 +350,12 @@ Every run past the pause and Git config checks appends one line to
 (`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget, `no-risk-change` for one `skipped` by its
 [change trigger](#change-triggers), `model-unavailable` for a `failed` run whose picked CLI was missing or logged out,
-`usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause; else `null`),
+`usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause, `detect-error` for a [watch](#watch-trigger) tick whose `detect` failed; else `null`),
 `test_changes` (existing test files changed, deleted or renamed) and `dependency_change` (dependencies
 disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd` (the sum of the costs the calls reported, `null` when none did) with
-`cost_complete` (`false` when a call reported no cost), and `stages`, one per call in order: `stage`,
+`cost_complete` (`false` when a call reported no cost), `trigger` (the entry's, else `null`), `events` (a
+[watch](#watch-trigger) fire's event keys, else `null`), and `stages`, one per call in order: `stage`,
 `cli`, `model` (`default` for the CLI default), `family` (from the model name, the CLI's name for `default`: `claude`, `opus`,
 `sonnet`, `haiku`, `fable` are `anthropic`, `gpt` and `o<digit>` `openai`, `gemini` `google`, else
 `unknown`), `effort`, `isolation` (`restricted`: confined to its directory, no shell;
@@ -340,7 +392,11 @@ First, `FACTORY_CHECK_MODELS=1`: the script makes one tool-less check call per p
 and reviewers) through its [mapping](#cli-mapping), prints `check: <pick> answered` or `did not
 answer`, records the calls as a dry run and ends; it passes only when it exits 0, so every picked
 model answered. At the weekly budget it fails before any call. Then `FACTORY_DRY_RUN=1`, the dry
-run. After both pass, a scheduled entry installs the real spec (`installed`); after a failure, or
+run. A [watch](#watch-trigger) entry runs both through the same `manual` copy of its interval job;
+its dry run ignores the window, cap and seen ledger, and `detect` hands it the most recent
+matching event, so analyze and `post_check` run as for a schedule. With no event in 30 days it
+passes on `detect` alone, logs `no event to analyze`, and the entry is recorded `active
+(unexercised)`. A tick of the live job holding the lock fails the step: run it again. After both pass, a scheduled entry installs the real spec (`installed`); after a failure, or
 when the smoke run is abandoned, `<oncue> uninstall factory-<repo> <entry>`.
 
 A [workflow-wired](#change-triggers) entry installs no oncue job: each step runs

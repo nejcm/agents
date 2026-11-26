@@ -7,7 +7,7 @@ entry=$(basename "$0" .sh)
 # A model check records as a dry run, so a change trigger never takes it for the last real run.
 [ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || FACTORY_DRY_RUN=1
 day=$(date +%F)
-out=.factory/reports/$entry
+out=.factory/reports/$entry report_md=.factory/reports/$entry/$day.md
 mkdir -p "$out" .factory/tmp
 [ -e .factory/tmp/.gitignore ] || echo '*' > .factory/tmp/.gitignore
 view=$(mktemp -d "$PWD/.factory/tmp/$entry.XXXXXX")
@@ -20,6 +20,7 @@ export GIT_CONFIG_COUNT=$((n + 3)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFI
   "GIT_CONFIG_KEY_$((n + 2))=core.quotePath" "GIT_CONFIG_VALUE_$((n + 2))=false"
 creds_re='(sk-(ant|proj|svcacct|admin)-[A-Za-z0-9_-]{16}|sk-[A-Za-z0-9]{32}|AIza[A-Za-z0-9_-]{35})'
 calls=$view/calls.jsonl gates_log=$view/gates.log began=$(date -u +%FT%TZ) run_outcome="" run_reason="" gate_block=""
+quiet="" locked="" fire="" final="" events="" keys=() values=()
 record_py=$(cat <<'PY'
 import json, os, re, sys
 mode, *a = sys.argv[1:]
@@ -186,10 +187,53 @@ if mode == "spent":
     reached = total >= float(a[0])
     print(f"weekly budget{' reached' if reached else ''}: ${total:.2f} of ${a[0]} in the last 7 days{note}")
     sys.exit(3 if reached else 0)
+if mode in ("fires", "recent"):
+    import datetime
+    now, n = datetime.datetime.now(datetime.timezone.utc).astimezone(), 0
+    for l in ledger():
+        try:
+            r = json.loads(l)
+            t = datetime.datetime.fromisoformat(r["started"].replace("Z", "+00:00"))
+            t = (t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)).astimezone()
+        except (ValueError, TypeError, KeyError, AttributeError):
+            continue
+        if r.get("entry") != a[0] or r.get("dry_run") is not False:
+            continue
+        n += bool(r.get("trigger") == "watch" and r.get("events") and t.date() == now.date() if mode == "fires" else
+                  r.get("reason") == a[1] and now - t < datetime.timedelta(hours=1))
+    print(n)
+    sys.exit()
+if mode in ("lock", "unlock"):
+    import fcntl
+    with open(a[0], "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        pid = f.read().strip()
+        if mode == "unlock":
+            if pid == a[1]:
+                f.truncate(0)
+            sys.exit()
+        if pid.isdigit() and int(pid) > 0 and pid != a[1]:
+            try:
+                os.kill(int(pid), 0)
+                alive = True
+            except PermissionError:
+                alive = True
+            except OSError:
+                alive = False
+            if alive:
+                print(pid)
+                sys.exit(3)
+        f.truncate(0)
+        f.write(a[1] + "\n")
+        if pid:
+            print(f"lock: took over from gone PID {pid}")
+    sys.exit()
 creds, calls, gates, outcomes, *kv = a
 rec = dict(x.split("=", 1) for x in kv)
 rec = {k: v or None for k, v in rec.items()}
 rec["exit_code"], rec["dry_run"] = int(rec["exit_code"]), rec["dry_run"] == "1"
+rec["events"] = rec["events"] and rec["events"].split()
 rec.update(disclosed(rec.pop("disclosure")))
 rec["instruction_change"] = None if rec["instruction_change"] is None else rec["instruction_change"] == "1"
 rec["gates"] = lines(gates)
@@ -227,16 +271,40 @@ instruction_change() { [ -z "${gated:-}" ] || { [ ${#instr[@]} = 0 ] && echo 0 |
 record() {
   local rc=$1 o=$run_outcome stat=""
   [ "$rc" = 0 ] || { o=failed; [ -z "$gate_block" ] || o=blocked; }
+  final=${o:-completed}
   local base
   base=$(git rev-parse -q --verify "${ref:-}^{commit}" 2> /dev/null) || true
   [ -z "${commit:-}" ] || stat=$(git diff --shortstat "$start" "$commit" 2> /dev/null | sed 's/^ //') || true
   python3 -I -c "$record_py" record "$creds_re" "$calls" "$gates_log" "$view/outcomes" entry="$entry" \
     started="$began" ended="$(date -u +%FT%TZ)" base="$base" \
     start_commit="${start:-$base}" end_commit="${commit:-${start:-$base}}" diff_stat="$stat" outcome="${o:-completed}" reason="$run_reason" exit_code="$rc" \
-    dry_run="${FACTORY_DRY_RUN:-0}" disclosure="$(disclosure)" instruction_change="$(instruction_change)"
+    dry_run="${FACTORY_DRY_RUN:-0}" disclosure="$(disclosure)" instruction_change="$(instruction_change)" \
+    trigger="${trigger:-}" events="$events"
+}
+ledger_ok() {
+  local f=${1:-${fx:-$out}/pushed.tsv}
+  [ ! -L "$f" ] && { [ ! -e "$f" ] || [ -f "$f" ]; } || block "$f is a symlink or not a regular file"
+}
+
+# Appends <key> <state> <value> to the seen ledger; never in a dry run.
+seen() {
+  [ "${FACTORY_DRY_RUN:-0}" != 1 ] || return 0
+  ledger_ok "$out/seen.tsv"
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "${3:--}" "$began" >> "$out/seen.tsv"
+}
+# EXIT trap: a succeeded fire settles its events, then notifies outside a dry run; the lock clears.
+settle() {
+  local i
+  if [ -n "$fire" ]; then
+    [ "$1" != 0 ] || (for i in "${!keys[@]}"; do seen "${keys[i]}" done "${values[i]}"; done) || echo "seen: done not written" >&2
+    [ "${FACTORY_DRY_RUN:-0}" = 1 ] || [ ${#notify[@]} = 0 ] ||
+      timeout 60 "${notify[@]}" "$entry: $fire $final" < /dev/null || echo "notify: exit $?" >&2
+  fi
+  [ -z "$locked" ] || python3 -I -c "$record_py" unlock "$locked" $$ || echo "lock: $locked not released" >&2
 }
 # With a weekly budget, a run whose spend was not recorded must not look clean.
-trap 'rc_=$?; record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
+trap 'rc_=$?; [ -n "$quiet" ] || record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }
+  settle $rc_; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
 block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
@@ -285,11 +353,121 @@ pick() { echo "${models[$1]:-${models[default]}}"; }
 margs=()
 [ "${models[default]%%:*}" != claude ] || model_args "${models[default]}"
 model=(${margs[@]+"${margs[@]}"})
+# Change-triggered entries (security-review, maintain-verification) and watch entries; see runners.md.
+trigger_ok() {
+  [[ $trigger =~ ^(schedule|changes|watch)$ ]] || block "trigger $trigger is not schedule or changes"
+  [ "$trigger" != watch ] || declare -F detect > /dev/null || block "trigger watch needs an entry with a detect step"
+}
+# A watch entry (runners.md#watch-trigger) fills these and defines its detect step here.
+trigger="" daily_cap=6 window="" notify=()
+
+# Sets n to this entry's watch fires today (fires) or its records with reason $2 in the last hour (recent).
+count() { n=$(python3 -I -c "$record_py" "$1" "$entry" "${2:-}" 2> "$view/count.err") || block "$(tail -n 1 "$view/count.err")"; }
+# The lock file holds the owner PID; it is read and written only under flock, so two ticks never both own it.
+watch_lock() {
+  local l=.factory/tmp/$entry.lock rc=0 msg
+  ledger_ok "$l"
+  msg=$(python3 -I -c "$record_py" lock "$l" $$) || rc=$?
+  case $rc in
+    0) locked=$l
+      [ -z "$msg" ] || echo "$msg" ;;
+    3) [ "${FACTORY_DRY_RUN:-0}" != 1 ] || block "lock $l is held by PID $msg"
+      quiet=1
+      exit 0 ;;
+    *) block "lock $l unusable" ;;
+  esac
+}
+# Succeeds inside the window: local time, <days> HH:MM-HH:MM, end excluded; no window is always open.
+in_window() {
+  local days span now today r a b w=" mon tue wed thu fri sat sun " ok=1
+  [ -n "$window" ] || return 0
+  read -r days span <<< "$window"
+  [[ $days =~ ^(daily|[a-z]{3}(-[a-z]{3})?(,[a-z]{3}(-[a-z]{3})?)*)$ && $window = "$days $span" &&
+    $span =~ ^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$ ]] ||
+    block "window $window is not <days> HH:MM-HH:MM"
+  [[ ${span:0:2}${span:3:2} < ${span:6:2}${span:9:2} ]] || block "window $window ends before it starts"
+  read -r today now <<< "$(date '+%u %H%M')"
+  for r in ${days//,/ }; do
+    [ "$r" != daily ] || { ok=0; continue; }
+    a=${r%-*} b=${r#*-}
+    [[ $w = *" $a "* && $w = *" $b "* ]] || block "window day $r is not daily or mon to sun"
+    a=${w%%" $a "*} b=${w%%" $b "*}
+    a=$((${#a} / 4 + 1)) b=$((${#b} / 4 + 1))
+    if [ "$a" -le "$b" ]; then [ "$today" -lt "$a" ] || [ "$today" -gt "$b" ] || ok=0
+    else [ "$today" -lt "$a" ] && [ "$today" -gt "$b" ] || ok=0; fi
+  done
+  [ "$ok" = 0 ] && [[ ! $now < ${span:0:2}${span:3:2} && $now < ${span:6:2}${span:9:2} ]]
+}
+# pause, lock, window, detect; nothing new leaves no record, log line or report. Sets the next fire.
+watch_tick() {
+  local dry=${FACTORY_DRY_RUN:-0} rc=0 st f k v seen_tsv=/dev/null
+  trigger_ok
+  [[ $daily_cap =~ ^[1-9][0-9]*$ ]] || block "daily_cap $daily_cap is not a positive whole number"
+  watch_lock
+  in_window || [ "$dry" = 1 ] || { quiet=1; exit 0; }
+  [ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || return 0
+  # In a subshell so set -e holds inside detect; its stdout: <fire> <key> [<value>] per event.
+  set +e
+  (set -e; detect) > "$view/detect"
+  rc=$?
+  set -e
+  [ ! -s "$gates_log" ] || { gate_block=1; exit 1; }
+  if [ "$rc" != 0 ]; then
+    [ "$dry" = 1 ] || { count recent detect-error; [ "$n" = 0 ] || { quiet=1; exit 0; }; }
+    echo "detect: failed, exit $rc" >&2
+    run_reason=detect-error
+    exit 1
+  fi
+  ! grep -qvE '^$|^[A-Za-z0-9._-]+[[:blank:]]+[A-Za-z0-9._-]+([[:blank:]]+[A-Za-z0-9._-]+)?$' "$view/detect" ||
+    block "detect printed a line other than <fire> <key> [<value>]"
+  ledger_ok "$out/seen.tsv"
+  [ "$dry" = 1 ] || [ ! -e "$out/seen.tsv" ] || seen_tsv=$out/seen.tsv
+  # Latest ledger line per key wins; the third failed attempt at one value gives the event up.
+  awk 'FILENAME == ARGV[1] { n[$1] = ($2 == "failed" && s[$1] == "failed" && v[$1] == $3) ? n[$1] + 1 : ($2 == "failed")
+      s[$1] = $2; v[$1] = $3; next }
+    NF == 0 { next }
+    { val = (NF > 2) ? $3 : "-" }
+    (s[$2] == "done" || s[$2] == "given-up") && v[$2] == val { next }
+    s[$2] == "failed" && v[$2] == val && n[$2] >= 3 { print "given-up", $1, $2, val; next }
+    f == "" { f = $1 }
+    $1 == f { print "fire", $1, $2, val }' "$seen_tsv" "$view/detect" > "$view/plan"
+  while read -r st f k v; do
+    if [ "$st" = given-up ]; then
+      seen "$k" given-up "$v"
+      echo "given-up: $k after 3 failed attempts" | tee -a "$out/$day.md"
+    else
+      next_fire=$f keys+=("$k") values+=("$v")
+    fi
+  done < "$view/plan"
+  if [ ${#keys[@]} = 0 ]; then
+    [ "$dry" = 1 ] || { quiet=1; exit 0; }
+    echo "no event to analyze"
+    exit 0
+  fi
+  [ "$dry" != 1 ] || return 0
+  count fires
+  if [ "$n" -ge "$daily_cap" ]; then
+    grep -qx "daily fire cap reached: $daily_cap" "$out/$day.md" 2> /dev/null ||
+      echo "daily fire cap reached: $daily_cap" | tee -a "$out/$day.md"
+    quiet=1
+    exit 0
+  fi
+}
+# After the weekly budget: the fire's events count as attempts until its run succeeds.
+start_fire() {
+  local i
+  for i in "${!keys[@]}"; do seen "${keys[i]}" failed "${values[i]}"; done
+  fire=$next_fire report_md=$out/$day-$next_fire.md events="${keys[*]}"
+}
+next_fire=""
+[ -z "$trigger" ] || trigger_ok
+[ "$trigger" != watch ] || watch_tick
 if [ -n "$weekly_usd" ]; then
   rc=0
   python3 -I -c "$record_py" spent "$weekly_usd" > "$view/spent" 2> "$view/spent.err" || rc=$?
   if [ "$rc" = 3 ]; then
     [ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || block "$(cat "$view/spent"), so the models were not checked"
+    if [ -n "$next_fire" ] && [ "${FACTORY_DRY_RUN:-0}" != 1 ]; then count recent weekly-budget; [ "$n" = 0 ] || { quiet=1; exit 0; }; fi
     tee -a "$out/$day.md" < "$view/spent"
     run_outcome=skipped run_reason=weekly-budget
     exit 0
@@ -297,6 +475,7 @@ if [ -n "$weekly_usd" ]; then
   [ "$rc" = 0 ] || block "weekly budget: $(tail -n 1 "$view/spent.err")"
   cat "$view/spent"
 fi
+[ -z "$next_fire" ] || start_fire
 git archive "$ref" | tar -x -C "$view/repo"
 
 # Project skills are repo-relative, read from the tracked snapshot and must resolve inside it;
@@ -468,9 +647,9 @@ Snapshot: $ref at $(git rev-parse --short "$ref")"
   test -s "$view/report.md"
   # A change-tracked range is never reviewed again, so a later run that day appends instead of replacing.
   if [ -n "$reviewed_sha" ]; then
-    { printf 'Range: %s\n\n' "$(cat "$view/input/range")"; cat "$view/report.md"; echo; } >> "$out/$day.md"
+    { printf 'Range: %s\n\n' "$(cat "$view/input/range")"; cat "$view/report.md"; echo; } >> "$report_md"
   else
-    mv "$view/report.md" "$out/$day.md"
+    mv "$view/report.md" "$report_md"
   fi
 }
 
@@ -637,13 +816,6 @@ ci_state() {
     -f query='query($o:String!,$r:String!,$s:GitObjectID!){repository(owner:$o,name:$r){object(oid:$s){... on Commit{statusCheckRollup{state}}}}}'
 }
 
-ledger_ok() {
-  local f=${1:-${fx:-$out}/pushed.tsv}
-  [ ! -L "$f" ] && { [ ! -e "$f" ] || [ -f "$f" ]; } || block "$f is a symlink or not a regular file"
-}
-
-# Change-triggered entries (security-review, maintain-verification); see their catalog steps.
-trigger_ok() { [[ $trigger =~ ^(schedule|changes)$ ]] || block "trigger $trigger is not schedule or changes"; }
 globs_ok() {
   local g
   [ $# -gt 0 ] || block "no path globs"
@@ -707,7 +879,7 @@ edit() {
       unknown) run_reason=ci-unknown why="CI status unknown" ;;
     esac
     if [ -n "$run_reason" ]; then
-      printf '\nescalated: %s: PR %s, %s; needs a human.\n' "$run_reason" "$pr" "$why" | tee -a "$out/$day.md"
+      printf '\nescalated: %s: PR %s, %s; needs a human.\n' "$run_reason" "$pr" "$why" | tee -a "$report_md"
       run_outcome=escalated
       exit 0
     fi
@@ -718,7 +890,7 @@ edit() {
   fi
   mkdir "$check"
   git worktree add -q --detach "$work" "$start"
-  cp "$out/$day.md" "$check/report.md"
+  cp "$report_md" "$check/report.md"
   cp .factory/profile.md "$check/"
   cp -R "$view/skills" "$check/"
   prompt="$(cat ".factory/automations/$entry.edit.md" && overlay edit)
@@ -737,7 +909,7 @@ dependency: <name> <why not in-house>."
   [ "$rc" = 0 ] || [ "$(wc -c < "$view/summary.md")" -gt "$summary_cap" ]
   [ "$(wc -c < "$view/summary.md")" -le "$summary_cap" ] || block "summary over $summary_cap bytes"
   if [[ $(tail -n1 "$view/summary.md") =~ ^escalated:\ (credentials|prod-access|ambiguous|out-of-scope)$ ]]; then
-    printf '\nescalated: %s: the edit stopped; needs a human.\n' "${BASH_REMATCH[1]}" | tee -a "$out/$day.md"
+    printf '\nescalated: %s: the edit stopped; needs a human.\n' "${BASH_REMATCH[1]}" | tee -a "$report_md"
     run_outcome=escalated run_reason=${BASH_REMATCH[1]}
     exit 0
   fi
@@ -946,7 +1118,7 @@ fetch
 analyze
 post_check
 case "$level" in
-  comment) if sendable "$out/$day.md"; then post; fi ;;
+  comment) if sendable "$report_md"; then post; fi ;;
   draft-pr | pr)
     if declare -F pipeline > /dev/null; then
       pipeline
