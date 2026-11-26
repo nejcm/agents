@@ -21,7 +21,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
      factory-<repo>` exits 0, so systemd or launchd answers ([runners.md](references/runners.md#local-oncue-job));
      a bash 4 or later: the first of `bash -c 'type -ap bash'`, then `/opt/homebrew/bin/bash` and
      `/usr/local/bin/bash`, whose `--version` is 4 or later (macOS: `/bin/bash` is 3.2 and often first),
-     recorded as the job spec's `<bash>`; `python3` 3.11 or later.
+     recorded as the job spec's `<bash>`; a `python3` 3.11 or later, found the same way with `python3`
+     (macOS: `/usr/bin/python3` is 3.9 and often first; the captured job `PATH` puts Homebrew's before it).
    - Isolated analyze for local runners: Claude Code with the flags and no managed hooks, per
      [`references/runners.md`](references/runners.md#analyze-command).
    - Other CLIs: `codex`, `agy` and `agent` versions and logins (`codex login status`, `agy -p /usage`,

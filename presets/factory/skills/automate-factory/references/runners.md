@@ -95,7 +95,8 @@ After the user confirms, the [smoke run](#smoke-run) installs it, and after a pa
 comma-separated: `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3`, the Run
 recipe's tools, and after them every tool above whose `command -v` is in `/usr/bin` or `/bin`.
 The job sees no login-shell `PATH`; `--capture-path` sets one from each tool's `PATH` directory in that order, unresolved (a
-version-manager wrapper dispatches on its name), then `/usr/local/bin:/usr/bin:/bin`, so a system
+version-manager wrapper dispatches on its name), then `/usr/local/bin:/usr/bin:/bin` (on macOS
+`/opt/homebrew/bin` first), skipping directories already listed, so a system
 directory listed early would shadow a newer `python3` or a version manager's copy. It prints
 `installed`, or `unchanged` when the job already matches. Remove an entry with `<oncue> uninstall
 factory-<repo> <entry>` (`removed`, or `not installed`).

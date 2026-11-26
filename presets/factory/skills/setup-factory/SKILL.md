@@ -29,7 +29,7 @@ need it stay unavailable.
 
 | Check | Passes when | macOS | Linux |
 | --- | --- | --- | --- |
-| `python3 -c 'import sys; print(sys.version)'` | 3.11 or later | `brew install python` | distro `python3` (3.11 or later) |
+| `--version` of the first of `bash -c 'type -ap python3'`, `/opt/homebrew/bin/python3`, `/usr/local/bin/python3` that is 3.11 or later | one found (macOS `/usr/bin/python3` is 3.9) | `brew install python` | distro `python3` (3.11 or later) |
 | `--version` of the first of `bash -c 'type -ap bash'`, `/opt/homebrew/bin/bash`, `/usr/local/bin/bash` that is 4 or later | one found (macOS `/bin/bash` is 3.2) | `brew install bash` | distro `bash` |
 | `command -v timeout gtimeout` | either found; only interactive `fix-issues` needs it | `brew install coreutils` | distro `coreutils` |
 | `node --version`, `bun --version` | node 18.3 or later, or any bun; oncue needs it only to install and manage jobs, which run `[<bash>, script]` (npm-installed Codex still needs node) | `brew install node` | distro `nodejs`, or bun |
