@@ -56,6 +56,9 @@ propose it as a diff:
 }
 ```
 
+On macOS, oncue's launchd backend refuses `timeout`, so the spec omits it: model calls and test
+runs keep their own `timeout`, but nothing bounds the whole run.
+
 `<oncue>` is `node <skill dir>/assets/oncue.mjs` (Node 18.3 or later) or the same with `bun`, `<skill
 dir>` this skill's resolved directory; run without arguments it prints its usage. Never read the
 bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changing nothing.
@@ -63,7 +66,7 @@ bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changin
 `<repo>`: `<name>-<hash>`, so two checkouts get different namespaces. `<name>` is the repo
 root's directory name, lowercased, each run of characters other than `a-z` and `0-9` replaced by
 `-`, cut to 16 characters, leading and trailing `-` removed (empty: `<repo>` is `<hash>` alone);
-`<hash>` the first 6 characters of `git rev-parse --show-toplevel | tr -d '\n' | sha256sum`. A
+`<hash>` the first 6 characters of `git rev-parse --show-toplevel | tr -d '\n' | sha256sum` (`shasum -a 256` on macOS). A
 namespace holds 31 characters.
 
 `<schedule>`: the entry's schedule ([per-entry settings](../SKILL.md#steps)) as an oncue schedule,
@@ -74,14 +77,15 @@ weekdays" is five entries, `mon` to `fri` at `hour` 8, `minute` 0; "hourly on we
 18:00" one entry per weekday and hour. A schedule neither can express gets the nearest one, shown to
 the user. A [watch](#watch-trigger) entry: `{"kind": "interval", "minutes": <interval>}`.
 
-`<minutes>` in the spec's `timeout` is the per-run minutes; for `issue-pipeline` at `draft-pr`, the
-entry's `run_minutes` plus 10, while the script keeps the per-stage `<minutes>`. oncue accepts 1 to
+`<minutes>` in the spec's `timeout` is the per-run minutes; for
+`issue-pipeline` at `draft-pr`, the entry's `run_minutes` plus 10, while the script keeps the per-stage `<minutes>`. oncue accepts 1 to
 10080.
 
 After the user confirms, the [smoke run](#smoke-run) installs it, and after a pass:
 `<oncue> install .factory/automations/<entry>.job.json --capture-path <tools>`, `<tools>`
-comma-separated: `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3` and the
-Run recipe's tools. The job sees no login-shell `PATH`; `--capture-path` sets one from each tool's
+comma-separated: `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3`, the Run
+recipe's tools, then `bash` and `timeout` (`gtimeout` on macOS without `timeout`), last so their
+directory does not shadow a version manager's. The job sees no login-shell `PATH`; `--capture-path` sets one from each tool's
 `PATH` directory, unresolved (a version-manager wrapper dispatches on its name). It prints
 `installed`, or `unchanged` when the job already matches. Remove an entry with `<oncue> uninstall
 factory-<repo> <entry>` (`removed`, or `not installed`).
@@ -90,7 +94,8 @@ A [workflow-wired](#change-triggers) entry gets no job spec and no oncue job: it
 workflow is its runner, removed (after the user confirms) when the entry is removed or moves to a
 schedule; moving to the workflow uninstalls its job.
 
-User jobs stop at logout unless `loginctl enable-linger "$USER"`; say so, do not run it.
+On Linux, user jobs stop at logout unless `loginctl enable-linger "$USER"`; say so, do not run it.
+On macOS, a launchd agent runs only while the user is logged in.
 
 Propose `.factory/automations/*.log` for `.gitignore`.
 
@@ -385,7 +390,7 @@ spec](#local-oncue-job) with the variable added to its `env` and `schedule` set 
 "manual"}`, on stdin (`<oncue> install - --capture-path <tools>`). A `manual` job has no timer, so
 nothing starts it but `run`, and installing it over an entry's live job pauses that schedule until
 the real spec is installed again. The step then runs `<oncue> run factory-<repo> <entry> --wait`,
-which waits for that run and exits with its exit code (124, `timed out`, past `timeout`). Exit 2 to 4
+which waits for that run and exits with its exit code (124, `timed out`, past `timeout`; never on launchd). Exit 2 to 4
 with an `oncue:` line on stderr is oncue's own error: report it. The run's output is what it
 appended to `<entry>.log`.
 

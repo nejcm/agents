@@ -17,8 +17,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
 
 1. **Read** the profile. Detect runners, facts only, and record them in the profile's
    `Automations` section ([`../setup-factory/references/profile.md`](../setup-factory/references/profile.md)):
-   - oncue: Linux, `node` (18.3 or later) or `bun` on `PATH`, and `<oncue> list factory-<repo>`
-     exits 0, so systemd answers ([runners.md](references/runners.md#local-oncue-job)).
+   - oncue: Linux or macOS, `node` (18.3 or later) or `bun` on `PATH`, and `<oncue> list
+     factory-<repo>` exits 0, so systemd or launchd answers ([runners.md](references/runners.md#local-oncue-job));
+     `bash --version` 4 or later and `timeout` or `gtimeout` on `PATH`.
    - Isolated analyze for local runners: Claude Code with the flags and no managed hooks, per
      [`references/runners.md`](references/runners.md#analyze-command).
    - Other CLIs: `codex`, `agy` and `agent` versions and logins (`codex login status`, `agy -p /usage`,
@@ -142,8 +143,9 @@ delete its line from the `Automations` section; its files stay.
 
 ## Scope
 
-- Written and activated: one local oncue job (systemd user on Linux; the run script needs bash and
-  GNU `timeout`), under the user's subscription login of each picked CLI (`claude`, `codex`, `agy`, `agent`).
+- Written and activated: one local oncue job (systemd user on Linux, launchd agent on macOS; the run
+  script needs bash 4 or later and GNU `timeout` or `gtimeout`, on macOS from Homebrew `bash` and
+  `coreutils`), under the user's subscription login of each picked CLI (`claude`, `codex`, `agy`, `agent`).
 - Write levels: `report`, the default; `comment`; `draft-pr` and `pr`, per
   [`references/safety.md`](references/safety.md#steps).
 - Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external
@@ -162,7 +164,8 @@ delete its line from the `Automations` section; its files stay.
   name only ("`LINEAR_API_KEY` env var") and print the steps for the user to set it.
 - **Budgets**: every run gets the profile's per-run caps, default 30 minutes and 200 turns when
   unset; minutes are the budget, turns only stop a looping run: `--max-turns` (print mode; absent from `--help` but accepted and validated), the
-  minutes as `timeout` on every model call, and as the job spec's `timeout`. `issue-pipeline` at `draft-pr` also
+  minutes as `timeout` on every model call, and as the job spec's `timeout` (none on macOS,
+  [runners.md](references/runners.md#local-oncue-job)). `issue-pipeline` at `draft-pr` also
   has a run cap, `run_minutes` (default 240): no item starts without time for its stages, and the
   job spec's `timeout` is `run_minutes` plus 10; and an item cap, `cap` (default 3).
   Refactor, old-test and new-test runs and a revert's test runs also wait for time left in `run_minutes`. The

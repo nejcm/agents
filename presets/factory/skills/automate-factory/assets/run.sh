@@ -3,6 +3,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 [ ! -e .factory/pause ] || { echo paused; exit 0; }
+[ "${BASH_VERSINFO[0]:-0}" -ge 4 ] || { echo "needs bash 4 or later (macOS: brew install bash)" >&2; exit 1; }
+# macOS has no timeout; Homebrew coreutils may install it only as gtimeout.
+if ! command -v timeout > /dev/null; then
+  command -v gtimeout > /dev/null || { echo "needs GNU timeout or gtimeout (macOS: brew install coreutils)" >&2; exit 1; }
+  timeout() { gtimeout "$@"; }
+fi
 entry=$(basename "$0" .sh)
 # A model check records as a dry run, so a change trigger never takes it for the last real run.
 [ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || FACTORY_DRY_RUN=1
@@ -305,6 +311,8 @@ settle() {
 # With a weekly budget, a run whose spend was not recorded must not look clean.
 trap 'rc_=$?; [ -n "$quiet" ] || record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }
   settle $rc_; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
+# Without it a SIGTERM (stop, job timeout) reaches the EXIT trap with the last status, often 0.
+trap 'exit 143' TERM
 block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
@@ -539,7 +547,7 @@ claude_run() {
     head -c $((8 * summary_cap + 1)) > "$4"
 }
 # Fails and cuts the final message $1 when it is over the output cap.
-cap() { [ ! -f "$1" ] || [ "$(wc -c < "$1")" -le $((8 * summary_cap)) ] || { truncate -s $((8 * summary_cap + 1)) "$1"; return 1; }; }
+cap() { [ ! -f "$1" ] || [ "$(wc -c < "$1")" -le $((8 * summary_cap)) ] || { python3 -I -c 'import os, sys; os.truncate(sys.argv[1], int(sys.argv[2]))' "$1" $((8 * summary_cap + 1)); return 1; }; }
 # JSONL events to $4, the final message to $4.txt, capped like claude's output. Reads are not confined.
 codex_run() {
   local m=${2#*:} rc=0 a=(--json --ephemeral --ignore-user-config --ignore-rules --strict-config --skip-git-repo-check

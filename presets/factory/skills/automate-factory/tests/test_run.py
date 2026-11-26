@@ -137,6 +137,36 @@ class RunShTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertTrue(calls[0].startswith("claude ") and "--restricted" in calls[0])
 
+    def path_without_timeout(self, gtimeout):
+        real = shutil.which("timeout") or shutil.which("gtimeout")
+        self.assertIsNotNone(real)
+        sys_bin = f"{self.tmp.name}/sys"
+        os.makedirs(sys_bin)
+        for d in os.environ["PATH"].split(os.pathsep):
+            for n in os.listdir(d) if os.path.isdir(d) else ():
+                if n not in ("timeout", "gtimeout") and not os.path.lexists(f"{sys_bin}/{n}"):
+                    os.symlink(f"{d}/{n}", f"{sys_bin}/{n}")
+        if gtimeout:
+            with open(f"{sys_bin}/gtimeout", "w") as f:
+                f.write(f'#!/bin/sh\necho "gtimeout $1" >> "$LOG"\nexec {real} "$@"\n')
+            os.chmod(f"{sys_bin}/gtimeout", 0o755)
+        self.env["PATH"] = f"{self.tmp.name}/bin" + os.pathsep + sys_bin
+
+    def test_gtimeout_stands_in_for_a_missing_timeout(self):
+        self.path_without_timeout(gtimeout=True)
+        r = self.run_entry("report")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        calls = self.calls()
+        self.assertEqual(calls[0], "gtimeout 1m")
+        self.assertTrue(calls[1].startswith("claude "))
+
+    def test_no_timeout_fails_before_any_call(self):
+        self.path_without_timeout(gtimeout=False)
+        r = self.run_entry("report")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("needs GNU timeout or gtimeout", r.stderr)
+        self.assertEqual(self.calls(), [])
+
     def test_draft_pr_publishes(self):
         r = self.run_entry("draft-pr")
         self.assertEqual(r.returncode, 0, r.stderr)

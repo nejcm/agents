@@ -102,7 +102,7 @@ Updated: <YYYY-MM-DD> (baselines) at <short SHA>
 ## Automations
 Updated: <YYYY-MM-DD> (automate-factory)
 
-- Runners: oncue <node / bun> <version>, backend <systemd / none: error>, isolated analyze
+- Runners: oncue <node / bun> <version>, backend <systemd / launchd / none: error>, isolated analyze
   <Claude Code version / no: reason; managed policy confirmed none <yes/no>>, codex <version, `codex login status` ok / no>,
   agy <version, `agy -p /usage` ok / no>, agent <version, `agent status` logged in / no>
 - <entry>: <runner>, schedule <oncue schedule JSON>; models default <cli:model[@effort]>[, <stage>
