@@ -30,10 +30,13 @@ need it stay unavailable.
 | Check | Passes when | macOS | Linux |
 | --- | --- | --- | --- |
 | `python3 -c 'import sys; print(sys.version)'` | 3.11 or later | `brew install python` | distro `python3` (3.11 or later) |
-| `bash -c 'echo $BASH_VERSION'` | 4 or later | `brew install bash` | distro `bash` |
+| `--version` of the first of `bash -c 'type -ap bash'`, `/opt/homebrew/bin/bash`, `/usr/local/bin/bash` that is 4 or later | one found (macOS `/bin/bash` is 3.2) | `brew install bash` | distro `bash` |
 | `command -v timeout gtimeout` | either found; only interactive `fix-issues` needs it | `brew install coreutils` | distro `coreutils` |
-| `node --version`, `bun --version` | node 18.3 or later, or any bun | `brew install node` | distro `nodejs`, or bun |
-| `git --version`, `gh --version` | both found | `brew install git gh` | distro `git` and `gh` (Arch: `github-cli`) |
+| `node --version`, `bun --version` | node 18.3 or later, or any bun; only to install and manage jobs, which run `[<bash>, script]` | `brew install node` | distro `nodejs`, or bun |
+| `git --version`, `gh --version` | both found | `xcode-select --install` (git), `brew install gh` | distro `git` and `gh` (Arch: `github-cli`) |
+
+On macOS in one line: `xcode-select --install; brew install bash python gh node` (`bun` can
+replace `node`), plus one model CLI.
 
 ## Re-runs
 
