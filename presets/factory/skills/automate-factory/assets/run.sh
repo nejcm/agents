@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 [ ! -e .factory/pause ] || { echo paused; exit 0; }
-[ "${BASH_VERSINFO[0]:-0}" -ge 4 ] || { echo "needs bash 4 or later (macOS: brew install bash, or set the job spec's <bash> to a bash 4+)" >&2; exit 1; }
+[ "${BASH_VERSINFO[0]:-0}" -ge 4 ] || { echo "needs bash 4 or later: set the job spec's <bash> to one (macOS: brew install bash) and reinstall the job" >&2; exit 1; }
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2> /dev/null ||
   { echo "needs python3 3.11 or later (macOS: brew install python)" >&2; exit 1; }
 entry=$(basename "$0" .sh)

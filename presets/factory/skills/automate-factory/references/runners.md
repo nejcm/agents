@@ -65,8 +65,9 @@ finds first.
 
 `<oncue>` is `node <skill dir>/assets/oncue.mjs` (Node 18.3 or later) or the same with `bun`, `<skill
 dir>` this skill's resolved directory; run without arguments it prints its usage. Never read the
-bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changing nothing. Node or bun is
-needed only to install and manage jobs: the scheduled job runs `[<bash>, script]`, not `<oncue>`.
+bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changing nothing. `<oncue>`
+needs node or bun only to install and manage jobs: the scheduled job runs `[<bash>, script]`, though
+npm-installed Codex still needs node on the job's `PATH`.
 
 `<repo>`: `<name>-<hash>`, so two checkouts get different namespaces. `<name>` is the repo
 root's directory name, lowercased, each run of characters other than `a-z` and `0-9` replaced by
