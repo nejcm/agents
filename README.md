@@ -103,7 +103,8 @@ ulis install --global --source . --preset react-web --yes
 - `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from the factory's
   run records, then local Claude Code, Codex, Cursor and Antigravity transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
-  catalog; report-only by default, comments and gated PRs when opted in. Local edit steps run as
+  catalog as local oncue jobs, so it needs Linux with a systemd user manager and `node` (18.3 or
+  later) or `bun`; report-only by default, comments and gated PRs when opted in. Local edit steps run as
   you, so run them in an isolated VM or container holding only a repo-scoped token. Each stage
   runs the model you pick on `claude`, `codex`, `agy` or `agent` (Cursor); a non-Claude CLI runs exec and write stages
   outside an isolated environment, or untrusted input at weak isolation, only after a recorded

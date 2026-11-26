@@ -2,7 +2,7 @@
 
 - **Trigger**: weekly, Monday 06:00. Per-entry `trigger`
   ([runners.md](../runners.md#change-triggers)): `schedule` analyzes on every run; `changes`
-  (from the timer or the user's workflow) re-reports an unchanged state without a model call.
+  (from the oncue job or the user's workflow) re-reports an unchanged state without a model call.
 - **Requires**: a committed `verify-<app>` skill recorded in the profile's `Verification`
   section, with a `Feature paths` line per mapped feature; pstack `maintain-verification-skill`
   installed for the follow-up.

@@ -325,11 +325,13 @@ token total is `null` when any call did not report it. Agent fetch and write cal
 
 ## Smoke run
 
-Run the entry once as the runner before its trigger is enabled, in two steps, each with one
+Run the entry once as the runner before the real job is installed, in two steps, each with one
 variable set: `FACTORY_CHECK_MODELS=1`, then `FACTORY_DRY_RUN=1` (below). A scheduled entry runs
-them through oncue before the real job is installed: each step installs a copy of the [job
+them through oncue: each step installs a copy of the [job
 spec](#local-oncue-job) with the variable added to its `env`, on stdin
-(`<oncue> install - --capture-path <tools>`), then runs `<oncue> run factory-<repo> <entry> --wait`,
+(`<oncue> install - --capture-path <tools>`). `install` enables the schedule, so that copy is live
+until the real spec replaces it or it is uninstalled: a start it fires meanwhile is a check or dry
+run, which costs usage but makes no external write. The step then runs `<oncue> run factory-<repo> <entry> --wait`,
 which waits for that run and exits with its exit code (124, `timed out`, past `timeout`). Exit 2 to 4
 with an `oncue:` line on stderr is oncue's own error: report it; exit 4 can also be a scheduled start
 overlapping this one (attribution is best-effort), so run `--wait` once more. The run's output is what it appended to
@@ -339,8 +341,8 @@ First, `FACTORY_CHECK_MODELS=1`: the script makes one tool-less check call per p
 and reviewers) through its [mapping](#cli-mapping), prints `check: <pick> answered` or `did not
 answer`, records the calls as a dry run and ends; it passes only when it exits 0, so every picked
 model answered. At the weekly budget it fails before any call. Then `FACTORY_DRY_RUN=1`, the dry
-run. After both pass, a scheduled entry installs the real spec (`installed`); after a failure,
-`<oncue> uninstall factory-<repo> <entry>`.
+run. After both pass, a scheduled entry installs the real spec (`installed`); after a failure, or
+when the smoke run is abandoned, `<oncue> uninstall factory-<repo> <entry>`.
 
 A [workflow-wired](#change-triggers) entry installs no oncue job: each step runs
 `.factory/automations/<entry>.sh` directly as that user, from the repo root, with the variable set;

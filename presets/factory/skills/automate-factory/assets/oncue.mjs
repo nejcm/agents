@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// oncue 0.2.0 efe756141436aa97f88a68ec06b7688718b2f53a, built with bun run build:node
+// oncue 0.2.0 1b67f6a4530cd1bf4abbf4e7387ecbdae0b4ff59, built with bun run build:node
 // MIT License
 //
 // Copyright (c) 2026 nejcm
@@ -38,7 +38,7 @@ class OnCueError extends Error {
 
 // src/index.ts
 import { homedir } from "node:os";
-import { posix as posix5, win32 as win323 } from "node:path";
+import { isAbsolute as isAbsolute2, posix as posix5, win32 as win323 } from "node:path";
 
 // src/path.ts
 import { accessSync, constants, statSync } from "node:fs";
@@ -1112,9 +1112,10 @@ var ref = (r) => ({
 });
 function install4(spec, o = {}) {
   const job = validateJob(spec);
-  const exe = which(job.command[0]);
+  const cmd = job.command[0];
+  const exe = which(cmd);
   if (!exe)
-    throw new OnCueError("NOT_FOUND", `${job.command[0]} not found on PATH`);
+    throw new OnCueError("NOT_FOUND", isAbsolute2(cmd) ? `${cmd} is not an executable file` : `${cmd} not found on PATH`);
   const { env, sys, backend } = setup(o);
   return backend.install(validateJob({ ...job, command: [exe, ...job.command.slice(1)] }, { install: true }), env, sys);
 }

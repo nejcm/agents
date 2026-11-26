@@ -2,7 +2,7 @@
 
 - **Trigger**: daily, covering pushes to the default branch since the last reviewed SHA. Per-entry
   `trigger` ([runners.md](../runners.md#change-triggers)): `schedule` reviews on every run;
-  `changes` (only on risky changes, from the timer or the user's workflow) reviews only when the
+  `changes` (only on risky changes, from the oncue job or the user's workflow) reviews only when the
   range touches the profile's `Risk paths`.
 - **Requires**: none beyond the repo; for `changes`, the profile's confirmed `Risk paths`.
 - **Runners**: local.
