@@ -328,14 +328,13 @@ token total is `null` when any call did not report it. Agent fetch and write cal
 Run the entry once as the runner before the real job is installed, in two steps, each with one
 variable set: `FACTORY_CHECK_MODELS=1`, then `FACTORY_DRY_RUN=1` (below). A scheduled entry runs
 them through oncue: each step installs a copy of the [job
-spec](#local-oncue-job) with the variable added to its `env`, on stdin
-(`<oncue> install - --capture-path <tools>`). `install` enables the schedule, so that copy is live
-until the real spec replaces it or it is uninstalled: a start it fires meanwhile is a check or dry
-run, which costs usage but makes no external write. The step then runs `<oncue> run factory-<repo> <entry> --wait`,
+spec](#local-oncue-job) with the variable added to its `env` and `schedule` set to `{"kind":
+"manual"}`, on stdin (`<oncue> install - --capture-path <tools>`). A `manual` job has no timer, so
+nothing starts it but `run`, and installing it over an entry's live job pauses that schedule until
+the real spec is installed again. The step then runs `<oncue> run factory-<repo> <entry> --wait`,
 which waits for that run and exits with its exit code (124, `timed out`, past `timeout`). Exit 2 to 4
-with an `oncue:` line on stderr is oncue's own error: report it; exit 4 can also be a scheduled start
-overlapping this one (attribution is best-effort), so run `--wait` once more. The run's output is what it appended to
-`<entry>.log`.
+with an `oncue:` line on stderr is oncue's own error: report it. The run's output is what it
+appended to `<entry>.log`.
 
 First, `FACTORY_CHECK_MODELS=1`: the script makes one tool-less check call per picked model (models
 and reviewers) through its [mapping](#cli-mapping), prints `check: <pick> answered` or `did not

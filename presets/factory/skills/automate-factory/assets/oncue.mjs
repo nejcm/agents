@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// oncue 0.2.0 1b67f6a4530cd1bf4abbf4e7387ecbdae0b4ff59, built with bun run build:node
+// oncue 0.3.0 a9a9a9743e35c956d403b96ef3ea9dd49bb65798, built with bun run build:node
 // MIT License
 //
 // Copyright (c) 2026 nejcm
@@ -228,6 +228,8 @@ function scheduleKeys(job) {
     const keep = s.restart === "always" ? "<true/>" : `<dict>${key("SuccessfulExit", "<false/>")}</dict>`;
     return key("KeepAlive", keep) + (s.delaySeconds === undefined ? "" : key("ThrottleInterval", int(s.delaySeconds)));
   }
+  if (s.kind === "manual")
+    return "";
   let at;
   if (s.kind === "calendar")
     at = s.at;
@@ -260,7 +262,7 @@ function render(job, env) {
     ...vars.length ? [key("EnvironmentVariables", `<dict>${vars.map(([k, v]) => key(xml(k), str(v))).join("")}</dict>`)] : [],
     key("StandardOutPath", str(log)),
     key("StandardErrorPath", str(log)),
-    schedule,
+    ...schedule ? [schedule] : [],
     ...job.leaveChildrenOnStop ? [key("AbandonProcessGroup", "<true/>")] : [],
     "</dict></plist>"
   ];
@@ -339,10 +341,10 @@ function status(ref, env, sys) {
   if (native === undefined)
     return { installed: true, active: false, warnings: [], native: "" };
   const exit = native.match(/^\s*last exit code = (\d+)/m);
-  const keepAlive = text.includes("<key>KeepAlive</key>");
+  const timer = /^<key>(StartInterval|StartCalendarInterval)<\/key>/m.test(text);
   return {
     installed: true,
-    active: keepAlive ? running(native) : true,
+    active: timer ? true : running(native),
     lastExit: exit ? Number(exit[1]) : undefined,
     warnings: [],
     native
@@ -359,7 +361,7 @@ function run(ref, env, sys, wait) {
     launchctl(sys, true, "kickstart", target);
     return {};
   }
-  if (text.includes("<key>KeepAlive</key>"))
+  if (/^<key>KeepAlive<\/key>/m.test(text))
     throw new OnCueError("UNSUPPORTED", "run --wait does not apply to keepAlive jobs");
   const fail = (why) => new OnCueError("COMMAND_FAILED", `${target}: ${why}`);
   const before = print(ref, env, sys);
@@ -532,9 +534,13 @@ function validateJob(input, opts = {}) {
     if (j.catchUp !== undefined)
       fail("catchUp applies to timers only");
     if (j.timeout !== undefined)
-      fail("timeout applies to timers only");
+      fail("timeout does not apply to keepAlive jobs");
+  } else if (s.kind === "manual") {
+    onlyKeys(s, ["kind"], "schedule.");
+    if (j.catchUp !== undefined)
+      fail("catchUp applies to timers only");
   } else {
-    fail('schedule.kind must be "interval", "calendar" or "keepAlive"');
+    fail('schedule.kind must be "interval", "calendar", "keepAlive" or "manual"');
   }
   return j;
 }
@@ -609,6 +615,8 @@ function triggers(job, env) {
   const s = job.schedule;
   if (s.kind === "calendar")
     return s.at.map(calendarTrigger);
+  if (s.kind === "manual")
+    return [];
   if (s.kind === "interval")
     return [el("TimeTrigger", repetition(`PT${s.minutes}M`) + el("StartBoundary", EPOCH))];
   if (!env.user)
@@ -650,13 +658,12 @@ function render2(job, env) {
     ...keepAlive ? [el("ExecutionTimeLimit", "PT0S"), el("RestartOnFailure", el("Interval", "PT1M") + el("Count", "3"))] : job.timeout ? [el("ExecutionTimeLimit", `PT${job.timeout}M`)] : [],
     el("Enabled", "true")
   ];
+  const trig = triggers(job, env);
   const task = [
     '<?xml version="1.0" encoding="UTF-16"?>',
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
     `  <RegistrationInfo>${el("Source", marker(job))}${job.description === undefined ? "" : el("Description", xml(job.description))}</RegistrationInfo>`,
-    "  <Triggers>",
-    ...triggers(job, env).map((t) => `    ${t}`),
-    "  </Triggers>",
+    ...trig.length ? ["  <Triggers>", ...trig.map((t) => `    ${t}`), "  </Triggers>"] : [],
     `  <Principals><Principal id="Author">${el("LogonType", "InteractiveToken")}${el("RunLevel", "LeastPrivilege")}</Principal></Principals>`,
     "  <Settings>",
     ...settings.map((s) => `    ${s}`),
@@ -672,7 +679,8 @@ function render2(job, env) {
   ];
   const warnings = [
     ...job.schedule.kind === "keepAlive" && job.schedule.restart === "on-failure" ? ["Task Scheduler relaunches keepAlive jobs after any exit; restart: on-failure behaves as always"] : [],
-    ...job.leaveChildrenOnStop ? ["Task Scheduler: leaveChildrenOnStop is ignored"] : []
+    ...job.leaveChildrenOnStop ? ["Task Scheduler: leaveChildrenOnStop is ignored"] : [],
+    ...job.schedule.kind === "manual" && job.timeout ? ["Task Scheduler applies timeout only to scheduled starts; a manual job's runs have no limit"] : []
   ];
   return {
     files: [
@@ -761,11 +769,12 @@ function status2(ref, env, sys) {
   const { task, native } = find(ref, sys);
   if (!task || owner2(task) !== `${ref.namespace}/${ref.name}`)
     return { installed: false, active: false, warnings: [], native: "" };
-  const keepAlive = sys.read(paths(ref, env).xml)?.includes("<LogonTrigger>") ?? false;
+  const xmlText = sys.read(paths(ref, env).xml) ?? "";
+  const timer = !xmlText.includes("<LogonTrigger>") && /<(TimeTrigger|CalendarTrigger)>/.test(xmlText);
   const lastRun = unixDate(task.LastRun);
   return {
     installed: true,
-    active: keepAlive ? task.State === "Running" : task.State === "Ready" || task.State === "Running",
+    active: timer ? task.State === "Ready" || task.State === "Running" : task.State === "Running",
     lastExit: lastRun && task.LastResult !== null ? task.LastResult : undefined,
     lastRun,
     nextRun: unixDate(task.NextRun),
@@ -871,7 +880,7 @@ function render3(job, env) {
 `)}
 ` }];
   const timerKeys = timerLines(job);
-  if (s.kind !== "keepAlive") {
+  if (s.kind === "interval" || s.kind === "calendar") {
     const timer = [marker2(job), "[Unit]", desc, "", "[Timer]", ...timerKeys, "", "[Install]", "WantedBy=timers.target"];
     files.push({ path: `${u}.timer`, content: `${timer.join(`
 `)}
@@ -908,7 +917,9 @@ var unixDate2 = (v) => v && /^@\d+$/.test(v) ? new Date(Number(v.slice(1)) * 100
 function install3(job, env, sys) {
   const r = render3(job, env);
   const u = posix4.join(dir3(env), unit(job));
-  const timer = job.schedule.kind !== "keepAlive";
+  const kind = job.schedule.kind;
+  const timer = kind === "interval" || kind === "calendar";
+  const manual = kind === "manual";
   const [main, other] = timer ? [`${unit(job)}.timer`, `${unit(job)}.service`] : [`${unit(job)}.service`, `${unit(job)}.timer`];
   const ref = `${job.namespace}/${job.name}`;
   const pending = r.files.filter((f) => {
@@ -925,19 +936,23 @@ function install3(job, env, sys) {
   const [m, o] = show(sys, [main, other], ["UnitFileState", "ActiveState"]).blocks;
   const enabled = m?.UnitFileState === "enabled";
   const active = m?.ActiveState === "active";
-  const disableOther = o?.UnitFileState === "enabled" && (timer || staleTimer);
+  const disableOther = (o?.UnitFileState === "enabled" || o?.ActiveState === "active") && (timer || staleTimer);
   const filesChanged = pending.length > 0 || staleTimer || disableOther;
-  if (!filesChanged && enabled && active)
+  if (!filesChanged && (manual ? !enabled && !active : enabled && active))
     return { changed: false, warnings: r.warnings };
   ensureLogDir(sys, job.log);
   if (disableOther)
     mayFail2(sys, "disable", "--now", other);
+  if (manual && (enabled || active))
+    mayFail2(sys, "disable", "--now", main);
   if (staleTimer)
     sys.remove(`${u}.timer`);
   for (const f of pending)
     sys.write(f.path, f.content);
   if (filesChanged)
     systemctl(sys, true, "daemon-reload");
+  if (manual)
+    return { changed: true, warnings: r.warnings };
   if (!enabled || !active)
     systemctl(sys, true, "enable", "--now", main);
   if (filesChanged && active)
@@ -1003,7 +1018,7 @@ function status3(ref, env, sys) {
   const tmr = timer ? blocks[1] ?? {} : undefined;
   return {
     installed: true,
-    active: (tmr ?? svc).ActiveState === "active",
+    active: (tmr ?? svc).ActiveState === "active" || !tmr && svc.SubState === "start",
     lastExit: svc.ExecMainExitTimestamp && svc.ExecMainStatus ? Number(svc.ExecMainStatus) : undefined,
     lastRun: unixDate2(tmr ? tmr.LastTriggerUSec : svc.ExecMainStartTimestamp),
     nextRun: unixDate2(tmr?.NextElapseUSecRealtime),
@@ -1024,7 +1039,9 @@ function run3(ref, env, sys, wait) {
     systemctl(sys, true, "start", "--no-block", service);
     return {};
   }
-  if (!files.some((f) => f.path.endsWith(".timer")))
+  if (sys.read(posix4.join(dir3(env), service))?.includes(`
+Type=simple
+`))
     throw new OnCueError("UNSUPPORTED", "run --wait does not apply to keepAlive jobs");
   const props = ["ActiveState", "Result", "ExecMainStatus", "ExecMainStartTimestampMonotonic"];
   const before = show(sys, [service], props).blocks[0] ?? {};

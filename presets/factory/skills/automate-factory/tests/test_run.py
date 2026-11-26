@@ -939,11 +939,17 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("TimeoutStartSec=45min\n", r.stdout)
             self.assertIn("OnCalendar=Tue *-*-* 09:30\n", r.stdout)
+            smoke = json.dumps({**spec, "schedule": {"kind": "manual"}, "env": {"FACTORY_DRY_RUN": "1"}})
+            r = subprocess.run(["node", ONCUE, "render", "-", "--backend", "systemd"], input=smoke,
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertNotIn("[Timer]", r.stdout)
+            self.assertIn("Environment=\"FACTORY_DRY_RUN=1\"\n", r.stdout)
 
     def test_vendored_oncue_names_its_version(self):
         with open(ONCUE) as f:
             self.assertEqual(f.readline(), "#!/usr/bin/env node\n")
-            self.assertRegex(f.readline(), r"^// oncue 0\.2\.0 [0-9a-f]{40}, built with bun run build:node\n$")
+            self.assertRegex(f.readline(), r"^// oncue 0\.3\.0 [0-9a-f]{40}, built with bun run build:node\n$")
 
 if __name__ == "__main__":
     unittest.main()
