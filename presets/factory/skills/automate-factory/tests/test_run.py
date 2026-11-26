@@ -167,6 +167,15 @@ class RunShTest(unittest.TestCase):
         self.assertIn("needs GNU timeout or gtimeout", r.stderr)
         self.assertEqual(self.calls(), [])
 
+    def test_an_old_python3_fails_before_any_call(self):
+        with open(f"{self.tmp.name}/bin/python3", "w") as f:
+            f.write("#!/bin/sh\nexit 1\n")
+        os.chmod(f"{self.tmp.name}/bin/python3", 0o755)
+        r = self.run_entry("report")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("needs python3 3.11 or later", r.stderr)
+        self.assertEqual(self.calls(), [])
+
     def test_draft_pr_publishes(self):
         r = self.run_entry("draft-pr")
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -732,7 +741,8 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
     def test_intermediate_commit_keeps_guarded_manifests_dependency_only_and_regular(self):
         start = '{"scripts": {"test": "sh tests/a_test.sh"}, "dependencies": {}}'
         self.commit_file("package.json", start + "\n")
-        final = f"printf '%s\\n' '{start.replace('{}', '{\"left-pad\": \"1\"}')}' > package.json; echo 2 > src/w"
+        dep = start.replace("{}", '{"left-pad": "1"}')
+        final = f"printf '%s\\n' '{dep}' > package.json; echo 2 > src/w"
         for do, msg in (
                 (f"printf '%s\\n' '{start.replace('sh tests', 'true; sh tests')}' > package.json; git commit -qam r; " + final,
                  "package.json outside the allowlist: changes more than dependencies at commit "),
@@ -975,6 +985,26 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertNotIn("[Timer]", r.stdout)
             self.assertIn("Environment=\"FACTORY_DRY_RUN=1\"\n", r.stdout)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_launchd_renders_the_spec_without_timeout_and_refuses_one_with_it(self):
+        with open(os.path.join(HERE, "..", "references", "runners.md")) as f:
+            [tpl] = re.findall(r"```json\n(.*?)```", f.read(), re.S)
+        fill = {"<schedule>": '{"kind": "interval", "minutes": 30}', "<repo-root>": "/w/r", "<repo>": "r",
+                "<entry>": "e", "<minutes>": "45"}
+        for k, v in fill.items():
+            tpl = tpl.replace(k, v)
+        spec = json.loads(tpl)
+        mac = json.dumps({k: v for k, v in spec.items() if k != "timeout"})
+        r = subprocess.run(["node", ONCUE, "render", "-", "--backend", "launchd"], input=mac,
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("<plist ", r.stdout)
+        self.assertIn("<array><string>/w/r/.factory/automations/e.sh</string></array>", r.stdout)
+        r = subprocess.run(["node", ONCUE, "render", "-", "--backend", "launchd"], input=tpl,
+                           capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("timeout is not supported", r.stderr)
 
     def test_vendored_oncue_names_its_version(self):
         with open(ONCUE) as f:

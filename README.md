@@ -103,12 +103,13 @@ ulis install --global --source . --preset react-web --yes
 - `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from the factory's
   run records, then local Claude Code, Codex, Cursor and Antigravity transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
-  catalog as local oncue jobs, so it needs Linux with a systemd user manager and `node` (18.3 or
-  later) or `bun`; report-only by default, comments and gated PRs when opted in. Local edit steps run as
-  you, so run them in an isolated VM or container holding only a repo-scoped token. Each stage
-  runs the model you pick on `claude`, `codex`, `agy` or `agent` (Cursor); a non-Claude CLI runs exec and write stages
-  outside an isolated environment, or untrusted input at weak isolation, only after a recorded
-  confirmation.
+  catalog as local oncue jobs, so it needs Linux with a systemd user manager or macOS, `node` (18.3
+  or later) or `bun`, bash 4 or later, `python3` 3.11 or later and `timeout` or `gtimeout`
+  (setup-factory checks these first); report-only by default, comments and gated PRs when opted in.
+  Local edit steps run as you, so run them in an isolated VM or container holding only a repo-scoped
+  token. Each stage runs the model you pick on `claude`, `codex`, `agy` or `agent` (Cursor); a
+  non-Claude CLI runs exec and write stages outside an isolated environment, or untrusted input at
+  weak isolation, only after a recorded confirmation.
   `failed-ci-triage` and `pr-babysitting` can `watch` instead of running on a schedule: their job
   polls every few minutes with no model call and fires only on a new default-branch failure or a
   settled, actionable PR change, capped per day; a `comment` still goes only to the PR fixed at

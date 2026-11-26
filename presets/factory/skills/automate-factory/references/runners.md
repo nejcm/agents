@@ -84,9 +84,11 @@ the user. A [watch](#watch-trigger) entry: `{"kind": "interval", "minutes": <int
 After the user confirms, the [smoke run](#smoke-run) installs it, and after a pass:
 `<oncue> install .factory/automations/<entry>.job.json --capture-path <tools>`, `<tools>`
 comma-separated: `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3`, the Run
-recipe's tools, then `bash` and `timeout` (`gtimeout` on macOS without `timeout`), last so their
-directory does not shadow a version manager's. The job sees no login-shell `PATH`; `--capture-path` sets one from each tool's
-`PATH` directory, unresolved (a version-manager wrapper dispatches on its name). It prints
+recipe's tools, then `bash` and `timeout` (`gtimeout` on macOS without `timeout`), and after them
+every tool above whose `command -v` is in `/usr/bin` or `/bin`. The job sees no login-shell `PATH`;
+`--capture-path` sets one from each tool's `PATH` directory in that order, unresolved (a
+version-manager wrapper dispatches on its name), then `/usr/local/bin:/usr/bin:/bin`, so a system
+directory listed early would shadow a newer `python3` or a version manager's copy. It prints
 `installed`, or `unchanged` when the job already matches. Remove an entry with `<oncue> uninstall
 factory-<repo> <entry>` (`removed`, or `not installed`).
 

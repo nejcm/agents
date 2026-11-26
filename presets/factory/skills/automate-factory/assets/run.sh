@@ -9,6 +9,8 @@ if ! command -v timeout > /dev/null; then
   command -v gtimeout > /dev/null || { echo "needs GNU timeout or gtimeout (macOS: brew install coreutils)" >&2; exit 1; }
   timeout() { gtimeout "$@"; }
 fi
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2> /dev/null ||
+  { echo "needs python3 3.11 or later (macOS: brew install python)" >&2; exit 1; }
 entry=$(basename "$0" .sh)
 # A model check records as a dry run, so a change trigger never takes it for the last real run.
 [ "${FACTORY_CHECK_MODELS:-0}" != 1 ] || FACTORY_DRY_RUN=1
@@ -309,9 +311,10 @@ settle() {
   [ -z "$locked" ] || python3 -I -c "$record_py" unlock "$locked" $$ || echo "lock: $locked not released" >&2
 }
 # With a weekly budget, a run whose spend was not recorded must not look clean.
-trap 'rc_=$?; [ -n "$quiet" ] || record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }
+trap 'rc_=$?; trap : TERM; [ -n "$quiet" ] || record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }
   settle $rc_; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
-# Without it a SIGTERM (stop, job timeout) reaches the EXIT trap with the last status, often 0.
+# Without it a SIGTERM (stop, job timeout) reaches the EXIT trap with the last status, often 0;
+# that trap swaps it for a no-op, so a second SIGTERM to this script cannot cut its cleanup short.
 trap 'exit 143' TERM
 block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
 mkdir "$view/repo" "$view/input" "$view/skills"

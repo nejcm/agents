@@ -13,13 +13,27 @@ Run from the target repo's root.
 
 ## Invocation
 
-- `setup-factory`: every phase in order.
+- `setup-factory`: the [compatibility check](#compatibility-check), then every phase in order.
 - `setup-factory <phase>`: that phase alone (`explore`, `interview`, `run`, `verification`,
   `analytics`, `baselines`, `handoff`). It reads the profile and updates only its own section.
   A phase whose inputs are missing from the profile (run or baselines without explore,
   verification without run) says which phase to run first and stops.
 - "Change my factory" (a setting, prompt guidance, an automation): load `automate-factory` by
   path (see loading other skills) and follow its [re-run](../automate-factory/SKILL.md#re-run).
+
+## Compatibility check
+
+Run first in a full `setup-factory` run, before the profile is read. Check each tool and list each
+missing or too old one with its install hint; a miss does not stop setup, but the automations that
+need it stay unavailable.
+
+| Check | Passes when | macOS | Linux |
+| --- | --- | --- | --- |
+| `python3 -c 'import sys; print(sys.version)'` | 3.11 or later | `brew install python` | distro `python3` (3.11 or later) |
+| `bash -c 'echo $BASH_VERSION'` | 4 or later | `brew install bash` | distro `bash` |
+| `command -v timeout gtimeout` | either found | `brew install coreutils` | distro `coreutils` |
+| `node --version`, `bun --version` | node 18.3 or later, or any bun | `brew install node` | distro `nodejs`, or bun |
+| `git --version`, `gh --version` | both found | `brew install git gh` | distro `git` and `gh` (Arch: `github-cli`) |
 
 ## Re-runs
 
