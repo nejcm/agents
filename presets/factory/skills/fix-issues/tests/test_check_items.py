@@ -42,6 +42,17 @@ def tool_use(name, use_id="t", args=None):
 LIST = "mcp__trk__list_issues"
 
 
+def setUpModule():
+    global scratch
+    scratch = tempfile.TemporaryDirectory()
+    tempfile.tempdir = scratch.name
+
+
+def tearDownModule():
+    tempfile.tempdir = None
+    scratch.cleanup()
+
+
 def run(lines, prefix="lin", extra=(), **kw):
     out = tempfile.mkdtemp()
     text = "".join(json.dumps(x) + "\n" if not isinstance(x, str) else x + "\n" for x in lines)

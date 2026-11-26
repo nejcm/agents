@@ -355,7 +355,7 @@ margs=()
 model=(${margs[@]+"${margs[@]}"})
 # Change-triggered entries (security-review, maintain-verification) and watch entries; see runners.md.
 trigger_ok() {
-  [[ $trigger =~ ^(schedule|changes|watch)$ ]] || block "trigger $trigger is not schedule or changes"
+  [[ $trigger =~ ^(schedule|changes|watch)$ ]] || block "trigger $trigger is not schedule or changes or watch"
   [ "$trigger" != watch ] || declare -F detect > /dev/null || block "trigger watch needs an entry with a detect step"
 }
 # A watch entry (runners.md#watch-trigger) fills these and defines its detect step here.

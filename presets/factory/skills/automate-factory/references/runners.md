@@ -343,7 +343,8 @@ fine-grained token scoped to this repo, bounds an injected model
 
 ## Run record
 
-Every run past the pause and Git config checks appends one line to
+Every run past the pause and Git config checks, except a silent [watch](#watch-trigger) tick,
+appends one line to
 `.factory/reports/runs.jsonl`, written by the run script, never the model, credential-shaped text
 (`sk-ant-`, OpenAI `sk-`, Google `AIza`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`

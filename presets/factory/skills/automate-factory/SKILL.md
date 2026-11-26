@@ -85,7 +85,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `<skill-path:<name>>` in the script's `skills` list with that skill's resolved directory, found by the lookup in
    [`../setup-factory/SKILL.md`](../setup-factory/SKILL.md#loading-other-skills). A skill not
    found makes the entry unavailable on that runner. Also fill `<app>`, `<base>` and the entry's
-   choices. For `failed-ci-triage` and `pr-babysitting`, fill their first block's settings at
+   choices. Write each catalog block flush left, without the list's indent: an indented
+   heredoc's closing `PY` never ends it. For `failed-ci-triage` and `pr-babysitting`, fill their first block's settings at
    either trigger: `<trigger>` (`watch` or `schedule`), `<daily cap>` a number (6 when
    `schedule`), `<window>` (empty for none), `<notify command>` its words (empty for none), and
    `workflows`, or `drafts` (`skip` when `schedule`), `author` (empty for all open) and `target`

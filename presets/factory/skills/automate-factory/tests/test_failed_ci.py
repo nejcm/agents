@@ -132,10 +132,18 @@ class FailedCiTest(unittest.TestCase):
         self.assertEqual(views, [f"gh run view {i} --repo o/r {a}" for i in (1, 2)
                                  for a in ("--log-failed", "--json headSha,workflowName,jobs")])
         self.assertIn("gh run list --repo o/r --branch main --limit 50 --json "
-                      "databaseId,headSha,workflowName,status,conclusion,createdAt", self.calls())
+                      "databaseId,headSha,workflowName,status,conclusion,createdAt,event", self.calls())
         self.assertEqual(self.seen(), [["1", "failed", sha], ["2", "failed", sha], ["1", "done", sha], ["2", "done", sha]])
         self.quiet(done)
         self.assertEqual(self.model_calls(), 1)
+
+    def test_a_same_named_fork_pr_run_is_ignored(self):
+        fork = dict(run(1, self.sha), event="pull_request")
+        self.quiet([fork, dict(run(2, self.sha, "Lint"), event="pull_request_target")])
+        self.assertEqual((self.model_calls(), self.records(), self.seen()), (0, [], []))
+        r = self.tick([fork, dict(run(3, self.sha), event="schedule")])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.records()[-1]["events"], ["3"])
 
     def test_the_failed_sha_is_fetched_as_data_only(self):
         refs = self.git("-C", self.repo, "for-each-ref")

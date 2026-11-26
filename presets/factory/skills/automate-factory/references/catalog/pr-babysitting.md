@@ -30,10 +30,10 @@
   `<head SHA>.<rollup>.<merge state>.<bot threads>`; a new fingerprint fires again. A dry run
   ignores the ledger and takes the most recently changed actionable PR of the last 30 days. A
   watch fire fetches only its PR under `input/<n>/` (the snapshots `check` mode needs, plus
-  `diff.patch`); a same-repo PR's head SHA is fetched into the object store only (no ref or branch
-  moves, no `FETCH_HEAD`) and its tree, symlinks dropped, extracted to `input/<n>/head/` as data; a
-  fork PR gets the diff only. Fetch uses read-only calls; analyze never calls GitHub, reruns or
-  adds reviewers:
+  `diff.patch`, left out when GitHub refuses the diff); a same-repo PR's head SHA is fetched into
+  the object store only (no ref or branch moves, no `FETCH_HEAD`) and its tree, symlinks dropped,
+  extracted to `input/<n>/head/` as data; a fork PR gets the diff only. Fetch uses read-only calls
+  on `repo` (`GH_REPO`); analyze never calls GitHub, reruns or adds reviewers:
 
   ```bash
   trigger="<trigger>" daily_cap=<daily cap> window="<window>" notify=(<notify command>)
@@ -47,7 +47,7 @@
   pr_query='query($o:String!,$r:String!,$endCursor:String){rateLimit{limit remaining cost}
     repository(owner:$o,name:$r){pullRequests(states:OPEN,first:50,after:$endCursor,
     orderBy:{field:UPDATED_AT,direction:DESC}){pageInfo{hasNextPage endCursor} nodes{number updatedAt
-    author{login} isCrossRepository isDraft headRefOid headRefName mergeable mergeStateStatus
+    author{login} isDraft headRefOid mergeable mergeStateStatus
     statusCheckRollup{state} reviewThreads(last:20){nodes{isResolved comments(first:1){nodes{author{__typename}}}}}}}}}'
   pr_py=$(cat <<'PY'
   import datetime, json, sys
@@ -91,8 +91,10 @@
   ```
 
   ```bash
+  pr_field() { python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$view/input/$1/pr.json" "$2"; }
   fetch() {
     local n id i sha
+    local -x GH_REPO=$repo
     prs_ok
     if [ "$trigger" = watch ]; then
       for i in ${keys[@]+"${keys[@]}"}; do echo "${i#pr-}"; done > "$view/input/prs"
@@ -104,7 +106,7 @@
     fi
     while read -r n; do
       mkdir "$view/input/$n"
-      gh pr view "$n" --json number,title,headRefOid,isDraft,mergeable,mergeStateStatus,statusCheckRollup \
+      gh pr view "$n" --json number,title,headRefOid,isCrossRepository,isDraft,mergeable,mergeStateStatus,statusCheckRollup \
         > "$view/input/$n/pr.json"
       gh pr checks "$n" --json name,state,link > "$view/input/$n/checks.json" || true
       gh api --paginate "repos/{owner}/{repo}/pulls/$n/reviews" > "$view/input/$n/reviews.json"
@@ -114,15 +116,16 @@
         pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
         pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated path line
         comments(first:20){nodes{author{login __typename} body}}}}}}}' > "$view/input/$n/threads.json"
-      gh run list --commit "$(gh pr view "$n" --json headRefOid --jq .headRefOid)" --status failure \
+      sha=$(pr_field "$n" headRefOid)
+      gh run list --commit "$sha" --status failure \
         --json databaseId --jq '.[].databaseId' | while read -r id; do
         gh run view "$id" --log-failed > "$view/input/$n/run-$id.log" || true
       done
     done < "$view/input/prs"
     for i in ${keys[@]+"${!keys[@]}"}; do
       n=${keys[i]#pr-} sha=${values[i]%%.*}
-      gh pr diff "$n" --repo "$repo" > "$view/input/$n/diff.patch"
-      [ "$(gh pr view "$n" --repo "$repo" --json isCrossRepository --jq .isCrossRepository)" = false ] || continue
+      gh pr diff "$n" --repo "$repo" > "$view/input/$n/diff.patch" || rm -f "$view/input/$n/diff.patch"
+      [ "$(pr_field "$n" isCrossRepository)" = False ] || continue
       [[ $sha =~ ^[0-9a-f]{40}$ ]] || block "PR head $sha unusable"
       [ -n "$remote" ] && [[ $remote != *"<"* ]] || block "remote url unfilled"
       git cat-file -e "$sha^{commit}" 2> /dev/null || git fetch -q --no-tags --no-write-fetch-head "$remote" "$sha"

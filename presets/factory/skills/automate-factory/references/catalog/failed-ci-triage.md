@@ -16,7 +16,8 @@
   [safety.md](../safety.md#steps) Loop caps. `watch` fills `<remote url>` at every level.
 - **Steps**: the first block replaces the run script's watch line, the second `fetch`;
   `workflows` holds the workflow names in scope. `detect` makes one
-  `gh run list --branch <base> --limit 50` call and prints one event per failed in-scope run
+  `gh run list --branch <base> --limit 50` call, drops `pull_request*` runs (a fork PR's branch
+  can share the base's name), and prints one event per failed in-scope run
   (key: the run ID), grouped into one fire per head SHA, oldest first, only once every in-scope
   run on that SHA has completed. Candidates are runs created at most 24 hours before the newest
   `done` line in the seen ledger, or in the last 24 hours with none, so a SHA still running when
@@ -55,7 +56,7 @@
           settled += [ts(r[3])] if r[1] == "done" else []
   since = {"dry": now - 30 * day, "schedule": now - day}.get(mode) or max(settled, default=now) - day
   with open(runs) as f:
-      runs = [r for r in json.load(f) if r["workflowName"] in scope]
+      runs = [r for r in json.load(f) if r["workflowName"] in scope and not r.get("event", "").startswith("pull_request")]
   failed = [r for r in runs if r["conclusion"] == "failure" and ts(r["createdAt"]) > since
             and state.get(str(r["databaseId"])) not in ("done", "given-up")]
   if mode == "schedule":
@@ -86,7 +87,7 @@
   )
   ci_runs() {
     gh run list --repo "$repo" --branch "$ref" --limit 50 "$@" \
-      --json databaseId,headSha,workflowName,status,conclusion,createdAt > "$view/runs.json"
+      --json databaseId,headSha,workflowName,status,conclusion,createdAt,event > "$view/runs.json"
   }
   detect() {
     local mode=watch seen_tsv=$out/seen.tsv merges=.factory/reports/fix-issues/merges.tsv k a b c

@@ -13,10 +13,8 @@ GH = r"""#!/usr/bin/env bash
 echo "gh $*" >> "$LOG"
 case "$1 $2" in
   "api graphql") case "$*" in *rateLimit*) cat "$PAGES" ;; *) echo '{}' ;; esac ;;
-  "pr view") case "$*" in
-    *isCrossRepository*) case " ${SAME-5} " in *" $3 "*) echo false ;; *) echo true ;; esac ;;
-    *--jq*) echo 0000000000000000000000000000000000000000 ;;
-    *) echo '{}' ;; esac ;;
+  "pr view") case " ${SAME-5} " in *" $3 "*) fork=false ;; *) fork=true ;; esac
+    echo "{\"headRefOid\": \"0000000000000000000000000000000000000000\", \"isCrossRepository\": $fork}" ;;
   "pr diff") echo "diff of $3" ;;
   "pr list") printf '%s\n' ${PRLIST:-} ;;
   "pr checks"|"api repos/"*) echo '[]' ;;
@@ -172,7 +170,7 @@ class PrBabysittingTest(unittest.TestCase):
         self.assertEqual(self.fired(prs), ["pr-1"])
         self.quiet(prs)
         views = [c for c in self.calls() if c.startswith("gh pr view") and "--json number" in c]
-        self.assertEqual(views, [f"gh pr view {n} --json number,title,headRefOid,isDraft,mergeable,mergeStateStatus,"
+        self.assertEqual(views, [f"gh pr view {n} --json number,title,headRefOid,isCrossRepository,isDraft,mergeable,mergeStateStatus,"
                                  "statusCheckRollup" for n in (2, 1)])
         self.assertNotIn("gh pr list", "\n".join(self.calls()))
         self.assertIn("input/1/diff.patch", self.listing())
@@ -187,6 +185,24 @@ class PrBabysittingTest(unittest.TestCase):
         r = subprocess.run(["git", "-C", self.repo, "cat-file", "-e", self.sha], env=self.env, capture_output=True)
         self.assertNotEqual(r.returncode, 0)
 
+    def test_a_refused_diff_still_fires_without_it(self):
+        with open(f"{self.tmp.name}/bin/gh", "w") as f:
+            f.write(GH.replace('"pr diff") echo "diff of $3" ;;', '"pr diff") exit 1 ;;'))
+        self.assertEqual(self.fired([pr(5, self.sha)]), ["pr-5"])
+        self.assertEqual(self.records()[-1]["outcome"], "completed")
+        self.assertNotIn("input/5/diff.patch", self.listing())
+        self.assertIn("input/5/head/pushed.txt", self.listing())
+        self.assertEqual(self.seen()[-1][:2], ["pr-5", "done"])
+
+    def test_fetch_calls_target_the_configured_repo(self):
+        with open(f"{self.tmp.name}/bin/gh", "w") as f:
+            f.write(GH.replace('echo "gh $*" >> "$LOG"', 'echo "gh $*" >> "$LOG"; echo "${GH_REPO-unset}" >> "$LOG.repo"'))
+        self.assertEqual(self.fired([pr(5, self.sha)]), ["pr-5"])
+        with open(self.log + ".repo") as f:
+            repos = f.read().split()
+        self.assertEqual(repos[0], "unset")
+        self.assertEqual(set(repos[1:]), {"o/r"})
+
     def test_a_same_repo_head_is_data_never_skills(self):
         refs = self.git("-C", self.repo, "for-each-ref")
         self.assertEqual(self.fired([pr(5, self.sha)]), ["pr-5"])
@@ -199,7 +215,7 @@ class PrBabysittingTest(unittest.TestCase):
             self.assertEqual(f.read(), "base skill\n")
         self.assertEqual(self.git("-C", self.repo, "for-each-ref"), refs)
         self.assertFalse(os.path.exists(f"{self.repo}/.git/FETCH_HEAD"))
-        self.assertEqual(sum(c.startswith("gh pr view 5 --repo o/r --json isCrossRepository") for c in self.calls()), 1)
+        self.assertEqual(sum(c.startswith("gh pr view 5 ") for c in self.calls()), 1)
 
     def test_drafts_are_skipped_unless_included(self):
         prs = [pr(1, self.other_sha, draft=True)]
