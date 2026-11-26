@@ -1,4 +1,4 @@
-Run this ticket with the `orchestration` skill: load it, and `model-dispatch` before the first delegated
+Run this ticket with the `model-orchestration` skill: load it, and `model-dispatch` before the first delegated
 call. Its "Local or Delegated" rule picks the pattern: a small ticket with a clear spec you build
 yourself; anything else follows its staged implementation. Either way, these hold for an unattended run:
 

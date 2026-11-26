@@ -29,7 +29,7 @@ local branch collides on a retry. The stage leaves its changes uncommitted; the 
 
 Inputs in `$check`: `spec.md`, `repro.md`, the profile's `Run` and `Scripts` as `run.md`, the
 `debugging` skill's `SKILL.md`, and the verify skill of `$start`; per
-[Dispatch](../SKILL.md#dispatch). Role per `orchestration`: Builder, sized by the likely change.
+[Dispatch](../SKILL.md#dispatch). Role per `model-orchestration`: Builder, sized by the likely change.
 The stage follows the target repo's `AGENTS.md` and:
 
 1. Follows `debugging`: root cause from runtime evidence, competing hypotheses eliminated before

@@ -9,7 +9,7 @@ observes, never edits.
 
 In `$check`: `spec.md`, the profile's `Run` section as `run.md`, and the verify skill of
 `$base_sha` (`.cursor/skills/verify-<app>/SKILL.md` and `features/<feature>.md`). Role per
-`orchestration`: Verifier.
+`model-orchestration`: Verifier.
 
 ## Steps
 

@@ -1,6 +1,6 @@
 ---
 name: model-dispatch
-description: How to call another agent CLI — per-CLI invocation references (Codex, Cursor `agent`, `claude`, OpenCode), passing whichever model and effort the caller selected, isolation, resume, structured output, and watching long runs. Use when shelling out to another agent CLI.
+description: How to call another agent CLI — per-CLI invocation references (Codex, Cursor `agent`, `claude`, OpenCode, Antigravity), passing whichever model and effort the caller selected, isolation, resume, structured output, and watching long runs. Use when shelling out to another agent CLI.
 ---
 
 # Model Dispatch
@@ -18,10 +18,11 @@ call as readily as for one step of a larger workflow.
 
 Before the first dispatch in a session, establish two things:
 
-1. **Which host you are.** Codex, Claude Code, Cursor, OpenCode, or ForgeCode.
+1. **Which host you are.** Codex, Claude Code, Cursor, OpenCode, Antigravity,
+   or ForgeCode.
    Never shell out to your own host's CLI — that recurses. Use the host's
    native subagent/workflow mechanism for same-host work.
-2. **Which CLIs exist.** `command -v codex claude agent cursor-agent opencode`.
+2. **Which CLIs exist.** `command -v codex claude agent cursor-agent opencode antigravity agy`.
    Absence of a binary rules that path out; say so rather than
    pretending the dispatch happened. A CLI being installed does not mean it is
    authenticated — each reference opens with its own precondition check.
@@ -38,6 +39,7 @@ Read only the references you need:
 | `references/agent-cli.md`  | Cursor `agent -p` — any model in `agent models`         |
 | `references/claude-cli.md` | `claude -p` — any model alias or id the install accepts |
 | `references/opencode.md`   | `opencode run` — any `provider/model` it can reach      |
+| `references/antigravity.md` | `antigravity -p` — any model in `antigravity models`   |
 
 Each reference covers one CLI: preconditions, the invocation, how that CLI
 expresses effort, isolation, resume, and long-run watching.
@@ -51,7 +53,8 @@ Callers select a family, not a release. At dispatch, resolve it to the newest
 release the host exposes, from that host's model list (see each reference),
 unless the user names a release. Claude families (Fable, Opus, Sonnet, Haiku)
 go through Claude; Sol and Luna through Codex; Grok through Cursor; DeepSeek
-Flash, GLM and Qwen through OpenCode. Pass the ID explicitly when spawning; Codex role
+Flash, GLM and Qwen through OpenCode; Gemini (Neon, Argon, Hydrogen, Flash)
+through Antigravity. Pass the ID explicitly when spawning; Codex role
 inheritance alone does not select the requested family. Keep the original model
 on resume.
 

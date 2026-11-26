@@ -26,8 +26,7 @@ when a budget matters.
 ## Effort is a first-class flag
 
 `--effort <low|medium|high|xhigh|max>` — pass the requested level straight
-through. This is the one CLI here where effort is a flag rather than a config
-override or a provider-specific variant.
+through.
 
 ## Read-only dispatch
 

@@ -35,7 +35,7 @@ stop. Writes go to GitHub through `gh`, and to a source with `Write` lines throu
 
 ## Stages
 
-| Stage | Role (`orchestration`) | Reads | Capability |
+| Stage | Role (`model-orchestration`) | Reads | Capability |
 | ----- | ---- | ----- | ---------- |
 | fetch | none, or [agent fetch](references/triage.md#agent-fetch) | tracker, `git` | read-only calls into the view |
 | triage | Reviewer/Judge, `medium` | the view | file read and search only; report on stdout |
@@ -87,7 +87,7 @@ results reach it only as projected enum lines, and the user reads the reports an
 
 ## Dispatch
 
-Role, model and effort per `orchestration`; invocation per `model-dispatch`'s Claude CLI
+Role, model and effort per `model-orchestration`; invocation per `model-dispatch`'s Claude CLI
 reference. v1 runs every shell stage with Claude Code as a standalone process: a native subagent
 would inherit this session's tools, permissions and context. Other CLIs are later.
 
@@ -240,6 +240,6 @@ on stdin; titles are built from projected fields only.
   invoked; `disable-model-invocation` blocks that.
 - **Git after a stage**: coordinator `add`, `commit`, `worktree` and `push` take
   `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, against mistakes only.
-- **Retries**: one corrected retry per stage, then stop and report, per orchestration.
+- **Retries**: one corrected retry per stage, then stop and report, per `model-orchestration`.
 - **Two machines** can both claim an item before its draft PR exists; the second push is
   rejected and stops. Attended v1 accepts that.
