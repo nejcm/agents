@@ -30,6 +30,7 @@ fetch_items() {
   for n in "$@"; do
     gh issue view "$n" --repo "$repo" --json number,title,body,author,createdAt,labels,comments,url,state,assignees \
       > "$view/input/items/$n.json"
+    python3 -I -c "$record_py" trust "$view/trust.jsonl" --item "${repo%/*}" "$view/input/items/$n.json"
   done
 }
 
@@ -87,8 +88,14 @@ fetch_context() {
 for f, cap in (("issues", 500), ("prs", 300)):
     if len(json.load(open(f"{sys.argv[1]}/{f}.json"))) >= cap:
         open(f"{sys.argv[1]}/truncated", "a").write(f"{f}: first {cap} only\n")' "$view/input"
+  python3 -I -c "$record_py" trust "$view/trust.jsonl" "$view/input/issues.json" "$view/input/prs.json"
 }
 ```
+
+Every fetched issue and PR file passes the model-free author-trust filter, `record_py`'s `trust`
+mode in automate-factory's [`run.sh`](../../automate-factory/assets/run.sh), per its
+[safety rule](../../automate-factory/references/safety.md#steps). An attended run takes
+`record_py` from that file first: `record_py=$(sed -n "/^record_py=\$(cat <<'PY'\$/,/^PY\$/{//!p}" <run.sh path>)`.
 
 Attachments are not fetched: the analyze step has no network, so the report says which ones went
 unread.
@@ -125,6 +132,14 @@ items, print nothing. If a call fails, stop.
 ```
 
 ```bash
+# run.sh's model environment check; the server's ${VAR} references stay for it. Attended: no check.
+mcp_env() {
+  hidden=()
+  ! declare -F hide_env > /dev/null || if [ "${2:-}" = mcp ]; then
+    hide_env claude $(grep -o '\${[A-Za-z_][A-Za-z0-9_]*' ".factory/automations/$1.mcp.json" 2> /dev/null | tr -d '${')
+  else hide_env claude; fi
+}
+
 # $1 prefix, $2 target dir, $3 what to fetch, $4 MCP tools (empty: CLI output on stdin),
 # $5 $6 earlier reports dir and today's report name, whose judged items are skipped.
 agent_fetch() {
@@ -134,7 +149,8 @@ agent_fetch() {
 $3" || return
   [ -z "${4:-}" ] || { [ -s ".factory/automations/$1.mcp.json" ] || return
     mcp=(--mcp-config "$PWD/.factory/automations/$1.mcp.json" --allowedTools "$4"); }
-  (unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
+  mcp_env "$1" "${4:+mcp}"
+  (unset ${hidden[@]+"${hidden[@]}"} ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
     ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
     CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
     CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD
@@ -227,7 +243,8 @@ agent_write() {
   local mcp=$PWD/.factory/automations/$1.mcp.json in=${4:-/dev/null} body=""
   [ -s "$mcp" ] && [ -d "$view/skills/fix-issues" ] || return
   [ -z "$3" ] || body=", plus $3 set to the text on stdin, verbatim"
-  (unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
+  mcp_env "$1" mcp
+  (unset ${hidden[@]+"${hidden[@]}"} ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE \
     ANTHROPIC_FEDERATION_RULE_ID ANTHROPIC_ORGANIZATION_ID ANTHROPIC_BASE_URL ANTHROPIC_CUSTOM_HEADERS \
     CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_MANTLE \
     CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD

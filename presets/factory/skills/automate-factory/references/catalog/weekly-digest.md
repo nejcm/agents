@@ -18,6 +18,7 @@ Outward-facing: what shipped this week, for people outside the agent loop.
     --json number,title,author,mergedAt > "$view/input/merged.json"
   gh issue list --state all --search "updated:>=$since" --limit 500 \
     --json number,title,state,createdAt,closedAt > "$view/input/issues.json"
+  python3 -I -c "$record_py" trust "$view/trust.jsonl" "$view/input/merged.json" "$view/input/issues.json"
   git log "$ref" --since="$since" --format='%h %an %s' > "$view/input/commits.txt"
   # Never copied: fix-issues, security-review, weekly-retro.
   tar -C .factory --exclude=reports/fix-issues --exclude=reports/security-review \

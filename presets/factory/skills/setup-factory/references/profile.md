@@ -18,6 +18,7 @@ Updated: <YYYY-MM-DD> (explore) at <short SHA>
   runnable from the repo root; app or package <name at path / the repo root>
 - Services: <db, queue, cache> (<source>)
 - CI: <workflow files>; jobs <names>; triggers <events>
+- CI cache risk: <release workflow> restores `<key>` that <workflow> (<trigger>) can save / none
 - Dependent repos: <name>: <why needed> (<source>)
 - Agent config: <AGENTS.md, skills, MCP servers found>
 - Agent setup: <plan step, phase splitting, independent review, CI round cap, dependency rule>:

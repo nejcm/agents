@@ -37,8 +37,8 @@ Through setup-factory's "change my factory", which runs automate-factory's [re-r
 
 Locked in the run scripts, at every write: model-free writes to destinations fixed at setup; dry
 run writes nothing external; item text reaches stages only through the checked spec; gates on the
-exact pushed commit; credential check and size cap on every final body (`sendable`); the consumed
-in-repo skills, stage skills included, in `deny`; the record contract of every stage; pause, claims; a merge only at `issue-pipeline` `merge_level` `merge`,
+exact pushed commit; credential check and size cap on every final body (`sendable`); the
+author-trust filter; secret-looking variables kept from model calls; the consumed in-repo skills, stage skills included, in `deny`; the record contract of every stage; pause, claims; a merge only at `issue-pipeline` `merge_level` `merge`,
 by the model-free rule under Merge levels, never of a revert; every other PR stays unmerged, and
 `issue-pipeline` PRs open as drafts; a PR that changes [agent instructions](#steps) stays a draft
 and is never marked ready or merged, whatever `needs_human` says. A
@@ -78,6 +78,37 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   stage outside an isolated `Environment` also needs a recorded confirmation: the machine it runs
   on is then the only boundary. Without the confirmation the run fails before any call. Agent fetch
   and agent write stay on Claude.
+- **Author trust**: model-free, before any model reads them, fetched GitHub issue and PR files
+  (`fix-issues` items and dedupe context, `pr-babysitting` snapshots, `weekly-digest` lists) go
+  through `record_py`'s `trust` mode in place. Every string loses HTML comments (an unclosed `<!--`
+  to the end), Unicode tag characters (U+E0000 to U+E007F), zero-width characters (U+200B to
+  U+200D, U+2060, U+FEFF) and bidi controls (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to
+  U+2069). A title and body whose `author_association` is `OWNER`, `MEMBER` or `COLLABORATOR`
+  stay; anyone else's become `[dropped: ...]` lines, except that these stay as labelled data (a
+  marked title, a `> `-quoted body): bots (`Bot` type or `[bot]` login), for `pr-babysitting`'s
+  review findings; the item's own author (issue and their comments), for triage to judge the
+  item; and text with no association (the `gh issue list`, `gh pr list` and `pr.json` lists).
+  `gh issue view` has no association for the issue itself, so its author's own comment supplies
+  it, or `OWNER` when the author is the repo's owner account; else it is unknown and quoted. Its
+  comments carry no author type, so a bot comment on an issue is dropped. The run record's `trust`
+  sums the counts.
+- **Model environment**: before every model call in a run script (`run_model`, agent fetch and
+  agent write), a model-free check unsets for that call each exported variable whose name contains
+  `TOKEN`, `SECRET`, `PASSW`, `CREDENTIAL` or `KEY`, or the word `AUTH`, `PAT` or `AUTHORIZATION`
+  (any case), or whose whole value is a key (the credential pattern, GitHub `ghp_`-style and
+  `github_pat_` tokens), or that holds a URL with a password (`scheme://user:pass@`). It records
+  `env: unset <name>` once per run in `gates`. Exempt: the script's `GIT_CONFIG_KEY_<n>`, the CLI's
+  own `cli_env` list (unset already) and, for agent fetch and write through MCP, the `${VAR}` names
+  in the source's `<prefix>.mcp.json`, which Claude Code expands for the MCP server; that agent has no
+  built-in tools to read them. Every CLI logs in from its own config, so it needs no secret
+  variable. Unset rather than fail: the test command and publish may need the variable and keep
+  it, and the model never sees it either way; a read-only one blocks the run. `SSH_AUTH_SOCK` goes
+  too, so a model step cannot push or sign through the SSH agent. The attended `fix-issues` run has
+  no run script, so no check: its stages see the user's environment. This bounds the environment,
+  not files: a CLI's own file tools read whatever the process can, `/proc/self/environ` included,
+  whatever its shell sandbox allows (the Claude Code GitHub Action's Read tool bypassed its Bash
+  sandbox until 2.1.128,
+  [Microsoft](https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/)).
 - **Agent fetch**: for sources without a script fetch, per `fix-issues`
   [triage.md](../../fix-issues/references/triage.md#agent-fetch). The MCP server holds the
   credential, out of the model's reach, and the agent can call only the allowlisted read tools of

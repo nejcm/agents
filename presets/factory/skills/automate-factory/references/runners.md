@@ -7,7 +7,12 @@ Paths in prompts are relative to the run's view: `repo/`, `input/`, `skills/<nam
 Runs are local only and use the runner identity's existing subscription login of each picked CLI
 (`claude`, and `codex`, `agy` or `agent` where picked); no API key or token secret. Tell the user to check their plan's terms for unattended use; these runs
 draw on the plan's usage limits. A self-hosted GitHub Actions runner on the user's own machine is
-possible but not provided.
+possible but not provided: the factory ships no workflow template. A factory step the user puts in
+a workflow writes no `actions/cache` and turns off setup actions' caching explicitly, since some
+cache by default (`actions/setup-node` for the `packageManager` in `package.json`, npm, Yarn or pnpm in v5 and npm in
+v6 and later, unless `package-manager-cache: false`;
+`actions/setup-go` v4 and later unless `cache: false`), or keys its cache under its own `factory-` prefix, so no release or publish job restores what a run wrote
+([Clinejection](https://simonwillison.net/2026/Mar/6/clinejection/)).
 
 ## Analyze command
 
@@ -364,7 +369,7 @@ appends one line to
 `.factory/reports/runs.jsonl`, written by the run script, never the model, credential-shaped text
 (`sk-ant-`, OpenAI `sk-`, Google `AIza`) replaced with `[redacted]`: `entry`, `started`, `ended` (UTC), `base`,
 `start_commit`, `end_commit` (the start commit when nothing was committed), `diff_stat`, `gates`
-(`passed` or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
+(`passed`, `env: unset <name>` from the [model environment](safety.md#steps) check, or the gate message, in order), `outcome` (`completed`, `no-change`, `published`,
 `escalated`, `blocked`, `failed`, `skipped`), `reason` (the escalation reason, `ci-cap` or `ci-unknown`, `weekly-budget` for a run `skipped` at its weekly budget, `no-risk-change` for one `skipped` by its
 [change trigger](#change-triggers), `model-unavailable` for a `failed` run whose picked CLI was missing or logged out,
 `usage-limit`, `rate-limit` or `api-error` for a `failed` run whose call reported `is_error` with that cause, `detect-error` for a [watch](#watch-trigger) tick whose `detect` failed; else `null`),
@@ -372,7 +377,8 @@ appends one line to
 disclosed), `scope`, `weighted_lines` and `instruction_change` (a pushed commit changes agent instructions), all `null` unless the gates passed, `exit_code`, `dry_run`, `calls`, `max_turns_hit` (calls that stopped at `--max-turns`), and the summed `turns`, `input_tokens`, `cache_write_tokens`,
 `cache_read_tokens`, `output_tokens`, `cost_usd` (the sum of the costs the calls reported, `null` when none did) with
 `cost_complete` (`false` when a call reported no cost), `trigger` (the entry's, else `null`), `events` (a
-[watch](#watch-trigger) fire's event keys, else `null`), and `stages`, one per call in order: `stage`,
+[watch](#watch-trigger) fire's event keys, else `null`), `trust` (the [author-trust filter](safety.md#steps)'s summed
+`dropped`, `wrapped`, `html_comments` and `invisible` counts, `null` when it did not run), and `stages`, one per call in order: `stage`,
 `cli`, `model` (`default` for the CLI default), `family` (from the model name, the CLI's name for `default`: `claude`, `opus`,
 `sonnet`, `haiku`, `fable` are `anthropic`, `gpt` and `o<digit>` `openai`, `gemini` `google`, else
 `unknown`), `effort`, `isolation` (`restricted`: confined to its directory, no shell;

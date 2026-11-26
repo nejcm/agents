@@ -115,7 +115,8 @@
         query($o:String!,$r:String!,$n:Int!,$endCursor:String){repository(owner:$o,name:$r){
         pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
         pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated path line
-        comments(first:20){nodes{author{login __typename} body}}}}}}}' > "$view/input/$n/threads.json"
+        comments(first:20){nodes{author{login __typename} authorAssociation body}}}}}}}' > "$view/input/$n/threads.json"
+      python3 -I -c "$record_py" trust "$view/trust.jsonl" "$view/input/$n/"{pr,reviews,comments,threads}.json
       sha=$(pr_field "$n" headRefOid)
       gh run list --commit "$sha" --status failure \
         --json databaseId --jq '.[].databaseId' | while read -r id; do
@@ -155,7 +156,8 @@
   }
   ```
 
-  (`gh pr checks` exits non-zero when a check failed; that is data, not an error.) The newest 20
+  (`gh pr checks` exits non-zero when a check failed; that is data, not an error.) The snapshots
+  pass the [author-trust filter](../safety.md#steps): bot findings stay, as quoted data. The newest 20
   threads bound `detect`'s cost; an unresolved bot thread older than those does not fire, though the
   fire's fetch still reads every thread.
 - **Choices**: for `comment` or `pr`, the PR number (`target`); PRs in scope: all open, or one

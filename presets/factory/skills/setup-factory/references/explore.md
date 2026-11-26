@@ -19,6 +19,17 @@ interview instead of asking now.
   env examples, connection-string env var names, ORM config).
 - **CI**: workflow files, the jobs and named steps they run, triggers, required checks if visible
   (`gh api repos/{owner}/{repo}/branches/<default>/protection` when permitted).
+- **CI cache risk**: a release or publish workflow (publishes a package, image or release, or
+  holds a registry token) that restores a cache (`actions/cache`, `actions/cache/restore`, a
+  setup action with `cache:` on or caching by default: `actions/setup-node` for the `packageManager` in
+  `package.json` (npm, Yarn or pnpm in v5, npm in v6 and later) without `package-manager-cache: false`; `actions/setup-go` v4 and later without `cache: false`) under a key or `restore-keys` prefix that an `issues`,
+  `issue_comment`, `discussion*` or `pull_request_target`-triggered workflow can save. Those run
+  on the default branch, whose cache every workflow and branch restores from; `pull_request` saves
+  stay on the PR's ref. Issue or PR text can steer such a workflow into poisoning what the release
+  builds from
+  ([Clinejection](https://simonwillison.net/2026/Mar/6/clinejection/)). Name both workflow files,
+  the key and the trigger; a finding goes to `Open gaps` and the hand-off as a fix to suggest
+  (separate key prefixes, or no cache restore in the release job).
 - **Dependent repos**: other repos this one needs at runtime or build time (git submodules,
   workspace refs, API base URLs pointing at sibling services, docs naming them).
 - **Agent config**: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, project skills (`.agents/skills`,
