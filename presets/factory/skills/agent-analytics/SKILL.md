@@ -98,7 +98,7 @@ harness dirs and count the same way. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` are 
   write paths outside the repo into a report. If a number needs explaining, say it needs a
   `retro`, not a transcript read.
 - Never patch numbers by hand; a wrong count is fixed in the parser.
-- Tests: `python3 -B -m unittest discover -s <skill-dir>/tests`.
+- Tests: `python3 -B -m unittest discover -s <skill-dir>/tests` (Python 3.9 or later).
 
 ## Repair on drift
 

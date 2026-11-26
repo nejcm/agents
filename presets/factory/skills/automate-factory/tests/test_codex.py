@@ -234,7 +234,7 @@ class CodexRunTest(unittest.TestCase):
 
     def test_provider_variables_are_unset_for_their_cli_only(self):
         test_cmd = ('test_cmd="sh tests/a_test.sh"',
-                    'test_cmd="printenv OPENAI_API_KEY GOOGLE_APPLICATION_CREDENTIALS > $LOG.env; sh tests/a_test.sh"')
+                    'test_cmd="printenv OPENAI_API_KEY > $LOG.env; printenv GOOGLE_APPLICATION_CREDENTIALS >> $LOG.env; sh tests/a_test.sh"')
         r = self.run_entry("draft-pr", models="[default]=claude:default [edit]=codex:gpt-6-luna", subs=[confirm("edit"), test_cmd],
                            extra={"OPENAI_API_KEY": "k", "GOOGLE_APPLICATION_CREDENTIALS": "/g"})
         self.assertEqual(r.returncode, 0, r.stderr)

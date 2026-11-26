@@ -104,7 +104,7 @@ ulis install --global --source . --preset react-web --yes
   run records, then local Claude Code, Codex, Cursor and Antigravity transcripts
 - `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
   catalog as local oncue jobs, so it needs Linux with a systemd user manager or macOS, `node` (18.3
-  or later) or `bun`, bash 4 or later, `python3` 3.11 or later and `timeout` or `gtimeout`
+  or later) or `bun`, bash 4 or later and `python3` 3.11 or later
   (setup-factory checks these first); report-only by default, comments and gated PRs when opted in.
   Local edit steps run as you, so run them in an isolated VM or container holding only a repo-scoped
   token. Each stage runs the model you pick on `claude`, `codex`, `agy` or `agent` (Cursor); a

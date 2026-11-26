@@ -3,7 +3,9 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
+import time
 import unittest
 
 import test_run
@@ -18,7 +20,7 @@ DETECT = r"""detect() {
 """
 CLAUDE = r"""#!/usr/bin/env bash
 echo claude >> "$LOG"
-[ -z "${KILL:-}" ] || { pkill -KILL -f "$KILL"; exit 1; }
+[ -z "${RESIST:-}" ] || trap '' TERM
 [ -z "${HOLD:-}" ] || for _ in $(seq 600); do [ ! -e "$HOLD" ] || break; sleep 0.1; done
 [ -z "${SLOW:-}" ] || sleep 1
 [ -z "${BREAK:-}" ] || { rm -f "$BREAK"; mkdir "$BREAK"; }
@@ -232,22 +234,40 @@ class WatchTest(unittest.TestCase):
         self.assertEqual(holder.returncode, 0, err)
         self.assertEqual((self.count("claude"), self.count("detect"), self.lock_pid()), (1, 1, ""))
 
-    def test_a_sigterm_mid_fire_records_a_failure_and_settles_nothing(self):
-        p = self.tick("a 1\n", extra={"HOLD": f"{self.tmp.name}/never"}, popen=True)
+    def held_fire(self, hold, **extra):
+        p = self.tick("a 1\n", extra={"HOLD": hold, **extra}, popen=True)
         for _ in range(600):
             if self.count("claude"):
                 break
             subprocess.run(["sleep", "0.1"])
-        # The whole session, as systemd signals the whole cgroup; inner timeouts sit in their own groups.
-        subprocess.run(["pkill", "-TERM", "-s", str(p.pid)])
-        p.communicate(timeout=120)
-        self.assertEqual(p.returncode, 143)
-        [rec] = self.records()
-        self.assertEqual((rec["outcome"], rec["exit_code"]), ("failed", 143))
-        self.assertEqual(self.seen(), [["1", "failed", "-"]])
-        with open(self.log + ".notify") as f:
-            self.assertEqual(f.read(), "e: a failed|\n")
-        self.assertEqual(self.lock_pid(), "")
+        return p
+
+    def test_a_sigterm_mid_fire_records_a_failure_and_settles_nothing(self):
+        # systemd signals the whole cgroup, launchd (kill or bootout) only the script, mid-call.
+        for name, send, extra in (("group", os.killpg, {}), ("script", os.kill, {}),
+                                  ("script, call ignores TERM", os.kill, {"RESIST": "1"})):
+            with self.subTest(name):
+                shutil.rmtree(f"{self.repo}/.factory/reports", ignore_errors=True)
+                for f in (self.log, self.log + ".notify"):
+                    open(f, "w").close()
+                p = self.held_fire(f"{self.tmp.name}/never", **extra)
+                sent = time.monotonic()
+                send(p.pid, signal.SIGTERM)
+                p.communicate(timeout=10)
+                self.assertEqual(p.returncode, 143)
+                self.assertLess(time.monotonic() - sent, 5, "launchd kills the script 5 seconds after its TERM")
+                [rec] = self.records()
+                self.assertEqual((rec["outcome"], rec["exit_code"]), ("failed", 143))
+                self.assertEqual(self.seen(), [["1", "failed", "-"]])
+                with open(self.log + ".notify") as f:
+                    self.assertEqual(f.read(), "e: a failed|\n")
+                self.assertEqual(self.lock_pid(), "")
+                for _ in range(50):
+                    if subprocess.run(["pgrep", "-f", f"{self.tmp.name}/bin/claude"]).returncode:
+                        break
+                    subprocess.run(["sleep", "0.1"])
+                else:
+                    self.fail("the model call outlived the script")
 
     def test_a_second_sigterm_during_cleanup_still_releases_the_lock(self):
         release = f"{self.tmp.name}/release"
@@ -259,7 +279,7 @@ class WatchTest(unittest.TestCase):
                 subprocess.run(["sleep", "0.1"])
             self.fail("timed out waiting for the run")
         wait_for(lambda: self.count("claude"))
-        subprocess.run(["pkill", "-TERM", "-s", str(p.pid)])
+        os.killpg(p.pid, signal.SIGTERM)
         wait_for(lambda: os.path.exists(self.log + ".notify"))
         subprocess.run(["kill", "-TERM", str(p.pid)])
         open(release, "w").close()
@@ -268,8 +288,12 @@ class WatchTest(unittest.TestCase):
         self.assertEqual(self.lock_pid(), "")
 
     def test_a_kill_mid_fire_counts_an_attempt_and_three_failures_give_up(self):
-        r = self.tick("a 1\n", extra={"KILL": self.path})
-        self.assertEqual(r.returncode, -9)
+        hold = f"{self.tmp.name}/release"
+        p = self.held_fire(hold)
+        os.kill(p.pid, signal.SIGKILL)
+        open(hold, "w").close()
+        p.communicate(timeout=10)
+        self.assertEqual(p.returncode, -9)
         self.assertEqual(self.seen(), [["1", "failed", "-"]])
         self.assertTrue(self.lock_pid())
         for n in range(2):

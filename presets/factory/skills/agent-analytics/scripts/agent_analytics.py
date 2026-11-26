@@ -94,7 +94,12 @@ def load(path, stats):
 
 
 def repo_roots(repo):
-    return {os.path.normpath(os.path.abspath(repo)), os.path.realpath(repo)}
+    path = os.path.normpath(os.path.abspath(repo))
+    roots = {path, os.path.realpath(repo)}
+    # The link's own target keeps a symlinked parent unresolved, as tools record it (macOS /var, /tmp).
+    if os.path.islink(path):
+        roots.add(os.path.normpath(os.path.join(os.path.dirname(path), os.readlink(path))))
+    return roots
 
 
 def in_repo(cwd, repo):

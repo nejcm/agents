@@ -31,7 +31,7 @@ need it stay unavailable.
 | --- | --- | --- | --- |
 | `python3 -c 'import sys; print(sys.version)'` | 3.11 or later | `brew install python` | distro `python3` (3.11 or later) |
 | `bash -c 'echo $BASH_VERSION'` | 4 or later | `brew install bash` | distro `bash` |
-| `command -v timeout gtimeout` | either found | `brew install coreutils` | distro `coreutils` |
+| `command -v timeout gtimeout` | either found; only interactive `fix-issues` needs it | `brew install coreutils` | distro `coreutils` |
 | `node --version`, `bun --version` | node 18.3 or later, or any bun | `brew install node` | distro `nodejs`, or bun |
 | `git --version`, `gh --version` | both found | `brew install git gh` | distro `git` and `gh` (Arch: `github-cli`) |
 

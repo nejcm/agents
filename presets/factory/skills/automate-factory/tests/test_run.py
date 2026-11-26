@@ -137,35 +137,17 @@ class RunShTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertTrue(calls[0].startswith("claude ") and "--restricted" in calls[0])
 
-    def path_without_timeout(self, gtimeout):
-        real = shutil.which("timeout") or shutil.which("gtimeout")
-        self.assertIsNotNone(real)
+    def test_runs_without_timeout_on_path(self):
         sys_bin = f"{self.tmp.name}/sys"
         os.makedirs(sys_bin)
         for d in os.environ["PATH"].split(os.pathsep):
             for n in os.listdir(d) if os.path.isdir(d) else ():
                 if n not in ("timeout", "gtimeout") and not os.path.lexists(f"{sys_bin}/{n}"):
                     os.symlink(f"{d}/{n}", f"{sys_bin}/{n}")
-        if gtimeout:
-            with open(f"{sys_bin}/gtimeout", "w") as f:
-                f.write(f'#!/bin/sh\necho "gtimeout $1" >> "$LOG"\nexec {real} "$@"\n')
-            os.chmod(f"{sys_bin}/gtimeout", 0o755)
         self.env["PATH"] = f"{self.tmp.name}/bin" + os.pathsep + sys_bin
-
-    def test_gtimeout_stands_in_for_a_missing_timeout(self):
-        self.path_without_timeout(gtimeout=True)
         r = self.run_entry("report")
         self.assertEqual(r.returncode, 0, r.stderr)
-        calls = self.calls()
-        self.assertEqual(calls[0], "gtimeout 1m")
-        self.assertTrue(calls[1].startswith("claude "))
-
-    def test_no_timeout_fails_before_any_call(self):
-        self.path_without_timeout(gtimeout=False)
-        r = self.run_entry("report")
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("needs GNU timeout or gtimeout", r.stderr)
-        self.assertEqual(self.calls(), [])
+        self.assertTrue(self.calls()[0].startswith("claude "))
 
     def test_an_old_python3_fails_before_any_call(self):
         with open(f"{self.tmp.name}/bin/python3", "w") as f:
@@ -964,13 +946,13 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         with open(os.path.join(HERE, "..", "references", "runners.md")) as f:
             [tpl] = re.findall(r"```json\n(.*?)```", f.read(), re.S)
         schedule = '{"kind": "calendar", "at": [{"weekday": "tue", "hour": 9, "minute": 30}]}'
-        fill = {"<schedule>": schedule, "<repo-root>": "/w/r", "<repo>": "r", "<entry>": "e", "<minutes>": "45"}
+        fill = {"<schedule>": schedule, "<bash>": "/b/bash", "<repo-root>": "/w/r", "<repo>": "r", "<entry>": "e", "<minutes>": "45"}
         for k, v in fill.items():
             tpl = tpl.replace(k, v)
         self.assertNotRegex(tpl, r"<[a-z -]+>")
         spec = json.loads(tpl)
         self.assertEqual((spec["namespace"], spec["name"], spec["cwd"]), ("factory-r", "e", "/w/r"))
-        self.assertEqual(spec["command"], ["/w/r/.factory/automations/e.sh"])
+        self.assertEqual(spec["command"], ["/b/bash", "/w/r/.factory/automations/e.sh"])
         self.assertEqual(spec["log"], "/w/r/.factory/automations/e.log")
         self.assertEqual(spec["timeout"], 45)
         if shutil.which("node"):
@@ -990,8 +972,8 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
     def test_launchd_renders_the_spec_without_timeout_and_refuses_one_with_it(self):
         with open(os.path.join(HERE, "..", "references", "runners.md")) as f:
             [tpl] = re.findall(r"```json\n(.*?)```", f.read(), re.S)
-        fill = {"<schedule>": '{"kind": "interval", "minutes": 30}', "<repo-root>": "/w/r", "<repo>": "r",
-                "<entry>": "e", "<minutes>": "45"}
+        fill = {"<schedule>": '{"kind": "interval", "minutes": 30}', "<bash>": "/b/bash", "<repo-root>": "/w/r",
+                "<repo>": "r", "<entry>": "e", "<minutes>": "45"}
         for k, v in fill.items():
             tpl = tpl.replace(k, v)
         spec = json.loads(tpl)
@@ -1000,7 +982,7 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("<plist ", r.stdout)
-        self.assertIn("<array><string>/w/r/.factory/automations/e.sh</string></array>", r.stdout)
+        self.assertIn("<array><string>/b/bash</string><string>/w/r/.factory/automations/e.sh</string></array>", r.stdout)
         r = subprocess.run(["node", ONCUE, "render", "-", "--backend", "launchd"], input=tpl,
                            capture_output=True, text=True)
         self.assertNotEqual(r.returncode, 0)

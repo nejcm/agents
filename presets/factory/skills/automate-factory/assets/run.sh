@@ -4,11 +4,6 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 [ ! -e .factory/pause ] || { echo paused; exit 0; }
 [ "${BASH_VERSINFO[0]:-0}" -ge 4 ] || { echo "needs bash 4 or later (macOS: brew install bash)" >&2; exit 1; }
-# macOS has no timeout; Homebrew coreutils may install it only as gtimeout.
-if ! command -v timeout > /dev/null; then
-  command -v gtimeout > /dev/null || { echo "needs GNU timeout or gtimeout (macOS: brew install coreutils)" >&2; exit 1; }
-  timeout() { gtimeout "$@"; }
-fi
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2> /dev/null ||
   { echo "needs python3 3.11 or later (macOS: brew install python)" >&2; exit 1; }
 entry=$(basename "$0" .sh)
@@ -28,10 +23,43 @@ export GIT_CONFIG_COUNT=$((n + 3)) "GIT_CONFIG_KEY_$n=core.hooksPath" "GIT_CONFI
   "GIT_CONFIG_KEY_$((n + 2))=core.quotePath" "GIT_CONFIG_VALUE_$((n + 2))=false"
 creds_re='(sk-(ant|proj|svcacct|admin)-[A-Za-z0-9_-]{16}|sk-[A-Za-z0-9]{32}|AIza[A-Za-z0-9_-]{35})'
 calls=$view/calls.jsonl gates_log=$view/gates.log began=$(date -u +%FT%TZ) run_outcome="" run_reason="" gate_block=""
-quiet="" locked="" fire="" final="" events="" keys=() values=()
+quiet="" locked="" job="" held="" fire="" final="" events="" keys=() values=()
 record_py=$(cat <<'PY'
 import json, os, re, sys
 mode, *a = sys.argv[1:]
+if mode == "timeout":
+    import signal, subprocess
+    class Stop(Exception):
+        pass
+    p, got = None, []
+    def stop(sig, _):
+        got.append(sig)
+        if p:
+            raise Stop(sig)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, stop)
+    try:
+        p = subprocess.Popen(a[1:], start_new_session=True)
+    except OSError as e:
+        print(f"timeout: {a[1]}: {e.strerror}", file=sys.stderr)
+        sys.exit(127 if isinstance(e, FileNotFoundError) else 126)
+    try:
+        if got:
+            raise Stop(got[0])
+        rc = p.wait(float(a[0].rstrip("smhd")) * {"s": 1, "m": 60, "h": 3600, "d": 86400}.get(a[0][-1], 1) or None)
+    except (subprocess.TimeoutExpired, Stop) as e:
+        stopped = isinstance(e, Stop)
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            signal.signal(sig, signal.SIG_IGN)
+        # A stop (TERM, INT) gets a short grace: launchd kills the script 5 seconds after its TERM.
+        for sig, grace in ((signal.SIGTERM, 2 if stopped else 5), (signal.SIGKILL, 0)):
+            try:
+                os.killpg(p.pid, sig)
+                p.wait(grace)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        sys.exit(128 + e.args[0] if stopped else 124)
+    sys.exit(128 - rc if rc < 0 else rc)
 def read(p):
     try:
         with open(p, encoding="utf-8", errors="replace") as f:
@@ -273,6 +301,8 @@ with open(path, "a") as f:
     f.write(re.sub(creds + "[A-Za-z0-9_-]*", "[redacted]", json.dumps(rec)) + "\n")
 PY
 )
+# GNU timeout on any OS: $2... in its own session, the whole session killed past $1, then exit 124.
+timeout() { python3 -I -c "$record_py" timeout "$@"; }
 # Existing test files changed, dependencies disclosed, scope and weighted size, once gates passed.
 disclosure() { [ -z "${gated:-}" ] || echo "${#changed[@]} $([ -s "$view/deps.md" ] && echo 1 || echo 0) $scope $weighted"; }
 instruction_change() { [ -z "${gated:-}" ] || { [ ${#instr[@]} = 0 ] && echo 0 || echo 1; }; }
@@ -300,22 +330,49 @@ seen() {
   ledger_ok "$out/seen.tsv"
   printf '%s\t%s\t%s\t%s\n' "$1" "$2" "${3:--}" "$began" >> "$out/seen.tsv"
 }
-# EXIT trap: a succeeded fire settles its events, then notifies outside a dry run; the lock clears.
+# EXIT trap: a succeeded fire settles its events and the lock clears; notify runs last, after cleanup.
 settle() {
   local i
-  if [ -n "$fire" ]; then
-    [ "$1" != 0 ] || (for i in "${!keys[@]}"; do seen "${keys[i]}" done "${values[i]}"; done) || echo "seen: done not written" >&2
-    [ "${FACTORY_DRY_RUN:-0}" = 1 ] || [ ${#notify[@]} = 0 ] ||
-      timeout 60 "${notify[@]}" "$entry: $fire $final" < /dev/null || echo "notify: exit $?" >&2
-  fi
+  [ -z "$fire" ] || [ "$1" != 0 ] ||
+    (for i in "${!keys[@]}"; do seen "${keys[i]}" done "${values[i]}"; done) || echo "seen: done not written" >&2
   [ -z "$locked" ] || python3 -I -c "$record_py" unlock "$locked" $$ || echo "lock: $locked not released" >&2
 }
+notify_fire() {
+  [ -n "$fire" ] && [ "${FACTORY_DRY_RUN:-0}" != 1 ] && [ ${#notify[@]} != 0 ] || return 0
+  timeout 60 "${notify[@]}" "$entry: $fire $final" < /dev/null || echo "notify: exit $?" >&2
+}
 # With a weekly budget, a run whose spend was not recorded must not look clean.
-trap 'rc_=$?; trap : TERM; [ -n "$quiet" ] || record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }
-  settle $rc_; rm -rf "$view"; git worktree prune; exit $rc_' EXIT
-# Without it a SIGTERM (stop, job timeout) reaches the EXIT trap with the last status, often 0;
-# that trap swaps it for a no-op, so a second SIGTERM to this script cannot cut its cleanup short.
-trap 'exit 143' TERM
+trap 'rc_=$?; trap : TERM INT; [ -n "$quiet" ] || record $rc_ || { echo "record: run not recorded" >&2; [ -z "${weekly_usd:-}" ] || rc_=1; }
+  settle $rc_; rm -rf "$view"; git worktree prune; notify_fire; exit $rc_' EXIT
+# Without them a SIGTERM (stop, job timeout) reaches the EXIT trap with the last status, often 0; the EXIT
+# trap swaps them for no-ops, so a second signal cannot cut its cleanup short. The owned call's group gets
+# 3 seconds to write its outcome: launchd kills this script 5 seconds after its TERM.
+stop() {
+  [ "$job" != launching ] || { held=$1; return; }
+  if [ -n "$job" ]; then
+    kill -TERM -- "-$job" 2> /dev/null || :
+    for _ in {1..30}; do kill -0 -- "-$job" 2> /dev/null || break; sleep 0.1; done
+  fi
+  exit "$1"
+}
+trap 'stop 143' TERM
+trap 'stop 130' INT
+# Runs "$@" in a subshell; from the main shell as its own background process group, since bash runs the
+# TERM trap only after a foreground command ends, and launchd kills this script 5 seconds after its TERM.
+own() {
+  [ "$BASHPID" = $$ ] || { (set -e; "$@"); return; }
+  local rc=0
+  held="" job=launching
+  set -m
+  (set -e; "$@") &
+  job=$!
+  set +m
+  [ -z "$held" ] || stop "$held"
+  wait "$job" || rc=$?
+  job=""
+  return "$rc"
+}
+run_tests() { cd "$1" && timeout "${minutes}m" sh -c "$test_cmd"; }
 block() { echo "gate: $*" >&2; printf '%s\n' "$*" >> "$gates_log"; gate_block=1; exit 1; }
 mkdir "$view/repo" "$view/input" "$view/skills"
 ref="<base>" repo="<owner/repo>"
@@ -527,6 +584,7 @@ confirm() {
     block "model $2 on $1 outside an isolated environment needs a recorded confirmation"
   [ "${isolation[${2%%:*}:$3]}" != weak ] || [[ ! $1 =~ ^(analyze|spec)$ ]] || block "model $2 on $1 has weak isolation and needs a recorded confirmation"
 }
+cli_ready() { unset ${cli_env[$1]-}; "${1}_ready"; }
 claude_ready() { :; }
 codex_ready() { codex login status > /dev/null 2>&1; }
 # /usage is answered by the CLI without a model call; logged out, it waits for a browser login.
@@ -606,6 +664,8 @@ agent_run() {
   return "$rc"
 }
 
+call_cli() { cd "$1" && shift && unset ${cli_env[$cli]-} && "${cli}_run" "$@"; }
+
 # $1 stage, $2 its pick, $3 tools (none: tool-less; Bash: exec, with Edit: write; else read-only), $4 working
 # directory, $5 the output, $6 the prompt. Stdin goes to the call, the result to stdout.
 run_model() {
@@ -619,12 +679,12 @@ run_model() {
   iso=${isolation[$cli:$kind]}
   confirm "$1" "$2" "$kind"
   [ "$iso" != weak ] || prompt+=$'\n'"$weak_rules"
-  if ! command -v "$cli" > /dev/null || ! (unset ${cli_env[$cli]-}; "${cli}_ready"); then
+  if ! command -v "$cli" > /dev/null || ! own cli_ready "$cli"; then
     echo "model-unavailable: $cli for $1 is missing or logged out" >&2
     run_reason=model-unavailable outcome=deferred reason=model-unavailable
     exit 1
   fi
-  (cd "$4" && unset ${cli_env[$cli]-} && "${cli}_run" "$kind" "$2" "$3" "$5" "$prompt") || rc=$?
+  own call_cli "$4" "$kind" "$2" "$3" "$5" "$prompt" || rc=$?
   python3 -I -c "$record_py" json "$5" "$calls" "$1" "$2" "$iso" "$rc" || exit 1
   return "$rc"
 }
@@ -969,7 +1029,7 @@ refactor_tests() {
   [ ${#refactors[@]} = 0 ] || ! declare -F reserve > /dev/null || reserve ${#refactors[@]}
   for c in ${refactors[@]+"${refactors[@]}"}; do
     git worktree add -q --detach "$view/at" "$c"
-    (cd "$view/at" && timeout "${minutes}m" sh -c "$test_cmd") > "$view/at.log" 2>&1 ||
+    own run_tests "$view/at" > "$view/at.log" 2>&1 ||
       block "tests failed at refactor commit ${c:0:12}, exit $?"
     git worktree remove --force "$view/at"
   done
@@ -1047,7 +1107,7 @@ gates() {
     > "$view/deps.md" 2> "$view/deps.err" ||
     block "$(tail -n 1 "$view/deps.err")"
   scope_gate
-  (cd "$work" && timeout "${minutes}m" sh -c "$test_cmd") > "$out/$day-tests.log" 2>&1 ||
+  own run_tests "$work" > "$out/$day-tests.log" 2>&1 ||
     block "tests failed, exit $?"
   refactor_tests
   if [ ${#changed[@]} -gt 0 ]; then
@@ -1055,7 +1115,7 @@ gates() {
     git worktree add -q --detach "$view/old" "$commit"
     git -C "$view/old" checkout -q "$start" -- "${changed[@]}"
     rc=0
-    (cd "$view/old" && timeout "${minutes}m" sh -c "$test_cmd") > "$view/old.log" 2>&1 || rc=$?
+    own run_tests "$view/old" > "$view/old.log" 2>&1 || rc=$?
     { printf '## Modifies existing tests\n\nNeeds human approval.\n\n'
       clip 50 < "$view/reasons.md"
       if [ "$rc" = 124 ]; then

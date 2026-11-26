@@ -48,7 +48,7 @@ propose it as a diff:
   "namespace": "factory-<repo>",
   "name": "<entry>",
   "description": "factory <entry> for <repo>",
-  "command": ["<repo-root>/.factory/automations/<entry>.sh"],
+  "command": ["<bash>", "<repo-root>/.factory/automations/<entry>.sh"],
   "cwd": "<repo-root>",
   "log": "<repo-root>/.factory/automations/<entry>.log",
   "schedule": <schedule>,
@@ -59,6 +59,10 @@ propose it as a diff:
 On macOS, oncue's launchd backend refuses `timeout`, so the spec omits it: model calls and test
 runs keep their own `timeout`, but nothing bounds the whole run.
 
+`<bash>`: the absolute path of the bash 4 or later found in [step 1](../SKILL.md#steps), as found, not
+resolved (Homebrew's link survives `brew upgrade`), so the job does not depend on which `bash` its `PATH`
+finds first.
+
 `<oncue>` is `node <skill dir>/assets/oncue.mjs` (Node 18.3 or later) or the same with `bun`, `<skill
 dir>` this skill's resolved directory; run without arguments it prints its usage. Never read the
 bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changing nothing.
@@ -66,7 +70,8 @@ bundle. `<oncue> render <spec>` prints the scheduler files a spec makes, changin
 `<repo>`: `<name>-<hash>`, so two checkouts get different namespaces. `<name>` is the repo
 root's directory name, lowercased, each run of characters other than `a-z` and `0-9` replaced by
 `-`, cut to 16 characters, leading and trailing `-` removed (empty: `<repo>` is `<hash>` alone);
-`<hash>` the first 6 characters of `git rev-parse --show-toplevel | tr -d '\n' | sha256sum` (`shasum -a 256` on macOS). A
+`<hash>` the first 6 characters of `git rev-parse --show-toplevel | tr -d '\n' | sha256sum` (`shasum -a 256` where
+`sha256sum` is missing, as on older macOS). A
 namespace holds 31 characters.
 
 `<schedule>`: the entry's schedule ([per-entry settings](../SKILL.md#steps)) as an oncue schedule,
@@ -76,6 +81,8 @@ local time: `{"kind": "interval", "minutes": <n>}`, or `{"kind": "calendar", "at
 weekdays" is five entries, `mon` to `fri` at `hour` 8, `minute` 0; "hourly on weekdays, 09:00 to
 18:00" one entry per weekday and hour. A schedule neither can express gets the nearest one, shown to
 the user. A [watch](#watch-trigger) entry: `{"kind": "interval", "minutes": <interval>}`.
+On launchd, an interval that divides 60 fires on the clock (minutes 0, n, 2n and so on of each hour), so
+the first fire can come sooner than n minutes after install; any other interval counts from install.
 
 `<minutes>` in the spec's `timeout` is the per-run minutes; for
 `issue-pipeline` at `draft-pr`, the entry's `run_minutes` plus 10, while the script keeps the per-stage `<minutes>`. oncue accepts 1 to
@@ -84,9 +91,8 @@ the user. A [watch](#watch-trigger) entry: `{"kind": "interval", "minutes": <int
 After the user confirms, the [smoke run](#smoke-run) installs it, and after a pass:
 `<oncue> install .factory/automations/<entry>.job.json --capture-path <tools>`, `<tools>`
 comma-separated: `claude`, `codex`, `agy` and `agent` when picked, `gh`, `git`, `python3`, the Run
-recipe's tools, then `bash` and `timeout` (`gtimeout` on macOS without `timeout`), and after them
-every tool above whose `command -v` is in `/usr/bin` or `/bin`. The job sees no login-shell `PATH`;
-`--capture-path` sets one from each tool's `PATH` directory in that order, unresolved (a
+recipe's tools, and after them every tool above whose `command -v` is in `/usr/bin` or `/bin`.
+The job sees no login-shell `PATH`; `--capture-path` sets one from each tool's `PATH` directory in that order, unresolved (a
 version-manager wrapper dispatches on its name), then `/usr/local/bin:/usr/bin:/bin`, so a system
 directory listed early would shadow a newer `python3` or a version manager's copy. It prints
 `installed`, or `unchanged` when the job already matches. Remove an entry with `<oncue> uninstall
@@ -393,7 +399,10 @@ spec](#local-oncue-job) with the variable added to its `env` and `schedule` set 
 nothing starts it but `run`, and installing it over an entry's live job pauses that schedule until
 the real spec is installed again. The step then runs `<oncue> run factory-<repo> <entry> --wait`,
 which waits for that run and exits with its exit code (124, `timed out`, past `timeout`; never on launchd). Exit 2 to 4
-with an `oncue:` line on stderr is oncue's own error: report it. The run's output is what it
+with an `oncue:` line on stderr is oncue's own error: report it. On launchd, `--wait` returns at once, with
+exit 4 or the previous run's exit code, so there `run` goes without `--wait` (it prints `started`), and
+`launchctl print gui/$(id -u)/factory-<repo>.<entry>` is polled until `runs` is above its value before
+`run` and `state = not running`; `last exit code` is then the run's exit code. The run's output is what it
 appended to `<entry>.log`.
 
 First, `FACTORY_CHECK_MODELS=1`: the script makes one tool-less check call per picked model (models

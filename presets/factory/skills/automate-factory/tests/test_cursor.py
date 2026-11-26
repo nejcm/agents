@@ -146,7 +146,7 @@ class CursorRunTest(unittest.TestCase):
 
     def test_an_unwritten_deny_config_fails_the_call_before_it_runs(self):
         with open(f"{self.tmp.name}/bin/mkdir", "w") as f:
-            f.write('#!/bin/sh\n[ "$2" != .cursor ] || exit 1\nexec /usr/bin/mkdir "$@"\n')
+            f.write('#!/bin/sh\n[ "$2" != .cursor ] || exit 1\nexec /bin/mkdir "$@"\n')
         os.chmod(f"{self.tmp.name}/bin/mkdir", 0o755)
         r = self.run_entry("report", models=f"[default]={PICK}", subs=[confirm("analyze")])
         self.assertNotEqual(r.returncode, 0)
@@ -250,13 +250,10 @@ class CursorPipelineTest(unittest.TestCase):
             ("review", "claude", "anthropic", "restricted")])
 
     def test_a_stage_timeout_blocks_the_item_and_the_queue_goes_on(self):
-        with open(f"{self.tmp.name}/bin/timeout", "w") as f:
-            f.write('#!/bin/sh\nif [ "$2" = agent ]; then shift; exec /usr/bin/timeout 2s "$@"; fi\nexec /usr/bin/timeout "$@"\n')
-        os.chmod(f"{self.tmp.name}/bin/timeout", 0o755)
         self.env["AGENT_SLOW"] = "1"
         self.gh_state({1: {}, 2: {}}, [])
         r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b"}}, models=f"[default]=claude:default [reproduce]={PICK}",
-                              subs=[ISOLATED])
+                              subs=[ISOLATED, ('timeout "${t}m" agent', 'timeout 2s agent')])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.outcome("1")[:2], ("blocked", "reproduce"))
         self.assertEqual(self.outcome("2")[0], "fixed")

@@ -19,7 +19,9 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    `Automations` section ([`../setup-factory/references/profile.md`](../setup-factory/references/profile.md)):
    - oncue: Linux or macOS, `node` (18.3 or later) or `bun` on `PATH`, and `<oncue> list
      factory-<repo>` exits 0, so systemd or launchd answers ([runners.md](references/runners.md#local-oncue-job));
-     `bash --version` 4 or later, `python3` 3.11 or later and `timeout` or `gtimeout` on `PATH`.
+     a bash 4 or later: the first of `bash -c 'type -ap bash'`, then `/opt/homebrew/bin/bash` and
+     `/usr/local/bin/bash`, whose `--version` is 4 or later (macOS: `/bin/bash` is 3.2 and often first),
+     recorded as the job spec's `<bash>`; `python3` 3.11 or later.
    - Isolated analyze for local runners: Claude Code with the flags and no managed hooks, per
      [`references/runners.md`](references/runners.md#analyze-command).
    - Other CLIs: `codex`, `agy` and `agent` versions and logins (`codex login status`, `agy -p /usage`,
@@ -144,9 +146,8 @@ delete its line from the `Automations` section; its files stay.
 ## Scope
 
 - Written and activated: one local oncue job (systemd user on Linux, launchd agent on macOS; the run
-  script needs bash 4 or later, `python3` 3.11 or later and GNU `timeout` or `gtimeout`, on macOS
-  from Homebrew `bash`, `python` and `coreutils`), under the user's subscription login of each
-  picked CLI (`claude`, `codex`, `agy`, `agent`).
+  script needs bash 4 or later and `python3` 3.11 or later, on macOS from Homebrew `bash` and
+  `python`), under the user's subscription login of each picked CLI (`claude`, `codex`, `agy`, `agent`).
 - Write levels: `report`, the default; `comment`; `draft-pr` and `pr`, per
   [`references/safety.md`](references/safety.md#steps).
 - Later, not offered: harness schedulers (Claude routines, Cursor Automations) and external

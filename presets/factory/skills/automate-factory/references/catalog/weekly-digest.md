@@ -28,7 +28,7 @@ Outward-facing: what shipped this week, for people outside the agent loop.
   with `post_check() { gh issue view <n> --repo <owner/repo> > /dev/null; }`. Elsewhere, a
   source's `post` write per `fix-issues`
   [write back](../../../fix-issues/references/triage.md#write-back):
-  `post() { bash .factory/automations/<prefix>.post.sh < "$out/$day.md"; }`, or for MCP
+  `post() { "$BASH" .factory/automations/<prefix>.post.sh < "$out/$day.md"; }`, or for MCP
   `post() { agent_write <prefix> <tool> <body argument> "$out/$day.md" '<fixed JSON>'; }`, with
   `post_check` reading the destination with the source's `Fetch` command or `agent_fetch` (which
   needs `skills=("<skill-path:fix-issues>")`). A post-only destination with no `Fetch` line gets

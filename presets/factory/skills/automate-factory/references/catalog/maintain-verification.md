@@ -47,7 +47,8 @@
       paths log -z --format= --name-only --no-renames "$last..$ref"
       ! touches "${globs[@]}" < "$view/paths" || return 0
     done
-    { printf 'still flagged: %s\n' "$(paste -sd, "$view/input/flagged.txt" | sed 's/,/, /g; s/^$/none/')"
+    f=$(paste -sd, "$view/input/flagged.txt" | sed 's/,/, /g')
+    { printf 'still flagged: %s\n' "${f:-none}"
       printf 'Nothing since %s touched a mapped feature or the verify skill; details in the last full report.\n' "${last:0:12}"
       [ -s "$view/input/flagged.txt" ] && echo "Maintenance due" || echo "No drift signals"; } >> "$out/$day.md"
     run_outcome=skipped run_reason=no-risk-change

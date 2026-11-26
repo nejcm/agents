@@ -23,7 +23,7 @@ done
 fx=$PWD/.factory/reports/fix-issues
 items=$fx/items
 
-try() { set +e; (set -e; "$@"); set -e; }
+try() { set +e; own "$@"; set -e; }
 tag() { case $1 in *[!0-9]*) echo "$1" ;; *) echo "#$1" ;; esac; }
 row() { [ ! -f "$1" ] || awk -v k="$2" '$1 == k {v = $2} END {print v}' "$1"; }
 finish() { outcome=$1 reason=$2; exit 0; }
@@ -112,7 +112,7 @@ red_green() {
   reserve 1
   git worktree add -q --detach "$item/red" "$start"
   git -C "$item/red" checkout -q "$commit" -- "${added[@]}"
-  (cd "$item/red" && timeout "${minutes}m" sh -c "$test_cmd") > "$item/red.log" 2>&1 || rc=$?
+  own run_tests "$item/red" > "$item/red.log" 2>&1 || rc=$?
   case $rc in
     0) red="New tests pass on base: they do not capture the bug, review closely." ;;
     124) red="New tests timed out on base after $minutes minutes: no evidence." ;;
@@ -221,7 +221,7 @@ send() {
     err-*) n=$(row "$fx/tickets.tsv" "${1#err-}"); [ -n "$n" ] || linked=no-ticket ;;
     *[!0-9]*)
       if [ -f ".factory/automations/$p.comment.sh" ]; then
-        bash ".factory/automations/$p.comment.sh" "${1#"$p"-}" < "$2"
+        "$BASH" ".factory/automations/$p.comment.sh" "${1#"$p"-}" < "$2"
       else
         linked=no-comment-write
       fi ;;
@@ -293,7 +293,7 @@ verify_item() {
     finish skipped fixed-ref
   fi
   git merge-base --is-ancestor "$after" "$tip" || finish skipped not-ancestor
-  [ "$k" = 1 ] || [ "$(git rev-list --parents -n 1 "$after" | wc -w)" = 3 ] || finish skipped ambiguous-baseline
+  [ "$k" = 1 ] || [ "$(git rev-list --parents -n 1 "$after" | wc -w)" -eq 3 ] || finish skipped ambiguous-baseline
   before=$(git rev-parse -q --verify "$after^1") || finish skipped root-commit
   commit=$after
 
