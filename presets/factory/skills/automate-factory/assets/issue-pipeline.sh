@@ -27,6 +27,8 @@ try() { set +e; own "$@"; set -e; }
 tag() { case $1 in *[!0-9]*) echo "$1" ;; *) echo "#$1" ;; esac; }
 row() { [ ! -f "$1" ] || awk -v k="$2" '$1 == k {v = $2} END {print v}' "$1"; }
 finish() { outcome=$1 reason=$2; exit 0; }
+# Embedded records sit under the body's ## sections: their headings outside code fences drop two levels, to H6 at most.
+nest() { awk '/^(```|~~~)/ {f = !f} !f && /^#+( |$)/ && match($0, /^#+/) && RLENGTH < 7 {$0 = substr("######", 1, RLENGTH < 4 ? RLENGTH + 2 : 6) substr($0, RLENGTH + 1)} 1'; }
 ran() { [ "$1" = 124 ] || { outcome=deferred reason=runner-error; exit 1; }; }
 time_for() { [ $((run_minutes * 60 - SECONDS)) -ge $(($1 * 60)) ]; }
 # Optional test runs (refactor commits, old tests, new tests on base) are known only after the fix;
@@ -164,11 +166,11 @@ body() {
     *[!0-9]*) echo "Source item: $id" ;;
     *) echo "Fixes #$id" ;;
   esac
-  printf '\n## Spec\n\n'; cat "$item/spec.md"
-  printf '\n## Reproduction\n\n'; clip 60 < "$item/repro.md"
-  printf '\n## Root cause and fix\n\n'; clip 60 < "$item/fix.md"
+  printf '\n## Spec\n\n'; nest < "$item/spec.md"
+  printf '\n## Reproduction\n\n'; clip 60 < "$item/repro.md" | nest
+  printf '\n## Root cause and fix\n\n'; clip 60 < "$item/fix.md" | nest
   printf '\n## Tests\n\nGates passed on the fix: allowlist, deny list, size ceiling, scope and the test command.\n%s\n' "$red"
-  printf '\n## Verification\n\n'; clip 60 < "$item/verify.md"
+  printf '\n## Verification\n\n'; clip 60 < "$item/verify.md" | nest
   case $merge_level in
     draft) printf '\n## Shadow review\n\nAdvisory; nothing merges on it.\n' ;;
     ready) printf '\n## Shadow review\n\nAll approve and nothing needs a human: marked ready for review. Nothing merges on it.\n' ;;
@@ -267,7 +269,7 @@ escalate() {
   why=${BASH_REMATCH[1]}
   echo "$id escalated: $why"
   { printf 'Needs a human: a scheduled run stopped at %s on %s (escalated: %s) instead of guessing.\n' "$step" "$start" "$why"
-    printf '\n## What is missing\n\n'; clip 60 < "$1"
+    printf '\n## What is missing\n\n'; clip 60 < "$1" | nest
     printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
   step=link
   [ -n "$(row "$fx/linked.tsv" "$id")" ] || send "$id" "$item/body.md" escalated
@@ -278,8 +280,8 @@ escalate() {
 repro_item() {
   step=link
   { printf 'Reproduced on %s by a scheduled run. %s\n' "$start" "${1:-No fix was attempted.}"
-    printf '\n## Spec\n\n'; cat "$item/spec.md"
-    printf '\n## Reproduction\n\n'; clip 60 < "$item/repro.md"
+    printf '\n## Spec\n\n'; nest < "$item/spec.md"
+    printf '\n## Reproduction\n\n'; clip 60 < "$item/repro.md" | nest
     printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
   sendable "$item/body.md" || finish deferred dry-run
   send "$id" "$item/body.md" "$start"
@@ -334,8 +336,8 @@ verify_item() {
       printf 'Not confirmed: the merged fix %s (%s) against its parent %s ended `%s`. Not re-filed.\n' \
         "$1" "$after" "$before" "$v"
     fi
-    printf '\n## Spec\n\n'; cat "$item/spec.md"
-    printf '\n## Verification\n\n'; clip 60 < "$item/verify.md"
+    printf '\n## Spec\n\n'; nest < "$item/spec.md"
+    printf '\n## Verification\n\n'; clip 60 < "$item/verify.md" | nest
     printf '\nEvidence: `.factory/reports/fix-issues/items/%s/evidence/` on the runner.\n' "$id"; } > "$item/body.md"
   sendable "$item/body.md" || finish deferred dry-run
 

@@ -93,7 +93,8 @@ else:
             open("tests/run_all.sh", "a").write("true\n")
         if s.get("grow_test"):
             open("tests/run_all.sh", "a").write(f"test -f src/{i}\n")
-        put(ev + "/fix.md", "root cause\n" + ("test-change: tests/run_all.sh: tidy\n" if s.get("edit_test") else "")
+        put(ev + "/fix.md", ("# Fix\n\n## Tests\n\n##### Deep\n\n```\n# kept\n```\n" if s.get("headed") else "")
+            + "root cause\n" + ("test-change: tests/run_all.sh: tidy\n" if s.get("edit_test") else "")
             + "scope: minimal\nfix: outcome=" + s.get("fix", "changed") + "\n")
     else:
         put(ev + "/verify.md", "runs\nverify: outcome=" + s.get("verify", "confirmed") + "\n")
@@ -1347,6 +1348,20 @@ sys.exit(1 if spec else p.returncode)
         [pr] = self.gh()["prs"]
         for h in SPEC_HEADINGS:
             self.assertIn(h, pr["body"])
+
+    def test_record_headings_nest_under_the_body_sections(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"headed": True}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        [pr] = self.gh()["prs"]
+        body = pr["body"].splitlines()
+        self.assertEqual(body.count("## Tests"), 1)
+        self.assertEqual([x for x in body if x in SPEC_HEADINGS], SPEC_HEADINGS)
+        self.assertIn("### Fix", body)
+        self.assertIn("#### Tests", body)
+        self.assertIn("#### Preconditions and data", body)
+        self.assertIn("# kept", body)
+        self.assertIn("###### Deep", body)
 
     def test_built_in_stages_carry_the_same_record_contract(self):
         self.gh_state({1: {}}, [])

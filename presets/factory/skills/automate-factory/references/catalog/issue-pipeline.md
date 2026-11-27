@@ -130,7 +130,9 @@ retried, and an item's one comment is the only thing its issue hears.
   one from `items/<id>/body.md` on the next run, and one with no `linked.tsv` row its link comment.
 - **PR body**: after the automation line, `Fixes #<n>` (or `Source item: <prefix>-<id>`), then
   `## Spec`, `## Reproduction`, `## Root cause and fix`, `## Tests` (gates and the red → green
-  line), `## Verification`, `## Shadow review` and the evidence path.
+  line), `## Verification`, `## Shadow review` and the evidence path. The embedded spec and stage
+  records (here and in comments) have their headings outside code fences moved two levels down,
+  to H6 at most.
 - **`linked.tsv`**: `<id> <value>` after the item's comment, sent or not; a row stops any later
   comment for that item. The value is the PR URL for a link, the fix commit in verify mode, the
   run's base commit for a reproduction, or `escalated`.
