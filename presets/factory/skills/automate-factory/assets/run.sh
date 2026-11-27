@@ -1062,8 +1062,9 @@ leaves open, or work outside this automation, do not guess: say what is missing 
 line escalated: <credentials|prod-access|ambiguous|out-of-scope>. Before that, one line
 $scope_rule One line per
 existing test file you changed, deleted or renamed (old path):
-test-change: <path from the repo root>: <one-line reason>; a file you only added lines to (new
-tests) needs none while its old version still passes. Prefer existing code and the standard
+test-change: <path from the repo root>: <one-line reason>; a file you only added lines to needs
+none while its old version still passes, so when adding tests never edit an existing line: put a
+new import on its own new line. Prefer existing code and the standard
 library; add a package only for substantial functionality, with one line per new package:
 dependency: <name> <why not in-house>."
   run_model edit "$(pick edit)" "$tools" "$work" "$view/edit.json" "$prompt" < /dev/null > "$view/summary.md" || rc=$?

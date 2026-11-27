@@ -157,8 +157,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   none with a control character, quote or backslash, which Git prints quoted; every
   changed, deleted or renamed existing test file (a rename counts as its old path), and only
   those, has exactly one `test-change` line whose path matches it exactly and whose reason is not
-  blank (a file that only gained lines needs none while its start version passes on the new code,
-  or the gate blocks; with a line it counts as changed); added test lines carry no skip or focus marker; every new package has a `dependency`
+  blank (a file that only gained lines needs none while its start version passes on the new code, or the
+  gate blocks; with a line it counts as changed; so the edit prompts say to add tests without editing
+  an existing line, a new import going on its own new line); added test lines carry no skip or focus marker; every new package has a `dependency`
   line; exactly one valid `scope` line; the commits descend linearly from the start and touch no
   path the final diff leaves unchanged; the fixed test command passes in the checkout; no
   credential-shaped text (`sk-ant-`, OpenAI `sk-`, Google `AIza` keys) in the diff, commit messages, summary or disclosure sections.

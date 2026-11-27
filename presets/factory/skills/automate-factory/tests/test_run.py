@@ -416,6 +416,14 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         self.assertEqual((len(creates), labels, self.records()[-1]["test_changes"]), (1, [], 0))
         self.assertNotIn("Modifies existing tests", self.body())
 
+    def test_an_extended_import_line_needs_a_reason_but_a_new_import_line_does_not(self):
+        self.second_test("import() { :; }\nimport a\n")
+        r, _, _ = self.edit_run("{ echo 'import() { :; }'; echo 'import a b'; echo 'test -f src/w'; } > tests/b_test.sh")
+        self.assert_blocked(r, "no test-change reason for tests/b_test.sh\n")
+        r, labels, creates = self.edit_run("{ echo 'import b'; echo 'test -f src/w'; } >> tests/b_test.sh")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((len(creates), labels, self.records()[-1]["test_changes"]), (1, [], 0))
+
     def test_an_appended_test_is_checked_apart_from_a_disclosed_test_change(self):
         self.second_test()
         r, labels, creates = self.edit_run("echo 2 > src/v; echo 'grep -qx 2 src/v' > tests/a_test.sh; "
