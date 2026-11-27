@@ -437,6 +437,17 @@ class Select(unittest.TestCase):
         self.assertEqual(self.select(mixed, items, extra=["--trust", "#"]),
                          [["1", "f1", "fix"], ["2", "f1", "same-feature"], ["3", "f3", "verify", "#9"]])
 
+    def test_skipped_items_take_no_feature_slot_or_cap(self):
+        day = "2026-11-0%dT08:00:00Z"
+        items = {str(n): gh_item(n, day % n) for n in range(1, 4)}
+        verdicts = [("1", "fixed", "f1", "#12"), ("2", "new-bug", "f1", "none"), ("3", "new-bug", "f3", "none")]
+        self.assertEqual(self.select(verdicts, items, cap=1, extra=["--trust", "#", "--skip", "1=pr-exists"]),
+                         [["1", "f1", "pr-exists"], ["2", "f1", "fix"], ["3", "f3", "cap"]])
+        with self.assertRaises(SystemExit):
+            self.select(verdicts, items, extra=["--skip", "1=$(x)"])
+        with self.assertRaises(SystemExit):
+            self.select(verdicts, items, extra=["--skip", "1=fix"])
+
     def test_no_verify_leaves_fixed_to_the_report_without_using_cap_or_feature(self):
         day = "2026-11-0%dT08:00:00Z"
         items = {str(n): gh_item(n, day % n) for n in range(1, 4)}

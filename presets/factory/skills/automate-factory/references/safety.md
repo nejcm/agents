@@ -268,7 +268,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   it before each item and defers the rest.
 - **Dry run**: no post or publish. Writes go to `.factory/reports/`, the run's temp view under
   `.factory/tmp/` and its worktree, nothing else; `issue-pipeline` also uses its claim under
-  `.factory/reports/fix-issues/tmp/` and stages only the first selected item, with no ticket, link
+  `.factory/reports/fix-issues/tmp/` and runs the stages (reproduce through review) on only the first
+  selected item, with no ticket, link
   or state rows, and no merge, revert or fate lookup.
 - **Fixed destination**: the post and publish steps' targets (`--repo <owner/repo>`, remote URL,
   branch, issue or PR number, channel, team) are written into the run script, or the

@@ -3,7 +3,8 @@
 - **Trigger**: daily, 08:00 on weekdays.
 - **Requires**: the profile's source-of-truth tracker with a `Fetch` line in `Integrations`; `gh`
   logged in for PRs; a committed `verify-<app>` skill recorded in the profile's `Verification`
-  section; `fix-issues` installed, and `debugging` for `draft-pr`.
+  section; `fix-issues` installed (it ships in this preset and is found only after `ulis install`; see
+  [loading other skills](../../../setup-factory/SKILL.md#loading-other-skills)), and `debugging` for `draft-pr`.
 - **Runners**: local. The follow-up reads the report from this checkout.
 - **Input**: open issues created since the newest earlier report, less a day of overlap, that no
   earlier report judged (at `draft-pr`, also deferred and labelled ones); plus 90 days of issues,
@@ -67,8 +68,8 @@
 - **Choices**: where to post at `comment`. At `draft-pr`: `run_minutes` (the
   profile's pipeline budget, default 240); `cap` (its item count, default 3); `flow`, `fix` (default) or `repro-only`;
   `verify_fixed`, `on` (default) or `off`; `trust`, one array element per `Fetch` line with
-  `trust trusted`: `#` for `gh`, else its prefix, `trust=()` for none; `label`, the `trust label`
-  name of the `gh` line, or empty; `allow` globs; `reviewers`, the `review` stage's
+  `trust trusted` (alone or with a label): `#` for `gh`, else its prefix, `trust=()` for none; `label`, the
+  `label` name of the `gh` line's trust, or empty; `allow` globs; `reviewers`, the `review` stage's
   [picks](../runners.md#models), best other than the `fix` pick (default `claude:sonnet`; setup recommends one Claude plus one other-family pick), each verdict recorded with its CLI and family,
   at least two for `merge`; `merge_level`, `draft` (default), `ready` or `merge`, offered per
   [interview](../../../setup-factory/references/interview.md) only with the entry's agreement

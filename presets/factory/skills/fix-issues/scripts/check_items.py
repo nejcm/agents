@@ -175,9 +175,12 @@ def check_spec(features, feature, stdin):
     sys.stdout.write("\n".join(lines) + "\n")
 
 
-def select(report, items, cap, trust, label, verify):
+def select(report, items, cap, trust, label, verify, skip):
     if not all(p == "#" or PREFIX.fullmatch(p) for p in trust):
         sys.exit("bad --trust prefix")
+    if not all(re.fullmatch(r"[^=\s]+=(pr-exists|branch-exists)", s) for s in skip):
+        sys.exit("bad --skip, want <id>=<reason>")
+    skip = dict(s.split("=", 1) for s in skip)
     never = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
     run = {}
     with open(report, errors="replace") as f:
@@ -216,6 +219,8 @@ def select(report, items, cap, trust, label, verify):
             why = "assigned"
         elif verdict == "fixed" and not re.fullmatch(r"#[0-9]{1,9}|[0-9a-f]{7,40}", raw):
             why = "fixed-ref"
+        elif i in skip:
+            why = skip[i]
         elif feature in taken:
             why = "same-feature"
         elif fixes >= cap:
@@ -273,13 +278,15 @@ def main(argv, stdin=sys.stdin.buffer):
         return sys.stdout.write("".join(i + "\n" for i in sorted(deferred(*argv[1:]))))
     if argv[:1] == ["--select"]:
         sp = argparse.ArgumentParser(usage="check_items.py --select <report> <items dir> <cap> "
-                                     "[--trust <prefix or '#' for GitHub>]... [--label <name>] [--no-verify]")
+                                     "[--trust <prefix or '#' for GitHub>]... [--label <name>] [--no-verify] "
+                                     "[--skip <id>=<reason>]...")
         sp.add_argument("report")
         sp.add_argument("items")
         sp.add_argument("cap", type=int)
         sp.add_argument("--trust", action="append", default=[])
         sp.add_argument("--label")
         sp.add_argument("--no-verify", dest="verify", action="store_false")
+        sp.add_argument("--skip", action="append", default=[])
         return select(**vars(sp.parse_args(argv[1:])))
     ap = argparse.ArgumentParser(usage="check_items.py <prefix> <dir> [--mcp <tools>] "
                                  "[--skip-judged <reports dir> <today>.md] < stream.jsonl | --project <report> | "

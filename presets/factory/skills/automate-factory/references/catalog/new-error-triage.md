@@ -5,7 +5,8 @@
   `Integrations`; a tracker for tickets (GitHub Issues, or one with a `ticket` `Write` line and a
   `Fetch` line that can search any state by body text, for ticket dedupe); a committed
   `verify-<app>` skill;
-  `fix-issues` installed.
+  `fix-issues` installed (it ships in this preset and is found only after `ulis install`; see
+  [loading other skills](../../../setup-factory/SKILL.md#loading-other-skills)).
 - **Runners**: local.
 - **Input**: error groups first seen since the newest earlier report, less a day of overlap, that
   no earlier report judged; plus 90 days of issues, PRs and commit subjects for dedupe. Untrusted:

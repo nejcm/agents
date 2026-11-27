@@ -442,7 +442,9 @@ and the PR lookup read the destination. A gate failure exits 1 and publishes not
 
 `issue-pipeline` at `draft-pr` passes only when the log shows one item's
 `<id> repro: outcome=reproduced` or `<id> repro: outcome=not-reproduced` line and no `gate:` line;
-`pipeline: no candidates` is not a pass. With no pending item, the user files a canary: a trusted
+`pipeline: no candidates` is not a pass. A reproduced item goes on through fix, gates, verify and
+review in the dry run, so a block at any of them (a `gate:` line, `dry run: <id> blocked <stage>`)
+fails the smoke run. With no pending item, the user files a canary: a trusted
 or labelled issue describing behaviour that works, so the expected line is `not-reproduced`. The
 dry run records every selected item as `deferred`, so the first real run processes it. A
 [stage skill](#stage-skills) passes only when its stage ran: a triage skill leaves a valid

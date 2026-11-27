@@ -4,6 +4,12 @@
 `automate-factory`), each with an `Updated` date. A phase rewrites only its own section. Every
 fact names its source; a missing value is `unavailable: <reason>`. No secrets, ever.
 
+It lives at the repo root's `.factory/profile.md` and is not on the proposed `.gitignore` list (only
+`.factory/reports/`, `.factory/tmp/` and similar output). Run scripts read it from the runner's
+working tree, not from a commit, so an uncommitted edit takes effect on the next run. Committing
+it is the user's choice; this skill never commits. Commit it when another checkout or runner will
+run the automations.
+
 ```markdown
 # Factory profile: <repo name>
 
@@ -38,7 +44,8 @@ Updated: <YYYY-MM-DD> (interview)
 
 - Fetch <tool>: prefix `<prefix>`; <`gh` | mcp `<server>` tools `<tool>`, ... | cli `<command>`>;
   query <project, labels, states, lookback>; id `<field>`; extras <fields>;
-  trust <trusted | label `<name>` (`gh` only) | none (default)>; confirmed <date>
+  trust <trusted | label `<name>` (`gh` only) | trusted, label `<name>` (`gh` only) | none (default)>;
+  confirmed <date>
 - Write <tool>: prefix `<prefix>`; <ticket | comment | status | post>: <cli `<command>` | mcp
   `<server>` tool `<tool>` body `<argument / none>` item `<argument / none>` args `<fixed JSON>`>;
   destination <team, channel, state, or the item>; confirmed <date>

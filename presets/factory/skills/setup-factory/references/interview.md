@@ -23,7 +23,9 @@ the items the user selected. Skip the phase when there are no gaps.
    the CLI's help; the user confirms.
    For each one, its trust for unattended fixes: `trusted` (any item may get a draft PR),
    `label <name>` (only open issues carrying that maintainer-applied label; `gh` only, since
-   agent-fetched labels are model output over issue text), or `none` (default). For an error
+   agent-fetched labels are model output over issue text), both for `gh` (`trusted, label <name>`:
+   every issue is trusted, and open issues carrying the label are fetched even when older than the
+   lookback), or `none` (default). For an error
    tracker marked `trusted`, warn once that its events carry strings any app user can set.
    For each one runs should write back to (other than GitHub), its writes: which of `ticket`,
    `comment`, `status`, `post`; for each, a CLI or API command (preferred) or one MCP write tool

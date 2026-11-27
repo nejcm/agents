@@ -106,7 +106,8 @@ Needs `.factory/profile.md` from `setup-factory`. Without it, say so and stop.
    tool-less check call per picked model (the entry is enabled only when every one answered), then
    dry-run mode, per [`references/runners.md`](references/runners.md#smoke-run). On failure, report the
    exact error, leave the entry `proposed`, and fix nothing silently. `issue-pipeline` at
-   `draft-pr` needs one item through reproduce; with none pending, ask the user to file a canary.
+   `draft-pr` stages the first selected item: reproduce, and for a reproduced one also fix, gates,
+   verify and review, so the pass needs each of them; with none pending, ask the user to file a canary.
    A stage skill needs its stage in the smoke run ([runners.md](references/runners.md#smoke-run)).
    A `watch` entry's dry run takes the latest matching event, ignoring window, cap and seen
    ledger; with none in 30 days it passes on `detect` alone and is recorded `active (unexercised)`.

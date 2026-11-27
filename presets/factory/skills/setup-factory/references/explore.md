@@ -35,14 +35,18 @@ interview instead of asking now.
 - **Agent config**: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, project skills (`.agents/skills`,
   `.claude/skills`, `.cursor/skills`), MCP config (`.mcp.json`, `.cursor/mcp.json`,
   `.codex/config.toml`), existing verify skills.
-- **Agent setup audit**: check whether that agent config asks for a plan step before code,
-  splitting large work into phases, an independent review of the change, a cap on CI fix rounds
+- **Agent setup audit**: read the full text of the repo's instruction files (`AGENTS.md` and
+  `CLAUDE.md` at the root and in subdirectories, `.cursor/rules`) and check whether they ask for a
+  plan step before code, splitting large work into phases, an independent review of the change, a cap on CI fix rounds
   (the factory stops at two), and a dependency rule (prefer existing code and the stdlib, justify
   each new package). Also list the user-level skills under the roots in
   [loading other skills](../SKILL.md#loading-other-skills), reading only each `SKILL.md`'s name and
   description (the one read outside the repo). Record each practice as present (with its file),
   unknown (only an installed skill's name or description suggests it; add it to `Open gaps`), or
-  missing (neither project config nor any installed skill covers it). From the same project and
+  missing (neither the repo's instruction files nor any installed skill covers it). The audit cannot
+  see the user's global instruction files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and the
+  like), so `missing` means missing from the repo and its skills; the record says the global files
+  were not read. From the same project and
   user skills, also record:
   - stage skill candidates: for each of triage, reproduce, fix, verify and review, the skills
     whose name or description says they do that job (a bug-triage, reproduction, debugging or fix,

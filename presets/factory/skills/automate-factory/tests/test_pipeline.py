@@ -103,7 +103,7 @@ while i < len(args):
         opt[args[i][2:]], i = args[i + 1], i + 2
     else:
         pos, i = pos + [args[i]], i + 1
-if cmd in st["fail"]:
+if cmd in st["fail"] or ("head" in opt and cmd + " --head" in st["fail"]):
     sys.exit(1)
 issues = st["issues"]
 def out(v):
@@ -447,6 +447,26 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(self.gh_writes(), [])
         self.assertEqual(self.outcome("err-sentry-C1")[:2], ("blocked", "verify"))
 
+    def test_blocked_verify_logs_its_outcome(self):
+        self.gh_state({1: {}, 2: {}, 3: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a", "verify": "insufficient"}, "2": {"feature": "b", "norecord": "verify"},
+                               "3": {"feature": "c", "verify": "arbitrary-text"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 verify: outcome=insufficient", r.stdout)
+        self.assertIn("2 verify: unknown outcome", r.stdout)
+        self.assertIn("3 verify: unknown outcome", r.stdout)
+        self.assertNotIn("arbitrary-text", r.stdout)
+        self.assertEqual([self.outcome(i)[:2] for i in "123"], [("blocked", "verify")] * 3)
+
+    def test_fixed_item_verify_without_an_outcome_logs_why(self):
+        sha = self.fix_commit()
+        self.push_main()
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"verdict": "fixed", "ref": sha[:7], "norecord": "verify"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 verify: unknown outcome", r.stdout)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "verify"))
+
     def test_red_green_line(self):
         self.gh_state({1: {}, 2: {}}, [])
         r = self.run_pipeline({"1": {"feature": "a", "test": "red"}, "2": {"feature": "b", "test": "green"}})
@@ -652,6 +672,28 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(self.pr_creates(), [])
         self.assertEqual(self.stage_calls(), [])
         self.assertEqual(len(self.gh()["prs"]), 1)
+
+    def test_item_with_a_pr_takes_no_feature_slot(self):
+        self.gh_state({1: {}, 2: {}}, [], prs=[{"head": "factory/fix-1", "url": "https://github.com/o/r/pull/9"}])
+        r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "a"}}, cap="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("skipped", "pr-exists"))
+        self.assertEqual(self.outcome("2")[0], "fixed")
+        self.assertEqual(self.stage_calls("1"), [])
+
+    def test_fixed_item_with_a_pr_frees_its_feature_slot(self):
+        self.gh_state({1: {}, 2: {}}, [], prs=[{"head": "factory/fix-1", "url": "https://github.com/o/r/pull/9"}])
+        r = self.run_pipeline({"1": {"feature": "a", "verdict": "fixed", "ref": "#9"}, "2": {"feature": "a"}}, cap="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("skipped", "pr-exists"))
+        self.assertEqual(self.outcome("2")[0], "fixed")
+
+    def test_pr_lookup_failure_blocks_at_claim(self):
+        self.gh_state({1: {}}, ["pr list --head"])
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "claim"))
+        self.assertEqual(self.stage_calls(), [])
 
     def test_pr_create_failure_recovered_without_stages(self):
         self.gh_state({1: {}}, ["pr create"])

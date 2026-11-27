@@ -72,6 +72,15 @@ record_rule() {
 # $1 a stage record: its last line cut to the leading <stage>: outcome=<value> token, so trailing text is ignored.
 outcome_of() { tail -n 1 "$1" | tr -d '\r' | sed -E 's/^[`*[:space:]]*([a-z]+: outcome=[a-z-]+)([^a-z-].*)?$/\1/'; }
 
+verify_outcome() {
+  case $(outcome_of "$1") in
+    "verify: outcome=confirmed") echo "verify: outcome=confirmed" ;;
+    "verify: outcome=insufficient") echo "verify: outcome=insufficient" ;;
+    "verify: outcome=inconclusive") echo "verify: outcome=inconclusive" ;;
+    *) echo "verify: unknown outcome" ;;
+  esac
+}
+
 # $1 the dir holding the copied skills: one line per extra skill.
 extras() { local s; for s in ${extra_skills[@]+"${extra_skills[@]}"}; do echo "Also follow $1/$s/SKILL.md where it applies."; done; }
 
@@ -310,11 +319,9 @@ verify_item() {
   stage verify "$item/verify" reproduce.md Bash,Read,Grep,Glob "$before" "$item/spec.md" "$item/run.md"
   take "$item/evidence/verify/verify.md" "$item/verify.md"
   escalate "$item/verify.md"
-  v=$(outcome_of "$item/verify.md")
-  case $v in
-    "verify: outcome=confirmed" | "verify: outcome=insufficient" | "verify: outcome=inconclusive") echo "$id $v" ;;
-    *) exit 1 ;;
-  esac
+  v=$(verify_outcome "$item/verify.md")
+  echo "$id $v"
+  [ "$v" != "verify: unknown outcome" ] || exit 1
   { if [ "$v" = "verify: outcome=confirmed" ]; then
       printf 'Verified: the merged fix %s (%s) resolves this; its parent %s showed the broken state.\n' \
         "$1" "$after" "$before"
@@ -399,8 +406,18 @@ release() {
   git worktree prune
 }
 
+# $1 item: prints pr-exists or branch-exists when a factory PR or branch for it is already there.
+published() {
+  local prs rc=0
+  prs=$(gh pr list --repo "$repo" --head "factory/fix-$1" --state all --json url,isCrossRepository \
+    --jq '.[] | select(.isCrossRepository | not) | .url') || return 1
+  [ -z "$prs" ] || { echo pr-exists; return; }
+  git ls-remote --exit-code -q "$remote" "refs/heads/factory/fix-$1" > /dev/null || rc=$?
+  case $rc in 0) echo branch-exists ;; 2) ;; *) return 1 ;; esac
+}
+
 run_item() {
-  local r prs
+  local r
   id=$1 feature=$2 item=$fx/tmp/fix-$1
   view=$item out=$items/$1 branch=factory/fix-$1 title="fix: $(tag "$1") $2"
   outcome="" reason="" url=none step=claim claimed="" ticket="" red="" stat="" reviews="" ready=""
@@ -408,10 +425,8 @@ run_item() {
   mkdir "$item" 2> /dev/null || finish skipped claimed
   claimed=1
   mkdir -p "$out"
-  prs=$(gh pr list --repo "$repo" --head "$branch" --state all --json url,isCrossRepository \
-    --jq '.[] | select(.isCrossRepository | not) | .url')
-  [ -z "$prs" ] || finish skipped pr-exists
-  ! git ls-remote --exit-code -q "$remote" "refs/heads/$branch" > /dev/null || finish skipped branch-exists
+  r=$(published "$id")
+  [ -z "$r" ] || finish skipped "$r"
   printf '%s\n' 'No git commit (fix stage: only refactor steps per the scope line) or git push, no gh, no tracker or chat writes, no edits outside the working directory and $evidence.' \
     'Unattended run: never ask a question; nobody answers.' \
     'When the stage needs credentials, production access, a decision the spec leaves open, or work outside its feature, do not guess: say what is missing and end your record with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line.' \
@@ -462,8 +477,9 @@ run_item() {
   stage verify "$item/verify" fix.md Bash,Read,Grep,Glob "$start" "$item/spec.md" "$item/repro.md" "$item/run.md"
   take "$item/evidence/verify/verify.md" "$item/verify.md"
   escalate "$item/verify.md"
-  [ "$(outcome_of "$item/verify.md")" = "verify: outcome=confirmed" ] || exit 1
-  echo "$id verify: outcome=confirmed"
+  r=$(verify_outcome "$item/verify.md")
+  echo "$id $r"
+  [ "$r" = "verify: outcome=confirmed" ] || exit 1
   cat "$item/spec.md" "$item/repro.md" "$item/verify.md" | no_creds || block "credential-shaped text"
 
   step=review
@@ -670,7 +686,8 @@ fates() {
 }
 
 pipeline() {
-  local id feature why fref o r u p sel=() started="" halt=""
+  local id feature why fref o r u p sel=() skip=() more started="" halt=""
+  local -A clear=()
   runview=$view report=$out/$day.md start=$(git rev-parse "$ref")
   [[ $cap =~ ^[1-9][0-9]*$ ]] || block "cap $cap is not a positive whole number"
   [[ $flow =~ ^(fix|repro-only)$ ]] || block "flow $flow is not fix or repro-only"
@@ -685,8 +702,18 @@ pipeline() {
   for p in ${trust[@]+"${trust[@]}"}; do sel+=(--trust "$p"); done
   [ -z "$label" ] || sel+=(--label "$label")
   [ "$verify_fixed" = on ] || sel+=(--no-verify)
-  python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$report" "$view/input/items" "$cap" \
-    ${sel[@]+"${sel[@]}"} > "$view/select.tsv"
+  # Items with a PR or branch already are skipped before selection, so they take no feature slot or cap.
+  while :; do
+    python3 -I "$view/skills/fix-issues/scripts/check_items.py" --select "$report" "$view/input/items" "$cap" \
+      ${sel[@]+"${sel[@]}"} ${skip[@]+"${skip[@]}"} > "$view/select.tsv"
+    more=""
+    while IFS=$'\t' read -r id feature why fref; do
+      [[ $why =~ ^(fix|verify)$ ]] && [ -z "${clear[$id]:-}" ] || continue
+      r=$(published "$id") || r=""
+      if [ -n "$r" ]; then skip+=(--skip "$id=$r") more=1; else clear[$id]=1; fi
+    done < "$view/select.tsv"
+    [ -n "$more" ] || break
+  done
   mkdir "$view/outcomes"
   printf '\n## Pipeline\n\n' >> "$report"
   [ "${FACTORY_DRY_RUN:-0}" = 1 ] || { land; try fates < /dev/null; }

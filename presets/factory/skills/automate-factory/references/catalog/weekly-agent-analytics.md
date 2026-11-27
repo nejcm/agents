@@ -1,8 +1,9 @@
 # Weekly agent analytics
 
 - **Trigger**: weekly, Monday 07:00.
-- **Requires**: this repo's transcripts on the runner's machine; `agent-analytics` installed;
-  `python3`. `gh` optional (sessions per merged PR).
+- **Requires**: this repo's transcripts on the runner's machine; `agent-analytics` installed (it
+  ships in this preset and is found only after `ulis install`; see
+  [loading other skills](../../../setup-factory/SKILL.md#loading-other-skills)); `python3`. `gh` optional (sessions per merged PR).
 - **Runners**: local.
 - **Input**: counter fields only; no model runs and no text is read.
 - **Writes**: `.factory/reports/<date>-agents.md` only.

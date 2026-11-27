@@ -80,7 +80,10 @@ first hit: project `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, then
 of a pstack skill is used only if it still has the steps this skill hands off to; otherwise take
 the installed one. Resolve symlinks so relative `references/` links work. If none is found, say
 which skill is missing and how to install it (this preset's `skills.yaml`), and skip the phase
-rather than improvise it.
+rather than improvise it. This preset's own skills (`automate-factory`, `fix-issues`,
+`agent-analytics`) sit under these roots only after `ulis install --global --source . --preset factory`
+(see the repo README); a checkout alone is not on the lookup, so without that install use the
+checked-out `presets/factory/skills/<name>` directory only when the user gives that path.
 
 ## Rules
 
