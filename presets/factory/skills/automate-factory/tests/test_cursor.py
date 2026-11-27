@@ -88,6 +88,8 @@ def agent(self):
 
 
 class CursorRunTest(unittest.TestCase):
+    tearDown = test_run.RunShTest.tearDown
+
     def setUp(self):
         test_run.RunShTest.setUp(self)
         install(self)
@@ -218,6 +220,8 @@ class CursorRunTest(unittest.TestCase):
 
 
 class CursorPipelineTest(unittest.TestCase):
+    tearDown = test_run.RunShTest.tearDown
+
     def setUp(self):
         test_pipeline.PipelineTest.setUp(self)
         install(self)

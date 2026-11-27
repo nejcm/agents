@@ -837,6 +837,7 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         self.assertEqual(self.calls(), [])
 
     def test_weekly_budget_fails_closed_on_an_unusable_ledger(self):
+        self.tearDown()
         for kind in ("symlink", "directory", "unreadable"):
             with self.subTest(kind):
                 self.setUp()

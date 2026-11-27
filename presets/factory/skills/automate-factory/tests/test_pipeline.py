@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import unittest
 
@@ -62,6 +63,16 @@ else:
     def put(path, text):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         open(path, "w").write(text)
+    rec = f"{ev}/{dict(reproduce='repro').get(stage, stage)}.md"
+    if s.get("badrecord") == stage + ":missing":
+        sys.exit(0)
+    if s.get("badrecord") == stage + ":symlink":
+        put(ev + "/real.md", "x\n")
+        os.symlink("real.md", rec)
+        sys.exit(0)
+    if s.get("badrecord") == stage + ":big":
+        put(rec, "x" * 70000 + "\n")
+        sys.exit(0)
     if s.get("norecord") == stage:
         put(f"{ev}/{dict(reproduce='repro').get(stage, stage)}.md", "did the work\n")
     elif s.get("escalate") == stage:
@@ -83,7 +94,7 @@ else:
         if s.get("grow_test"):
             open("tests/run_all.sh", "a").write(f"test -f src/{i}\n")
         put(ev + "/fix.md", "root cause\n" + ("test-change: tests/run_all.sh: tidy\n" if s.get("edit_test") else "")
-            + "scope: minimal\nfix: outcome=changed\n")
+            + "scope: minimal\nfix: outcome=" + s.get("fix", "changed") + "\n")
     else:
         put(ev + "/verify.md", "runs\nverify: outcome=" + s.get("verify", "confirmed") + "\n")
 """
@@ -458,6 +469,29 @@ sys.exit(1 if spec else p.returncode)
         self.assertNotIn("arbitrary-text", r.stdout)
         self.assertEqual([self.outcome(i)[:2] for i in "123"], [("blocked", "verify")] * 3)
 
+    def test_blocked_fix_logs_its_outcome(self):
+        self.gh_state({1: {}, 2: {}, 3: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a", "fix": "stopped"}, "2": {"feature": "b", "norecord": "fix"},
+                               "3": {"feature": "c", "fix": "arbitrary-text"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 fix: outcome=stopped", r.stdout)
+        self.assertIn("2 fix: unknown outcome", r.stdout)
+        self.assertIn("3 fix: unknown outcome", r.stdout)
+        self.assertNotIn("arbitrary-text", r.stdout)
+        self.assertEqual([self.outcome(i)[:2] for i in "123"], [("blocked", "fix")] * 3)
+
+    def test_an_unusable_stage_record_logs_why(self):
+        self.gh_state({1: {}, 2: {}, 3: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a", "badrecord": "reproduce:missing"},
+                               "2": {"feature": "b", "badrecord": "fix:symlink"},
+                               "3": {"feature": "c", "badrecord": "verify:big"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 reproduce: no record", r.stdout)
+        self.assertIn("2 fix: record is a symlink", r.stdout)
+        self.assertIn("3 verify: record over 65536 bytes", r.stdout)
+        self.assertEqual([self.outcome(i)[:2] for i in "123"],
+                         [("blocked", "reproduce"), ("blocked", "fix"), ("blocked", "verify")])
+
     def test_fixed_item_verify_without_an_outcome_logs_why(self):
         sha = self.fix_commit()
         self.push_main()
@@ -695,6 +729,18 @@ sys.exit(1 if spec else p.returncode)
         self.assertEqual(self.outcome("1")[:2], ("blocked", "claim"))
         self.assertEqual(self.stage_calls(), [])
 
+    def test_branch_lookup_failure_blocks_at_claim(self):
+        self.gh_state({1: {}}, [])
+        git = f"{self.tmp.name}/bin/git"
+        with open(git, "w") as f:
+            f.write(f'#!/bin/sh\ncase "$*" in *"ls-remote --exit-code"*factory/fix-1) exit 128 ;; esac\n'
+                    f'exec {shutil.which("git")} "$@"\n')
+        os.chmod(git, 0o755)
+        r = self.run_pipeline({"1": {}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[:2], ("blocked", "claim"))
+        self.assertEqual(self.stage_calls(), [])
+
     def test_pr_create_failure_recovered_without_stages(self):
         self.gh_state({1: {}}, ["pr create"])
         r = self.run_pipeline({"1": {}})
@@ -895,6 +941,7 @@ sys.exit(1 if spec else p.returncode)
     def test_merge_level_approves_only_without_needs_human_disclosure_and_never_merges_in_the_same_run(self):
         for needs_human, approved in ((None, "1"), ("dependency refactor", "13")):
             with self.subTest(needs_human=needs_human):
+                self.tearDown()
                 self.setUp()
                 self.gh_state({1: {}, 2: {}, 3: {}}, [])
                 r = self.run_pipeline({"1": {"feature": "a"}, "2": {"feature": "b", "review-opus": "x"},

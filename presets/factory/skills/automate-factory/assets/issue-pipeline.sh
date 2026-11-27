@@ -34,7 +34,12 @@ time_for() { [ $((run_minutes * 60 - SECONDS)) -ge $(($1 * 60)) ]; }
 reserve() { time_for $((($1 + 1 + ${#reviewers[@]}) * minutes)) || finish deferred run-time; }
 
 take() {
-  [ -f "$1" ] && [ ! -L "$1" ] && [ "$(wc -c < "$1")" -le "$summary_cap" ] || exit 1
+  local why=""
+  if [ -L "$1" ]; then why="record is a symlink"
+  elif [ ! -f "$1" ]; then why="no record"
+  elif [ "$(wc -c < "$1")" -gt "$summary_cap" ]; then why="record over $summary_cap bytes"
+  fi
+  [ -z "$why" ] || { echo "$id $step: $why"; exit 1; }
   cp "$1" "$2"
 }
 
@@ -460,7 +465,10 @@ run_item() {
     "$item/spec.md" "$item/repro.md" "$item/run.md" "$runview/skills/debugging"
   take "$item/evidence/fix/fix.md" "$item/fix.md"
   escalate "$item/fix.md"
-  [ "$(outcome_of "$item/fix.md")" = "fix: outcome=changed" ] || exit 1
+  r=$(outcome_of "$item/fix.md")
+  case $r in "fix: outcome=changed" | "fix: outcome=stopped") ;; *) r="fix: unknown outcome" ;; esac
+  echo "$id $r"
+  [ "$r" = "fix: outcome=changed" ] || exit 1
   cp "$item/fix.md" "$item/summary.md"
   work=$item/patch
   commit_edit "fix: $feature ($(tag "$id"))"

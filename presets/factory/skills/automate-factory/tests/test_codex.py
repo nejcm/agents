@@ -80,6 +80,8 @@ def borrow(cls, base):
 
 
 class CodexRunTest(unittest.TestCase):
+    tearDown = test_run.RunShTest.tearDown
+
     def setUp(self):
         test_run.RunShTest.setUp(self)
         with open(f"{self.tmp.name}/bin/codex", "w") as f:
@@ -285,6 +287,8 @@ class CodexRunTest(unittest.TestCase):
 
 
 class CodexPipelineTest(unittest.TestCase):
+    tearDown = test_run.RunShTest.tearDown
+
     def setUp(self):
         test_pipeline.PipelineTest.setUp(self)
         with open(f"{self.tmp.name}/bin/codex", "w") as f:

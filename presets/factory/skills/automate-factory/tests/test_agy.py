@@ -87,6 +87,8 @@ def agy(self):
 
 
 class AgyRunTest(unittest.TestCase):
+    tearDown = test_run.RunShTest.tearDown
+
     def setUp(self):
         test_run.RunShTest.setUp(self)
         install(self)
@@ -194,6 +196,8 @@ class AgyRunTest(unittest.TestCase):
 
 
 class AgyPipelineTest(unittest.TestCase):
+    tearDown = test_run.RunShTest.tearDown
+
     def setUp(self):
         test_pipeline.PipelineTest.setUp(self)
         install(self)

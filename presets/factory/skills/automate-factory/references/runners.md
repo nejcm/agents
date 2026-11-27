@@ -45,7 +45,8 @@ These values come from the profile and the entry's choices; the profile is the s
 so a changed value regenerates the entry ([re-run](../SKILL.md#re-run)).
 `repo/` and fetch's `git` reads use the local `<base>` branch, as fresh as the user's last pull;
 the prompt states its SHA.
-Then write the job spec to `.factory/automations/<entry>.job.json`, with absolute paths, and
+Then write the job spec to `.factory/automations/<entry>.job.json`, with absolute, normalized paths
+(no `..`: systemd rejects such a `log` path and sends the output to the journal), and
 propose it as a diff:
 
 ```json
