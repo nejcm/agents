@@ -1,0 +1,5 @@
+interface:
+  display_name: "Automate Factory"
+  short_description: "Schedule a repo's recurring agent work with smoke-tested runners"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,84 @@
+# Phase 1: Explore
+
+Answer from the repo alone. Cite the file or command for every fact; leave unknowns for the
+interview instead of asking now.
+
+## What to find
+
+- **Purpose**: what the repo is and who uses it (README, package metadata, top-level docs).
+- **Surfaces**: what a user touches (web UI, API, CLI/TUI, mobile, desktop, library, worker).
+  A repo can have several; name the primary one.
+- **Stack**: languages, frameworks, key libraries, runtime versions (`.nvmrc`, `.tool-versions`,
+  `engines`, `go.mod`, `pyproject.toml`, `Cargo.toml`, Dockerfiles).
+- **Package manager and scripts**: from the lockfile, not a guess. List dev, build, test, lint,
+  typecheck, migrate and seed commands as written in the manifest, Makefile or task runner. With
+  several manifests (monorepo), name the app or package behind the primary surface and record
+  its commands so they run from the repo root (`npm --prefix`, `pnpm --filter`, `make -C`, or
+  `(cd <dir> && <cmd>)`).
+- **Services**: databases, queues, caches and other processes the app needs (compose files,
+  env examples, connection-string env var names, ORM config).
+- **CI**: workflow files, the jobs and named steps they run, triggers, required checks if visible
+  (`gh api repos/{owner}/{repo}/branches/<default>/protection` when permitted).
+- **CI cache risk**: a release or publish workflow (publishes a package, image or release, or
+  holds a registry token) that restores a cache (`actions/cache`, `actions/cache/restore`, a
+  setup action with `cache:` on or caching by default: `actions/setup-node` for the `packageManager` in
+  `package.json` (npm, Yarn or pnpm in v5, npm in v6 and later) without `package-manager-cache: false`; `actions/setup-go` v4 and later without `cache: false`) under a key or `restore-keys` prefix that an `issues`,
+  `issue_comment`, `discussion*` or `pull_request_target`-triggered workflow can save. Those run
+  on the default branch, whose cache every workflow and branch restores from; `pull_request` saves
+  stay on the PR's ref. Issue or PR text can steer such a workflow into poisoning what the release
+  builds from
+  ([Clinejection](https://simonwillison.net/2026/Mar/6/clinejection/)). Name both workflow files,
+  the key and the trigger; a finding goes to `Open gaps` and the hand-off as a fix to suggest
+  (separate key prefixes, or no cache restore in the release job).
+- **Dependent repos**: other repos this one needs at runtime or build time (git submodules,
+  workspace refs, API base URLs pointing at sibling services, docs naming them).
+- **Agent config**: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, project skills (`.agents/skills`,
+  `.claude/skills`, `.cursor/skills`), MCP config (`.mcp.json`, `.cursor/mcp.json`,
+  `.codex/config.toml`), existing verify skills.
+- **Agent setup audit**: read the full text of the repo's instruction files (`AGENTS.md` and
+  `CLAUDE.md` at the root and in subdirectories, `.cursor/rules`) and check whether they ask for a
+  plan step before code, splitting large work into phases, an independent review of the change, a cap on CI fix rounds
+  (the factory stops at two), and a dependency rule (prefer existing code and the stdlib, justify
+  each new package). Also list the user-level skills under the roots in
+  [loading other skills](../SKILL.md#loading-other-skills), reading only each `SKILL.md`'s name and
+  description (the one read outside the repo). Record each practice as present (with its file),
+  unknown (only an installed skill's name or description suggests it; add it to `Open gaps`), or
+  missing (neither the repo's instruction files nor any installed skill covers it). The audit cannot
+  see the user's global instruction files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and the
+  like), so `missing` means missing from the repo and its skills; the record says the global files
+  were not read. From the same project and
+  user skills, also record:
+  - stage skill candidates: for each of triage, reproduce, fix, verify and review, the skills
+    whose name or description says they do that job (a bug-triage, reproduction, debugging or fix,
+    QA or verification, code-review skill). A suggestion only: `automate-factory` offers each
+    and the user confirms.
+  - a feature workflow: the order in which the user's skills and orchestration (a plan step,
+    phase splitting, builder and reviewer roles) already take a feature from plan to merged PR,
+    or the missing step. A suggestion for the hand-off; feature work is never a scheduled entry.
+- **Error and analytics SDKs**: detected from dependencies, init code, config files and env var
+  names, e.g. Sentry, PostHog, Datadog, Bugsnag, Rollbar, New Relic, Amplitude, Segment,
+  LogRocket. Record what was detected and where; do not check whether the agent can reach it yet.
+- **Risk paths**: globs for code where a change deserves a security review: auth, payments,
+  crypto, secrets handling and config, migrations, dependency manifests and lockfiles, CI, infra
+  (`src/auth/*`, `migrations/*`, `*package.json`, `.github/*`, `terraform/*`; a glob matches the
+  whole path from the repo root, `*` crossing `/`), each from a file
+  found. A proposal only: add `Risk paths` to `Open gaps` for the interview to confirm.
+- **Issue sources hinted by the repo**: issue templates, `.github/ISSUE_TEMPLATE`, Linear or Jira
+  keys in branch names or commit messages (`git log --oneline -200`).
+
+## Rules
+
+- The audit installs and changes nothing; missing items become suggestions in the hand-off.
+- Read env example files for variable names only. Never open `.env` or other files that may hold
+  real values.
+- MCP and harness config can hold inline tokens: list server and key names only, outside the
+  model's context (`jq -r '.mcpServers | keys[]' .mcp.json`, `grep -o '^\[[^]]*\]'
+  .codex/config.toml`), or use the connected tool inventory. Never print `env`, `headers`, `args`
+  or URL values.
+- Contradictions between sources (README says `npm`, lockfile is `pnpm-lock.yaml`) go to the
+  interview's contradiction list, not silently resolved.
+
+## Output
+
+Fill the profile's `Repo` section, including `Open gaps`: each unknown and contradiction with its
+sources, minus any already resolved in the `Interview` section. Phase 2 reads them from there.

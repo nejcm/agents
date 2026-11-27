@@ -27,6 +27,10 @@ Before the first dispatch in a session, establish two things:
    pretending the dispatch happened. A CLI being installed does not mean it is
    authenticated — each reference opens with its own precondition check.
 
+Under T3 Code, use its `delegate_task` for any provider it enables (see
+`orchestrator_capabilities`); use the references below only for providers it
+lists as disabled or hosts without it.
+
 Read only the references you need:
 
 | Reference                  | CLI                                                    |

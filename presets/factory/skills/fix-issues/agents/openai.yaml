@@ -1,0 +1,5 @@
+interface:
+  display_name: "Fix Issues"
+  short_description: "Triage, reproduce and fix tracker issues with proof on base and patch"
+policy:
+  allow_implicit_invocation: false

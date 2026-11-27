@@ -1,0 +1,1 @@
+{"role": "assistant", "message": {"content": [{"type": "tool_use", "id": "c3", "name": "Grep", "input": {"command": "SECRET-PROMPT-TEXT"}}]}}

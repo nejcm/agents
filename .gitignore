@@ -3,3 +3,5 @@ generated/
 
 TODO.md
 .research/
+__pycache__/
+.docs/

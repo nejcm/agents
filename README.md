@@ -28,8 +28,7 @@ The tree mirrors a global `~/.ulis/` source directory:
 | [`agents/`](./agents/) | Agent definitions (Markdown with YAML frontmatter) |
 | [`skills/`](./skills/) | Reusable skill definitions (`SKILL.md`) |
 | [`commands/`](./commands/) | OpenCode slash commands |
-| [`rules/`](./rules/) | Shared coding rules |
-| [`presets/`](./presets/) | Stack-specific skill presets (`react-web`, `react-native`, `web-growth-audit`) |
+| [`presets/`](./presets/) | Skill presets (`react-web`, `react-native`, `web-growth-audit`, `factory`) |
 | [`raw/`](./raw/) | Platform-native fragments copied verbatim into generated output |
 | [`hooks/`](./hooks/) | Lifecycle event hooks |
 | [`tools/`](./tools/) | Build-time helper scripts |
@@ -66,7 +65,6 @@ This deploys to `~/.claude/`, `~/.codex/`, `~/.cursor/`, `~/.config/opencode/`, 
 - **Agents**: add a Markdown file under [`agents/`](./agents/) with YAML frontmatter.
 - **Skills**: create a directory under [`skills/`](./skills/) with a `SKILL.md`; use them for reusable procedures rather than execution policy.
 - **Slash commands**: add a Markdown file under [`commands/`](./commands/).
-- **Rules**: add Markdown files under [`rules/`](./rules/) or a language-specific folder.
 - **Raw platform overrides**: place files in [`raw/<platform>/`](./raw/) to copy them verbatim into generated output.
 
 Each directory has its own `README.md` with format details.
@@ -88,13 +86,64 @@ Each directory has its own `README.md` with format details.
 - `react-web` — React, Next.js, shadcn/ui, frontend design
 - `react-native` — React Native, Expo, best practices
 - `web-growth-audit` — SEO, quality audit, optimization
-- `verification` — generate and maintain a project-local app verification skill
+- `factory` — prepare a repo for unattended agent work (see [Factory preset](#factory-preset))
 
 Apply a preset at install time:
 
 ```bash
 ulis install --global --source . --preset react-web --yes
 ```
+
+## Factory preset
+
+[`presets/factory/`](./presets/factory/) bundles four skills and pstack's verification skills:
+
+- `setup-factory` — explores a repo, interviews only for gaps, runs the app for real, generates a
+  verify skill, and writes `.factory/profile.md` in that repo
+- `agent-analytics` — agent usage numbers (sessions, tokens, cost, retries) from the factory's
+  run records, then local Claude Code, Codex, Cursor and Antigravity transcripts
+- `automate-factory` — schedules recurring runs (retros, PR babysitting, triage, digests) from a
+  catalog as local oncue jobs, so it needs Linux with a systemd user manager or macOS, `node` (18.3
+  or later) or `bun` for oncue to install and manage jobs, bash 4 or later and `python3` 3.11 or
+  later (setup-factory checks these first; on macOS: Homebrew, whose installer adds the Command Line
+  Tools, then `brew install bash python gh node`, `bun` can replace `node`, plus one model CLI,
+  `claude` for agent fetch and write); report-only by default, comments and gated PRs when opted in.
+  Local edit steps run as you, so run them in an isolated VM or container holding only a repo-scoped
+  token. Each stage runs the model you pick on `claude`, `codex`, `agy` or `agent` (Cursor); a
+  non-Claude CLI runs exec and write stages outside an isolated environment, or untrusted input at
+  weak isolation, only after a recorded confirmation.
+  `failed-ci-triage` and `pr-babysitting` can `watch` instead of running on a schedule: their job
+  polls every few minutes with no model call and fires only on a new default-branch failure or a
+  settled, actionable PR change, capped per day; a `comment` still goes only to the PR fixed at
+  setup.
+  `issue-pipeline` at `draft-pr` turns items from trusted sources into verified draft PRs,
+  at most 3 per run by default. They stay unmerged unless the entry's `merge_level` is `merge`:
+  then a later run squash-merges a PR only after two or more reviewers approve, CI is green on
+  the gated commit and nothing needs a human, and opens a draft revert PR if `main`'s CI goes red
+  after it. Every run past the pause and Git config checks appends one redacted line to
+  `.factory/reports/runs.jsonl`. Changed, deleted or renamed tests and new dependencies are
+  disclosed with a reason and force a draft; a run that would guess escalates instead, and a PR
+  stops getting pushes after two red CI rounds (see
+  [safety.md](./presets/factory/skills/automate-factory/references/safety.md#steps)). Change settings, prompt guidance or flow variants
+  by asking setup-factory to "change my factory"; what stays locked is in
+  [safety.md](./presets/factory/skills/automate-factory/references/safety.md#what-the-user-can-change)
+- `fix-issues` — triages, reproduces, fixes and verifies tracker issues in a staged pipeline;
+  writes tickets, comments and status back to GitHub, or to any tracker through a CLI or MCP tool
+  recorded at setup
+
+Its skills only run when invoked explicitly.
+
+ULIS resolves preset names only from `~/.ulis/presets/` and its bundled presets, so link this one
+once, then install:
+
+```bash
+mkdir -p ~/.ulis/presets
+ln -s /path/to/this/repo/presets/factory ~/.ulis/presets/factory
+ulis install --global --source . --preset factory
+```
+
+The verification skills used to live in the root [`skills.yaml`](./skills.yaml). ULIS does not
+track external installs, so copies from an earlier install stay until you remove them.
 
 ## Important notes
 

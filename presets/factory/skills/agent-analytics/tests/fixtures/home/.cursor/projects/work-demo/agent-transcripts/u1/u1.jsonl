@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "SECRET-PROMPT-TEXT"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "SECRET-PROMPT-TEXT"}, {"type": "tool_use", "id": "c1", "name": "Read", "input": {"command": "SECRET-PROMPT-TEXT"}}, {"type": "tool_use", "id": "c2", "name": "Shell", "input": {"command": "SECRET-PROMPT-TEXT"}}]}}
