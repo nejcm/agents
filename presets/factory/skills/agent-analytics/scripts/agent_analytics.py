@@ -434,12 +434,14 @@ def factory_runs(repo, since):
                                     "items": collections.Counter(), "escalations": collections.Counter(),
                                     "tests": 0, "test_files": 0, "deps": 0, "capped": 0, "partial": 0,
                                     "scopes": collections.Counter(), "weighted": None, "prs": {}, **{k: 0 for k in RUN_METRICS}})
+        dry = rec.get("dry_run") is True
         r["runs"] += 1
-        r["dry"] += rec.get("dry_run") is True
+        r["dry"] += dry
         r["capped"] += is_num(rec.get("max_turns_hit")) and rec["max_turns_hit"] > 0
         r["partial"] += rec.get("cost_complete") is False and is_num(rec.get("cost_usd"))
         r["outcomes"][outcome] += 1
-        items = rec.get("items") if isinstance(rec.get("items"), list) else []
+        # A dry run pushes nothing, so its items, escalations and disclosures are not counted.
+        items = rec.get("items") if isinstance(rec.get("items"), list) and not dry else []
         for i in items:
             o = i.get("outcome") if isinstance(i, dict) else None
             r["items"][o if re.fullmatch(r"[a-z-]{1,20}", str(o)) else "?"] += 1
@@ -449,7 +451,7 @@ def factory_runs(repo, since):
                 r["prs"][pr] = (bool(rv) and all(x.get("verdict") == "approve" for x in rv), bool(rv), text(i.get("scope")),
                                 [(x["family"] if re.fullmatch(r"[a-z]{1,20}", str(x.get("family"))) else "unknown",
                                   x.get("verdict") == "approve") for x in rv])
-        for u in [rec] + [i for i in items if isinstance(i, dict)]:
+        for u in ([] if dry else [rec]) + [i for i in items if isinstance(i, dict)]:
             if u.get("outcome") == "escalated":
                 why = u.get("reason")
                 r["escalations"][why if re.fullmatch(r"[a-z-]{1,20}", str(why)) else "?"] += 1

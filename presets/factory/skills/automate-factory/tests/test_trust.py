@@ -126,6 +126,20 @@ class RunShTrustTest(unittest.TestCase):
         self.assertEqual(sorted(self.record()["gates"]), sorted("env: unset " + v for v in hidden))
         self.assertIsNone(self.record()["trust"])
 
+    def test_a_style_key_setting_is_not_a_secret_but_its_other_words_and_value_still_are(self):
+        with open(f"{self.tmp.name}/bin/claude", "w") as f:
+            f.write(ENV_CLAUDE)
+        r = self.run_entry("report", extra={"GUM_LOG_KEY_FOREGROUND": "212", "GUM_LOG_KEY_BACKGROUND": "#000",
+                                            "APP_SECRET_KEY_BOLD": "x", "UI_KEY_ITALIC": "ghp_" + "a" * 36,
+                                            "SSH_KEY_FILE": "/k", "API_KEY": "z"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(self.log + ".env") as f:
+            names = {line.split("=", 1)[0] for line in f}
+        self.assertTrue({"GUM_LOG_KEY_FOREGROUND", "GUM_LOG_KEY_BACKGROUND"} <= names)
+        hidden = ("APP_SECRET_KEY_BOLD", "UI_KEY_ITALIC", "SSH_KEY_FILE", "API_KEY")
+        self.assertEqual(names & set(hidden), set())
+        self.assertEqual(sorted(self.record()["gates"]), sorted("env: unset " + v for v in hidden))
+
     def test_run_record_sums_trust_counts(self):
         fetch = ("fetch() { printf '%s' '[{\"author_association\":\"NONE\",\"user\":{\"login\":\"e\"},\"body\":\"a<!--b-->\"}]' "
                  "> \"$view/input/c.json\"; python3 -I -c \"$record_py\" trust \"$view/trust.jsonl\" \"$view/input/c.json\"; "

@@ -80,6 +80,8 @@ else:
             put(os.environ["REPO"] + "/.factory/pause", "")
         if s.get("edit_test"):
             open("tests/run_all.sh", "a").write("true\n")
+        if s.get("grow_test"):
+            open("tests/run_all.sh", "a").write(f"test -f src/{i}\n")
         put(ev + "/fix.md", "root cause\n" + ("test-change: tests/run_all.sh: tidy\n" if s.get("edit_test") else "")
             + "scope: minimal\nfix: outcome=changed\n")
     else:
@@ -453,6 +455,25 @@ sys.exit(1 if spec else p.returncode)
         self.assertIn("New tests fail on base (exit 1) and pass on the fix.", bodies["factory/fix-1"])
         self.assertIn("New tests pass on base: they do not capture the bug, review closely.",
                       bodies["factory/fix-2"])
+
+    def test_a_test_added_to_an_existing_file_is_red_green_evidence_not_a_test_change(self):
+        self.gh_state({1: {}}, [])
+        r = self.run_pipeline({"1": {"grow_test": True}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[0], "fixed")
+        [pr] = self.gh()["prs"]
+        self.assertIn("New tests fail on base (exit 1) and pass on the fix.", pr["body"])
+        self.assertNotIn("Modifies existing tests", pr["body"])
+        self.assertNotIn("No test added", pr["body"])
+
+    def test_outcome_lines_with_trailing_text_count_by_their_leading_token(self):
+        self.gh_state({1: {}, 2: {}}, [])
+        r = self.run_pipeline({"1": {"feature": "a", "repro": "reproduced (the broken state, twice)",
+                                     "verify": "confirmed (broken twice on base/, expected twice on patch/)"},
+                               "2": {"feature": "b", "verify": "confirmedly"}})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.outcome("1")[0], "fixed")
+        self.assertEqual(self.outcome("2")[:2], ("blocked", "verify"))
 
     def test_cap_defers_fourth_and_refetches_it(self):
         self.gh_state({n: {} for n in (1, 2, 3, 4)}, [])

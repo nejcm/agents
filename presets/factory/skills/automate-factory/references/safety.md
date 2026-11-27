@@ -97,7 +97,9 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   `TOKEN`, `SECRET`, `PASSW`, `CREDENTIAL` or `KEY`, or the word `AUTH`, `PAT` or `AUTHORIZATION`
   (any case), or whose whole value is a key (the credential pattern, GitHub `ghp_`-style and
   `github_pat_` tokens), or that holds a URL with a password (`scheme://user:pass@`). It records
-  `env: unset <name>` once per run in `gates`. Exempt: the script's `GIT_CONFIG_KEY_<n>`, the CLI's
+  `env: unset <name>` once per run in `gates`. A `KEY` right before a final `_FOREGROUND`, `_BACKGROUND`,
+  `_BOLD`, `_FAINT`, `_ITALIC` or `_UNDERLINE` (style settings such as gum's `GUM_LOG_KEY_FOREGROUND`)
+  does not count; the rest of the name and the value still do. Exempt: the script's `GIT_CONFIG_KEY_<n>`, the CLI's
   own `cli_env` list (unset already) and, for agent fetch and write through MCP, the `${VAR}` names
   in the source's `<prefix>.mcp.json`, which Claude Code expands for the MCP server; that agent has no
   built-in tools to read them. Every CLI logs in from its own config, so it needs no secret
@@ -155,7 +157,8 @@ user-owned executable flow is not offered: sourced Bash can redefine `gates` or 
   none with a control character, quote or backslash, which Git prints quoted; every
   changed, deleted or renamed existing test file (a rename counts as its old path), and only
   those, has exactly one `test-change` line whose path matches it exactly and whose reason is not
-  blank; added test lines carry no skip or focus marker; every new package has a `dependency`
+  blank (a file that only gained lines needs none while its start version passes on the new code,
+  or the gate blocks; with a line it counts as changed); added test lines carry no skip or focus marker; every new package has a `dependency`
   line; exactly one valid `scope` line; the commits descend linearly from the start and touch no
   path the final diff leaves unchanged; the fixed test command passes in the checkout; no
   credential-shaped text (`sk-ant-`, OpenAI `sk-`, Google `AIza` keys) in the diff, commit messages, summary or disclosure sections.

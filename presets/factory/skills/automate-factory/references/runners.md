@@ -310,7 +310,8 @@ value the next tick appends `given-up` and the report line `given-up: <key> afte
 attempts`. `detect` may itself call `seen <key> done [<value>]` for an event it settles without a
 fire. The ledger is kept when the trigger changes or the entry is removed.
 
-Each fire writes its own report, `.factory/reports/<entry>/<date>-<fire>.md`; analyze, `edit`
+Each fire writes its own report, `.factory/reports/<entry>/<date>-<fire>.md` (`-2`, `-3` and on when that
+fire name already wrote one that day, as a new value at the same head does); analyze, `edit`
 and the `comment` level's body check read only that fire's report (`$report_md`). The run record
 adds `trigger` and `events` (the fire's keys). `FACTORY_CHECK_MODELS=1` takes the lock and skips
 `detect`; `FACTORY_DRY_RUN=1` runs `detect` but ignores the window, cap and ledger and writes no
@@ -406,12 +407,14 @@ them through oncue: each step installs a copy of the [job
 spec](#local-oncue-job) with the variable added to its `env` and `schedule` set to `{"kind":
 "manual"}`, on stdin (`<oncue> install - --capture-path <tools>`). A `manual` job has no timer, so
 nothing starts it but `run`, and installing it over an entry's live job pauses that schedule until
-the real spec is installed again. The step then runs `<oncue> run factory-<repo> <entry> --wait`,
-which waits for that run and exits with its exit code (124, `timed out`, past `timeout`; never on launchd). Exit 2 to 4
-with an `oncue:` line on stderr is oncue's own error: report it. On launchd, `--wait` returns at once, with
-exit 4 or the previous run's exit code, so there `run` goes without `--wait` (it prints `started`), and
-`launchctl print gui/$(id -u)/factory-<repo>.<entry>` is polled until `runs` is above its value before
-`run` and `state = not running`; `last exit code` is then the run's exit code. The run's output is what it
+the real spec is installed again. The step counts the lines of `.factory/reports/runs.jsonl` (0 when
+missing), runs `<oncue> run factory-<repo> <entry>` without `--wait` (it prints `started`), and polls
+every few seconds until a line past that count has the entry's `entry` and `dry_run: true`; that
+record's `exit_code` is the run's exit code (143 when the job's `timeout` stopped it). No record within the `<minutes>` the spec's
+`timeout` takes (also on launchd, where the spec omits it) plus 1 fails the step: the script stopped before it could record
+(`.factory/pause`, or the bash 4 or python3 3.11 guard), and `<entry>.log` says why. Exit 2 to 4 from `run` with an
+`oncue:` line on stderr is oncue's own error: report it. `--wait` is not used: it misreports on
+launchd and, on systemd, for a timer-less job that succeeded (upstream oncue bug). The run's output is what it
 appended to `<entry>.log`.
 
 First, `FACTORY_CHECK_MODELS=1`: the script makes one tool-less check call per picked model (models

@@ -589,9 +589,10 @@ watch_tick() {
 }
 # After the weekly budget: the fire's events count as attempts until its run succeeds.
 start_fire() {
-  local i
+  local i n=1
   for i in "${!keys[@]}"; do seen "${keys[i]}" failed "${values[i]}"; done
   fire=$next_fire report_md=$out/$day-$next_fire.md events="${keys[*]}"
+  while [ -e "$report_md" ] || [ -L "$report_md" ]; do n=$((n + 1)) report_md=$out/$day-$next_fire-$n.md; done
 }
 next_fire=""
 [ -z "$trigger" ] || trigger_ok
@@ -734,13 +735,17 @@ call_cli() { cd "$1" && shift && unset ${cli_env[$cli]-} ${hidden[@]+"${hidden[@
 # Model-free: an exported variable named like a secret, or whose value is a key or a URL with a password, is
 # unset for the call and recorded as a gate; the test command and publish keep it. $2...: names also exempt.
 hide_env() {
-  local v skip secret_re='TOKEN|SECRET|PASSW|CREDENTIAL|KEY|(^|_)(AUTH|PAT)(_|$)|AUTHORIZATION'
+  local v n skip secret_re='TOKEN|SECRET|PASSW|CREDENTIAL|KEY|(^|_)(AUTH|PAT)(_|$)|AUTHORIZATION'
+  local style_re='_KEY_(FOREGROUND|BACKGROUND|BOLD|FAINT|ITALIC|UNDERLINE)$'
   local key_re="^(${creds_re}[A-Za-z0-9_-]*|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\$|^[A-Za-z][A-Za-z0-9+.-]*://[^/@]*:[^/@]*@"
   skip=$(printf ' %s ' ${cli_env[$1]-} "${@:2}")
   hidden=()
   for v in $(compgen -e); do
     [[ $skip != *" $v "* && ! $v =~ ^GIT_CONFIG_KEY_[0-9]+$ ]] || continue
-    [[ ${v^^} =~ $secret_re || ${!v} =~ $key_re ]] || continue
+    # A style setting such as gum's GUM_LOG_KEY_FOREGROUND: its KEY is no secret, the rest of the name still counts.
+    n=${v^^}
+    [[ ! $n =~ $style_re ]] || n=${n%_KEY_*}
+    [[ $n =~ $secret_re || ${!v} =~ $key_re ]] || continue
     (unset "$v") 2> /dev/null || block "env: $v is read-only, so it cannot be kept from $1"
     hidden+=("$v")
     ! grep -qxF "env: unset $v" "$gates_log" 2> /dev/null || continue
@@ -835,7 +840,7 @@ tests_re='(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.[A-Za-z]+$|(^|/)test_[
 locks_re='(^|/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|uv\.lock|poetry\.lock|pdm\.lock|Pipfile\.lock|Cargo\.lock|go\.sum)$'
 generated_re='\.min\.(js|css)$|\.(js|css)\.map$|_pb2(_grpc)?\.pyi?$|\.pb\.go$'
 manifests_re='(^|/)(package\.json|pyproject\.toml|Cargo\.toml|go\.mod)$'
-pr="" start="" commit="" gated="" changed=() instr=() scope="" why="" weighted="" refactors=()
+pr="" start="" commit="" gated="" changed=() added_to=() instr=() scope="" why="" weighted="" refactors=()
 scope_rule='scope: minimal, or scope: refactor <why a smaller fix is worse> when restructuring first makes the fix better; then commit each refactor step yourself with git commit, existing tests unchanged and passing at each, and leave the behaviour change uncommitted.'
 deps_py=$(cat <<'PY'
 import json, re, subprocess, sys
@@ -1057,7 +1062,8 @@ leaves open, or work outside this automation, do not guess: say what is missing 
 line escalated: <credentials|prod-access|ambiguous|out-of-scope>. Before that, one line
 $scope_rule One line per
 existing test file you changed, deleted or renamed (old path):
-test-change: <path from the repo root>: <one-line reason>. Prefer existing code and the standard
+test-change: <path from the repo root>: <one-line reason>; a file you only added lines to (new
+tests) needs none while its old version still passes. Prefer existing code and the standard
 library; add a package only for substantial functionality, with one line per new package:
 dependency: <name> <why not in-house>."
   run_model edit "$(pick edit)" "$tools" "$work" "$view/edit.json" "$prompt" < /dev/null > "$view/summary.md" || rc=$?
@@ -1122,7 +1128,7 @@ refactor_tests() {
 # $1 a pushed commit: path, mode, binary and size rules on its diff from the start.
 diff_gate() {
   local st p g ok a d m quarters=0
-  tests=() changed=() deleted=() guarded=()
+  tests=() changed=() grown=() deleted=() guarded=()
   while IFS=$'\t' read -r st p; do
     # Git quotes exactly these paths; a quoted name would match no glob and no tree entry below.
     [[ $p != \"* ]] || block "path $p has a control character, quote or backslash"
@@ -1142,7 +1148,8 @@ diff_gate() {
     fi
     [[ $p =~ $tests_re ]] || continue
     tests+=("$p")
-    [ "$st" = A ] || changed+=("$p")
+    if [ "$st" = M ] && [ "$(git diff --numstat --no-renames "$start" "$1" -- ":(literal)$p" | cut -f2)" = 0 ]; then grown+=("$p")
+    elif [ "$st" != A ]; then changed+=("$p"); fi
     [ "$st" != D ] || deleted+=("$p")
   done < <(git diff --name-status --no-renames "$start" "$1")
   while read -r a d p; do
@@ -1155,8 +1162,8 @@ diff_gate() {
 }
 
 gates() {
-  local r m rc c tests=() deleted=() guarded=() seen=$'\n'
-  changed=() refactors=()
+  local r m rc c tests=() grown=() deleted=() guarded=() seen=$'\n'
+  changed=() added_to=() refactors=()
   ! git diff --quiet "$start" "$commit" || block "empty diff"
   # Pushing $commit publishes every intermediate tree too.
   for c in $(git rev-list "$start..$commit"); do
@@ -1176,7 +1183,7 @@ gates() {
   sed -n 's/^test-change: /- /p' "$view/summary.md" > "$view/reasons.md"
   while IFS= read -r r; do
     m=""
-    for p in ${changed[@]+"${changed[@]}"}; do
+    for p in ${changed[@]+"${changed[@]}"} ${grown[@]+"${grown[@]}"}; do
       [[ $r != "- $p: "* || ${#p} -le ${#m} ]] || m=$p
     done
     [ -n "$m" ] || block "test-change line names no changed existing test: $r"
@@ -1187,6 +1194,10 @@ gates() {
   for p in ${changed[@]+"${changed[@]}"}; do
     [[ $seen == *$'\n'"$p"$'\n'* ]] || block "no test-change reason for $p"
   done
+  # A test file that only gained lines needs no reason while its start version passes on the new code.
+  for p in ${grown[@]+"${grown[@]}"}; do
+    if [[ $seen == *$'\n'"$p"$'\n'* ]]; then changed+=("$p"); else added_to+=("$p"); fi
+  done
   python3 -I -c "$deps_py" "$start" "$commit" "$view/summary.md" "$locks_re" ${guarded[@]+"${guarded[@]}"} \
     > "$view/deps.md" 2> "$view/deps.err" ||
     block "$(tail -n 1 "$view/deps.err")"
@@ -1194,8 +1205,15 @@ gates() {
   own run_tests "$work" > "$out/$day-tests.log" 2>&1 ||
     block "tests failed, exit $?"
   refactor_tests
+  r=$(( (${#changed[@]} > 0) + (${#added_to[@]} > 0) ))
+  [ "$r" = 0 ] || ! declare -F reserve > /dev/null || reserve "$r"
+  if [ ${#added_to[@]} -gt 0 ]; then
+    git worktree add -q --detach "$view/grown" "$commit"
+    git -C "$view/grown" checkout -q "$start" -- "${added_to[@]}"
+    own run_tests "$view/grown" > "$view/grown.log" 2>&1 ||
+      block "no test-change reason for ${added_to[0]}: its start version does not pass on the new code"
+  fi
   if [ ${#changed[@]} -gt 0 ]; then
-    ! declare -F reserve > /dev/null || reserve 1
     git worktree add -q --detach "$view/old" "$commit"
     git -C "$view/old" checkout -q "$start" -- "${changed[@]}"
     rc=0

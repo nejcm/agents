@@ -174,6 +174,21 @@ class ReportTest(unittest.TestCase):
                       "dependencies in 0.", report)
 
 
+    def test_dry_runs_count_as_runs_but_not_toward_items_escalations_or_disclosures(self):
+        with tempfile.TemporaryDirectory() as repo:
+            write(repo, ".factory/reports/runs.jsonl", [
+                {"entry": "p", "outcome": "completed", "dry_run": True, "cost_usd": 0.2, "items": [
+                    {"outcome": "blocked", "reason": "gates", "test_changes": 1},
+                    {"outcome": "escalated", "reason": "credentials"}]},
+                {"entry": "p", "outcome": "completed", "dry_run": False, "cost_usd": 0.3, "items": [
+                    {"outcome": "fixed", "test_changes": 1, "dependency_change": False}]}])
+            report = run(repo=repo)
+        self.assertIn("| p | 2 | completed 2 |", report)
+        self.assertIn("| 0.50 |", report)
+        self.assertIn("- p: 1 of 2 runs dry.", report)
+        self.assertIn("Items: fixed 1. Disclosed: existing tests changed in 1 (1 files), dependencies in 0.", report)
+        self.assertNotIn("Escalation reasons", report)
+
     def runs(self, recs, fates=""):
         repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, repo)

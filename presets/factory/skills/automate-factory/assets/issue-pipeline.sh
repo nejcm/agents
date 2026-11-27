@@ -57,7 +57,7 @@ preflight() {
 # $1 stage, $2 its reference: the record it leaves in $evidence; the coordinator reads only its last line.
 record_rule() {
   case $1 in
-    reproduce) echo "Write $evidence/repro.md: the exact steps and commands run (the check verify reruns), both final states, a state value and evidence paths; its last line exactly repro: outcome=reproduced (the broken state, twice), repro: outcome=not-reproduced (the expected state appeared) or repro: outcome=blocked (a precondition was missing; say which above it). When going on would mean guessing, end instead with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line, as above." ;;
+    reproduce) echo "Write $evidence/repro.md: the exact steps and commands run (the check verify reruns), both final states, a state value and evidence paths; its last line exactly one outcome line, without the explanation in parentheses after it: repro: outcome=reproduced (the broken state, twice), repro: outcome=not-reproduced (the expected state appeared) or repro: outcome=blocked (a precondition was missing; say which above it). When going on would mean guessing, end instead with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line, as above." ;;
     fix) echo "Write $evidence/fix.md: root cause, change, tests and what you skipped; its last line exactly fix: outcome=changed or fix: outcome=stopped. When going on would mean guessing, end instead with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line, as above." ;;
     verify)
       if [ "$2" = reproduce.md ]; then
@@ -65,9 +65,12 @@ record_rule() {
       else
         echo "Mode: this run's fix; base/ is the start, patch/ the fix commit. Run repro.md's check twice on base/, then twice on patch/, then the profile's test, lint and typecheck scripts on patch/ and neighbouring journeys that share the changed code."
       fi
-      echo "Write $evidence/verify.md: pass or fail per step, commands run and evidence paths; its last line exactly verify: outcome=confirmed (broken twice on base/, expected twice on patch/, every step passed), verify: outcome=insufficient (broken on both) or verify: outcome=inconclusive (base/ did not reproduce, a build could not run, or the evidence does not show the deciding state; say which half). When going on would mean guessing, end instead with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line, as above." ;;
+      echo "Write $evidence/verify.md: pass or fail per step, commands run and evidence paths; its last line exactly one outcome line, without the explanation in parentheses after it: verify: outcome=confirmed (broken twice on base/, expected twice on patch/, every step passed), verify: outcome=insufficient (broken on both) or verify: outcome=inconclusive (base/ did not reproduce, a build could not run, or the evidence does not show the deciding state; say which half above the last line). When going on would mean guessing, end instead with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line, as above." ;;
   esac
 }
+
+# $1 a stage record: its last line cut to the leading <stage>: outcome=<value> token, so trailing text is ignored.
+outcome_of() { tail -n 1 "$1" | tr -d '\r' | sed -E 's/^[`*[:space:]]*([a-z]+: outcome=[a-z-]+)([^a-z-].*)?$/\1/'; }
 
 # $1 the dir holding the copied skills: one line per extra skill.
 extras() { local s; for s in ${extra_skills[@]+"${extra_skills[@]}"}; do echo "Also follow $1/$s/SKILL.md where it applies."; done; }
@@ -103,7 +106,7 @@ spec_item() {
 }
 
 red_green() {
-  local p added=() rc=0
+  local p added=(${added_to[@]+"${added_to[@]}"}) rc=0
   while IFS= read -r p; do
     [[ $p =~ $tests_re ]] || continue
     added+=("$p")
@@ -307,7 +310,7 @@ verify_item() {
   stage verify "$item/verify" reproduce.md Bash,Read,Grep,Glob "$before" "$item/spec.md" "$item/run.md"
   take "$item/evidence/verify/verify.md" "$item/verify.md"
   escalate "$item/verify.md"
-  v=$(tail -n 1 "$item/verify.md")
+  v=$(outcome_of "$item/verify.md")
   case $v in
     "verify: outcome=confirmed" | "verify: outcome=insufficient" | "verify: outcome=inconclusive") echo "$id $v" ;;
     *) exit 1 ;;
@@ -414,7 +417,7 @@ run_item() {
     'When the stage needs credentials, production access, a decision the spec leaves open, or work outside its feature, do not guess: say what is missing and end your record with escalated: <credentials|prod-access|ambiguous|out-of-scope> in place of the outcome line.' \
     'The reference above also covers the coordinator and other stages: do only the part for the stage named on the last line.' > "$item/bans.md"
   printf '%s\n' "In fix.md, before its last line, one line $scope_rule" \
-    'In fix.md, before its last line, one line per existing test file you changed, deleted or renamed (old path): test-change: <path from the repo root>: <one-line reason>.' \
+    'In fix.md, before its last line, one line per existing test file you changed, deleted or renamed (old path): test-change: <path from the repo root>: <one-line reason>. Adding new tests to an existing file, without editing or removing any of its lines, is not a test change: give it no line; the gates then check that its old version still passes on the fix.' \
     'Prefer existing code and the standard library; add a package only for substantial functionality, with one line in fix.md per new package: dependency: <name> <why not in-house>.' > "$item/bans.fix.md"
   { awk '/^## /{p = $0 == "## Run"} p' .factory/profile.md; grep '^- Scripts: ' .factory/profile.md || true; } > "$item/run.md"
   [ -z "$3" ] || verify_item "$3"
@@ -429,7 +432,7 @@ run_item() {
   stage reproduce "$item/repro" reproduce.md Bash,Read,Grep,Glob "$start" "$item/spec.md" "$item/run.md"
   take "$item/evidence/reproduce/repro.md" "$item/repro.md"
   escalate "$item/repro.md"
-  r=$(tail -n 1 "$item/repro.md")
+  r=$(outcome_of "$item/repro.md")
   case $r in "repro: outcome=reproduced" | "repro: outcome=not-reproduced" | "repro: outcome=blocked") echo "$id $r" ;; *) exit 1 ;; esac
   [ "$r" != "repro: outcome=blocked" ] || finish blocked repro-blocked
   [ "$r" = "repro: outcome=reproduced" ] || finish not-reproduced reproduce
@@ -442,7 +445,7 @@ run_item() {
     "$item/spec.md" "$item/repro.md" "$item/run.md" "$runview/skills/debugging"
   take "$item/evidence/fix/fix.md" "$item/fix.md"
   escalate "$item/fix.md"
-  [ "$(tail -n 1 "$item/fix.md")" = "fix: outcome=changed" ] || exit 1
+  [ "$(outcome_of "$item/fix.md")" = "fix: outcome=changed" ] || exit 1
   cp "$item/fix.md" "$item/summary.md"
   work=$item/patch
   commit_edit "fix: $feature ($(tag "$id"))"
@@ -459,7 +462,7 @@ run_item() {
   stage verify "$item/verify" fix.md Bash,Read,Grep,Glob "$start" "$item/spec.md" "$item/repro.md" "$item/run.md"
   take "$item/evidence/verify/verify.md" "$item/verify.md"
   escalate "$item/verify.md"
-  [ "$(tail -n 1 "$item/verify.md")" = "verify: outcome=confirmed" ] || exit 1
+  [ "$(outcome_of "$item/verify.md")" = "verify: outcome=confirmed" ] || exit 1
   echo "$id verify: outcome=confirmed"
   cat "$item/spec.md" "$item/repro.md" "$item/verify.md" | no_creds || block "credential-shaped text"
 

@@ -407,6 +407,24 @@ print(json.dumps({"type": "result", "subtype": "success", "result": r, "num_turn
         r, _, _ = self.edit_run("rm tests/b_test.sh")
         self.assert_blocked(r, "no test-change reason for tests/b_test.sh")
 
+    def test_tests_added_to_an_existing_file_need_no_reason_while_its_start_version_passes(self):
+        self.second_test()
+        r, _, _ = self.edit_run("echo 2 > src/v; { echo 'exit 0'; cat tests/a_test.sh; } > t; mv t tests/a_test.sh")
+        self.assert_blocked(r, "no test-change reason for tests/a_test.sh: its start version does not pass on the new code")
+        r, labels, creates = self.edit_run("echo 'test -f src/w' >> tests/b_test.sh")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((len(creates), labels, self.records()[-1]["test_changes"]), (1, [], 0))
+        self.assertNotIn("Modifies existing tests", self.body())
+
+    def test_an_appended_test_is_checked_apart_from_a_disclosed_test_change(self):
+        self.second_test()
+        r, labels, creates = self.edit_run("echo 2 > src/v; echo 'grep -qx 2 src/v' > tests/a_test.sh; "
+                                           "echo 'test -f src/w' >> tests/b_test.sh",
+                                           "test-change: tests/a_test.sh: src/v now holds 2")
+        self.assert_disclosed(r, labels, creates, "factory:test-change")
+        self.assertIn("Old tests fail on the new code (exit 1): change needed.", self.body())
+        self.assertEqual(self.records()[-1]["test_changes"], 1)
+
     def test_renamed_test_needs_a_reason_for_its_old_path(self):
         self.second_test()
         r, _, _ = self.edit_run("mv tests/b_test.sh tests/c_test.sh")

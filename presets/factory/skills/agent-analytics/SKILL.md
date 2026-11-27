@@ -50,9 +50,9 @@ report. No transcript or record text enters the report or your context. Run from
 
 **Factory runs** come from `.factory/reports/runs.jsonl`, one line per scheduled run, written by
 the run script ([runners.md](../automate-factory/references/runners.md#run-record)). Per entry:
-runs, dry runs, outcomes (`escalated` among them), item outcomes for `issue-pipeline`, escalation
-reasons (`ci-cap` among them), runs and items that disclosed existing-test changes (and how many
-files) or dependencies, turns,
+runs, dry runs, outcomes (`escalated` among them), and from runs that were not dry: item outcomes
+for `issue-pipeline`, escalation reasons (`ci-cap` among them), runs and items that disclosed
+existing-test changes (and how many files) or dependencies, and scopes; for every run, turns,
 tokens and cost (the CLI's own estimate; runs whose cost misses a call that reported none are
 counted), and for reviewed PRs, joined with
 `.factory/reports/fix-issues/fates.tsv`: reviewer approve rate, agreement with the human outcome

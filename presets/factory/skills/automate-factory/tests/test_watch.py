@@ -177,6 +177,14 @@ class WatchTest(unittest.TestCase):
         self.assertEqual([x["events"] for x in self.records()], [["pr-1"], ["pr-1"]])
         self.assertEqual(self.seen()[-1], ["pr-1", "done", "h2"])
 
+    def test_a_second_fire_with_the_same_name_keeps_the_first_report(self):
+        self.tick("pr-1-aaa pr-1 h1\n")
+        r = self.tick("pr-1-aaa pr-1 h2\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        day = datetime.date.today()
+        self.assertEqual(sorted(f for f in os.listdir(self.out) if f.startswith(f"{day}-")),
+                         [f"{day}-pr-1-aaa-2.md", f"{day}-pr-1-aaa.md"])
+
     def test_a_live_lock_is_silent_and_fails_a_dry_run_loudly(self):
         self.hold_lock(os.getpid())
         r = self.tick("a 1\n")
